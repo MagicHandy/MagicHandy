@@ -19,10 +19,17 @@ func (v *VacuGlide) StrokeStepAt(generation uint64, longer bool) error {
 }
 
 // pulse opens a valve, waits, and always closes it again.
-func (v *VacuGlide) pulse(generation uint64, longer, following bool) error {
+func (v *VacuGlide) pulse(generation uint64, longer, motion bool) error {
 	v.valveMu.Lock()
 	defer v.valveMu.Unlock()
-	client, loops, err := v.admitValveStep(generation, longer, following)
+	return v.pulseLocked(context.Background(), generation, longer, motion)
+}
+
+func (v *VacuGlide) pulseLocked(parent context.Context, generation uint64, longer, motion bool) error {
+	if err := parent.Err(); err != nil {
+		return err
+	}
+	client, loops, err := v.admitValveStep(generation, longer, motion)
 	if err != nil {
 		return err
 	}
@@ -33,9 +40,21 @@ func (v *VacuGlide) pulse(generation uint64, longer, following bool) error {
 	}
 	attempted := false
 	err = v.commandBound(client, generation, autoblowCommandTimeout, func(ctx context.Context, client *autoblow.Client) error {
+		if err := parent.Err(); err != nil {
+			return err
+		}
+		ctx, cancel := context.WithCancel(ctx)
+		stopCancellation := context.AfterFunc(parent, cancel)
+		defer func() { stopCancellation(); cancel() }()
 		attempted = true
 		v.mu.Lock()
 		v.valveOpen = valve
+		// Count an attempted opening conservatively: a timeout or Stop may
+		// arrive after the device accepted it. Neither permits another step.
+		v.steps += step
+		if motion {
+			v.airSteps += step
+		}
 		v.mu.Unlock()
 		_, err := client.Valve(ctx, valve, true)
 		return err
@@ -48,6 +67,7 @@ func (v *VacuGlide) pulse(generation uint64, longer, following bool) error {
 		select {
 		case <-timer.C:
 		case <-loops.stop:
+		case <-parent.Done():
 		}
 		timer.Stop()
 	}
@@ -62,27 +82,23 @@ func (v *VacuGlide) pulse(generation uint64, longer, following bool) error {
 		if closeErr == nil {
 			v.valveOpen = ""
 		}
-		v.steps += step
-		if following && err == nil && closeErr == nil && v.generation == generation {
-			v.stream.followSteps += step
-		}
 		if combined := errors.Join(err, closeErr); combined != nil {
 			v.lastError = combined.Error()
 			go v.failConnection(client, combined)
 		}
 	}
 	v.mu.Unlock()
-	return errors.Join(err, closeErr)
+	return errors.Join(err, closeErr, parent.Err())
 }
 
 // Admit the entire pulse before retirement can join the connection workers.
-func (v *VacuGlide) admitValveStep(generation uint64, longer, following bool) (*autoblow.Client, *autoblowLoops, error) {
+func (v *VacuGlide) admitValveStep(generation uint64, longer, motion bool) (*autoblow.Client, *autoblowLoops, error) {
 	v.mu.Lock()
 	if v.client == nil {
 		v.mu.Unlock()
 		return nil, nil, errAutoblowNotConnected
 	}
-	if v.generation != generation || v.stopHolds > 0 || v.state == "stale" || (following && !v.config.StrokeFollow) {
+	if v.generation != generation || v.stopHolds > 0 || v.state == "stale" {
 		v.mu.Unlock()
 		return nil, nil, errAutoblowSuperseded
 	}
@@ -90,8 +106,28 @@ func (v *VacuGlide) admitValveStep(generation uint64, longer, following bool) (*
 		v.mu.Unlock()
 		return nil, nil, errVacuGlideStrokeLimit
 	}
+	if err := v.admitMotionAirLocked(longer, motion); err != nil {
+		v.mu.Unlock()
+		return nil, nil, err
+	}
 	client, loops := v.client, v.loops
 	loops.done.Add(1)
 	v.mu.Unlock()
 	return client, loops, nil
+}
+
+// admitMotionAirLocked keeps motion's valve steps inside the person's
+// permission and the session's bound. Manual steps are not limited here.
+func (v *VacuGlide) admitMotionAirLocked(longer, motion bool) error {
+	switch {
+	case !motion:
+		return nil
+	case !v.config.MotionAir:
+		return errVacuGlideAirOff
+	case !v.stream.origin.Playing():
+		return errVacuGlideNotPlaying
+	case longer && v.airSteps >= vacuglideMotionAirSteps, !longer && v.airSteps <= -vacuglideMotionAirSteps:
+		return errVacuGlideAirLimit
+	}
+	return nil
 }

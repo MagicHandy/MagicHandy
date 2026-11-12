@@ -1365,7 +1365,8 @@ describe("app shell safety invariants", () => {
     installFetch({ state });
     const { container } = renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
-    expect(screen.getAllByRole("img", { name: /commanded position estimate 63 percent/i })).toHaveLength(2);
+    // Now playing draws the device once; the status bar shows the one pill.
+    expect(screen.getAllByRole("img", { name: /commanded position estimate 63 percent/i })).toHaveLength(1);
     const detailed = container.querySelector(".visualizer:not(.mini)");
     expect(detailed).toHaveAttribute("data-state", "running");
     expect(detailed?.querySelector(".viz-body")).toBeInTheDocument();
@@ -1380,10 +1381,11 @@ describe("app shell safety invariants", () => {
     expect(detailed).toHaveAttribute("data-kind", "handy-original");
     expect(within(detailed as HTMLElement).getByText("70 mm")).toBeInTheDocument();
     expect(detailed?.querySelector(".viz-commanded")).toHaveAttribute("title", "63%");
-    expect(within(detailed as HTMLElement).getByText("20-80%")).toBeInTheDocument();
-    expect(within(detailed as HTMLElement).getByText("35%")).toBeInTheDocument();
-    expect(within(detailed as HTMLElement).getByText("Stroke")).toBeInTheDocument();
-    expect(within(detailed as HTMLElement).getByText("chat")).toBeInTheDocument();
+    const card = container.querySelector(".now-playing") as HTMLElement;
+    expect(within(card).getByText("Stroke")).toBeInTheDocument();
+    expect(within(card).getByText("From chat")).toBeInTheDocument();
+    expect(within(card).getByRole("meter", { name: "Pace: 35%" })).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Now playing: Stroke, Pace 35%" })).toBeInTheDocument();
   });
 });
 

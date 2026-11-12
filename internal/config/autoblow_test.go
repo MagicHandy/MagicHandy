@@ -12,8 +12,8 @@ import (
 
 func TestAutoblowTokensStayPrivate(t *testing.T) {
 	settings := DefaultSettings()
-	if settings.VacuGlide.SpeedMatch != VacuGlideSpeedHandyPace {
-		t.Fatalf("default speed match = %q", settings.VacuGlide.SpeedMatch)
+	if vg := settings.VacuGlide; vg.TempoMinPercent != VacuGlideTempoFloorPercent || vg.TempoMaxPercent != 100 || vg.MotionAir {
+		t.Fatalf("default VacuGlide = %+v, want the full motor range and air left to the person", vg)
 	}
 	var err error
 	if settings, err = settings.WithAutoblowToken(DeviceAutoblow, "  ultra-secret-token  "); err != nil {
@@ -55,21 +55,23 @@ func TestAutoblowTokensAreChecked(t *testing.T) {
 func TestAutoblowOptionsPatch(t *testing.T) {
 	settings := DefaultSettings()
 	settings.VacuGlide.DeviceToken = "vacuglide-token"
-	offset, follow, full := 120, true, VacuGlideSpeedFullRange
-	next, err := settings.ApplyDeviceOptionsPatch(DeviceOptionsPatch{VacuGlide: &VacuGlidePatch{TimingOffsetMillis: &offset, SpeedMatch: &full, StrokeFollow: &follow}})
+	offset, low, high, air := 120, 20, 70, true
+	next, err := settings.ApplyDeviceOptionsPatch(DeviceOptionsPatch{VacuGlide: &VacuGlidePatch{TimingOffsetMillis: &offset, TempoMinPercent: &low, TempoMaxPercent: &high, MotionAir: &air}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if next.VacuGlide.TimingOffsetMillis != 120 || next.VacuGlide.SpeedMatch != VacuGlideSpeedFullRange || !next.VacuGlide.StrokeFollow || next.VacuGlide.DeviceToken != "vacuglide-token" {
+	if vg := next.VacuGlide; vg.TimingOffsetMillis != 120 || vg.TempoMinPercent != 20 || vg.TempoMaxPercent != 70 || !vg.MotionAir || vg.DeviceToken != "vacuglide-token" {
 		t.Fatalf("patched = %+v", next.VacuGlide)
 	}
 	cleared, err := next.ApplyDeviceOptionsPatch(DeviceOptionsPatch{VacuGlide: &VacuGlidePatch{ClearToken: true}})
-	if err != nil || cleared.VacuGlide.DeviceToken != "" || cleared.VacuGlide.SpeedMatch != VacuGlideSpeedFullRange {
+	if err != nil || cleared.VacuGlide.DeviceToken != "" || cleared.VacuGlide.TempoMaxPercent != 70 {
 		t.Fatalf("clearing the token = %+v, %v", cleared.VacuGlide, err)
 	}
-	unknown := "fastest"
-	if _, err := settings.ApplyDeviceOptionsPatch(DeviceOptionsPatch{VacuGlide: &VacuGlidePatch{SpeedMatch: &unknown}}); err == nil {
-		t.Fatal("an unknown speed match was accepted")
+	for _, bounds := range [][2]int{{4, 50}, {60, 50}, {20, 101}} {
+		low, high := bounds[0], bounds[1]
+		if _, err := settings.ApplyDeviceOptionsPatch(DeviceOptionsPatch{VacuGlide: &VacuGlidePatch{TempoMinPercent: &low, TempoMaxPercent: &high}}); err == nil {
+			t.Fatalf("Tempo range %d..%d was accepted", low, high)
+		}
 	}
 	tooFar := AutoblowMaxTimingOffsetMs + 1
 	if _, err := settings.ApplyDeviceOptionsPatch(DeviceOptionsPatch{Autoblow: &AutoblowPatch{TimingOffsetMillis: &tooFar}}); err == nil {
@@ -101,5 +103,18 @@ func TestAutoblowDevicesJoinTheRunClockOrder(t *testing.T) {
 	}
 	if device.Output != DeviceOutputHandy {
 		t.Fatalf("legacy output = %q; the VacuGlide must not change it", device.Output)
+	}
+}
+
+func TestVacuGlideSettingsFromBeforeTheTempoRange(t *testing.T) {
+	// A store saved by alpha.85 has speed_match and stroke_follow but no
+	// Tempo range; it loads on the full range with the air left alone.
+	var saved VacuGlideSettings
+	if err := json.Unmarshal([]byte(`{"timing_offset_ms":40,"speed_match":"handy_pace","stroke_follow":true}`), &saved); err != nil {
+		t.Fatal(err)
+	}
+	loaded := applyMissingVacuGlideDefaults(saved)
+	if loaded.TempoMinPercent != VacuGlideTempoFloorPercent || loaded.TempoMaxPercent != 100 || loaded.MotionAir || loaded.TimingOffsetMillis != 40 {
+		t.Fatalf("loaded = %+v", loaded)
 	}
 }

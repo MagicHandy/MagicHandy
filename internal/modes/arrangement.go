@@ -23,6 +23,8 @@ const (
 // semantic speed, optionally focused and optionally drifting to a second
 // speed mid-segment. A segment always runs long enough to establish a feel.
 type Segment struct {
+	// Tempo is a native tempo-only segment, never a position fallback.
+	Tempo               *motion.TempoSpec         `json:"tempo,omitempty"`
 	PatternID           motion.PatternID          `json:"pattern_id"`
 	Dynamic             *motion.DynamicDefinition `json:"dynamic,omitempty"`
 	Flow                *motion.FlowSpec          `json:"flow,omitempty"`
@@ -42,6 +44,10 @@ type Arrangement struct {
 
 // NormalizeSegment clamps one segment into the bounded contract.
 func NormalizeSegment(segment Segment) Segment {
+	if segment.Tempo != nil {
+		return Segment{Tempo: motion.CloneTempoSpec(segment.Tempo),
+			DurationMillis: clampInt64(segment.DurationMillis, minSegmentMillis, maxSegmentMillis)}
+	}
 	if segment.Flow != nil {
 		segment.Flow = motion.CloneFlowSpec(segment.Flow)
 		segment.Dynamic, segment.PatternID, segment.AreaFocus = nil, "", nil
@@ -79,6 +85,8 @@ func NormalizeArrangement(arrangement Arrangement) (Arrangement, error) {
 // clamps speed into the user's limits and owns every transport decision.
 func (s Segment) Target(label string, source string) motion.MotionTarget {
 	return motion.MotionTarget{
+		Tempo:        motion.CloneTempoSpec(s.Tempo),
+		TempoOnly:    s.Tempo != nil,
 		Label:        label,
 		Source:       source,
 		PatternID:    s.PatternID,
@@ -104,7 +112,7 @@ func cloneDynamicDefinition(definition *motion.DynamicDefinition) *motion.Dynami
 }
 
 func (s Segment) hasContent() bool {
-	return s.PatternID != "" || s.Dynamic != nil || s.Flow != nil
+	return s.PatternID != "" || s.Dynamic != nil || s.Flow != nil || s.Tempo != nil
 }
 
 // DriftTarget is the optional mid-segment same-pattern speed nudge; phase is

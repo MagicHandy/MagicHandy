@@ -14,11 +14,10 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/modes"
 )
 
-// Auto timing reaches a planner only on a hosted route with the switch on;
+// Auto timing reaches a planner only on a capable planning route;
 // local planning and speech keep their sampled windows.
 func TestAutoMotionTimingRequiresAHostedPlanner(t *testing.T) {
 	settings := config.DefaultSettings()
-	settings.Autopilot.AutoMotionTiming = true
 	if autoMotionTiming(chat.AutopilotKindMotion, settings) {
 		t.Fatal("local planning gained auto timing")
 	}
@@ -30,14 +29,10 @@ func TestAutoMotionTimingRequiresAHostedPlanner(t *testing.T) {
 	if autoMotionTiming(chat.AutopilotKindSpeech, settings) {
 		t.Fatal("speech gained auto timing")
 	}
-	settings.Autopilot.AutoMotionTiming = false
-	if autoMotionTiming(chat.AutopilotKindMotion, settings) {
-		t.Fatal("auto timing applied while switched off")
-	}
 }
 
 // A hosted Creative v2 planner's horizon reaches the scheduler's decision, and
-// the request asks for it only while the switch is on.
+// the request asks for it when the planning route supports it.
 func TestHostedCreativeV2PlannerChoosesItsHorizon(t *testing.T) {
 	bodies := make(chan string, 4)
 	var reply atomic.Value
@@ -50,7 +45,6 @@ func TestHostedCreativeV2PlannerChoosesItsHorizon(t *testing.T) {
 	saveSettings(t, s.store, func(settings config.Settings) config.Settings {
 		settings.Motion.SpeedMinPercent, settings.Motion.SpeedMaxPercent = 10, 80
 		settings.LLM.MotionGenerationMode = config.LLMMotionModeCreativeV2
-		settings.Autopilot.AutoMotionTiming = true
 		return settings
 	})
 	flow := chat.FreshCreativeV2Score(30)
@@ -67,24 +61,12 @@ func TestHostedCreativeV2PlannerChoosesItsHorizon(t *testing.T) {
 		}
 	}
 
-	saveSettings(t, s.store, func(settings config.Settings) config.Settings {
-		settings.Autopilot.AutoMotionTiming = false
-		return settings
-	})
-	reply.Store(`{"edits":[{"evolve":true}],"reply":"Fresh."}`)
-	decision, err = s.autopilotDecide(t.Context(), input)
-	if err != nil || decision.NextCheck != 0 {
-		t.Fatalf("switched-off decision = %+v, %v", decision, err)
-	}
-	if body := <-bodies; strings.Contains(body, "next_check_seconds") || strings.Contains(body, "Timing is yours") {
-		t.Fatal("a switched-off hosted planner was asked for its horizon")
-	}
 	if len(fake.Commands()) != 0 {
 		t.Fatal("planning dispatched motion")
 	}
 }
 
-// The switch never changes what a local planner is asked.
+// Auto timing never changes what a local planner is asked.
 func TestLocalPlannerIgnoresAutoTiming(t *testing.T) {
 	provider := &scriptedLLMProvider{responses: []string{`{"edits":[{"evolve":true}],"reply":"Fresh."}`}}
 	s := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
@@ -92,7 +74,6 @@ func TestLocalPlannerIgnoresAutoTiming(t *testing.T) {
 	saveSettings(t, s.store, func(settings config.Settings) config.Settings {
 		settings.Motion.SpeedMinPercent, settings.Motion.SpeedMaxPercent = 10, 80
 		settings.LLM.MotionGenerationMode = config.LLMMotionModeCreativeV2
-		settings.Autopilot.AutoMotionTiming = true
 		return settings
 	})
 	flow := chat.FreshCreativeV2Score(30)
@@ -127,11 +108,6 @@ func TestPreparedDecisionsRequireAnExternalPlanner(t *testing.T) {
 	if !prepareAutopilotDecisions(settings) {
 		t.Fatal("a hosted planner does not prepare decisions")
 	}
-	settings.Autopilot.PrepareNextDecision = false
-	if prepareAutopilotDecisions(settings) {
-		t.Fatal("prepared decisions ignore the switch")
-	}
-	settings.Autopilot.PrepareNextDecision = true
 	settings.LLM.MotionGenerationMode = config.LLMMotionModeOff
 	if prepareAutopilotDecisions(settings) {
 		t.Fatal("motion off prepares decisions")
@@ -174,5 +150,21 @@ func TestPreparedDecisionMeasuresChatAgesAtItsBoundary(t *testing.T) {
 		if !strings.Contains(body, want[0]) && !strings.Contains(body, want[1]) {
 			t.Fatalf("lookahead %s: request lacks %s", lookahead, want[0])
 		}
+	}
+}
+
+// A saved catalog mode must not suppress timing facts when tempo actually leads.
+func TestNativeTempoHistoryKeepsRequestAgesAcrossSavedMotionModes(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.LLM.MotionGenerationMode = config.LLMMotionModePattern
+	start := time.Unix(1000, 0)
+	prompt := interactiveChatPromptContext{History: []llm.Message{{Role: "user", Content: "Build over two minutes"}}, HistoryAt: []time.Time{start}}
+	got := autopilotHistory(chat.AutopilotKindMotion, settings, prompt, start.Add(95*time.Second), true)
+	if len(got) != 1 || !strings.Contains(got[0].Content, "1 minute 35 seconds ago") {
+		t.Fatalf("request age lost: %+v", got)
+	}
+	unchanged := autopilotHistory(chat.AutopilotKindMotion, settings, prompt, start.Add(95*time.Second), false)
+	if unchanged[0].Content != prompt.History[0].Content {
+		t.Fatal("catalog history changed outside the native path")
 	}
 }

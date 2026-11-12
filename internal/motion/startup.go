@@ -81,7 +81,7 @@ type startupMotionProfile struct {
 // zero until the device has reached the script's first point.
 func (e *Engine) prepareMotionStartup(ctx context.Context, runEpoch uint64, prefix string) error {
 	e.mu.Lock()
-	only := e.plan.Target.VibrationOnly
+	only := e.plan.Target.VibrationOnly || e.plan.Target.TempoOnly
 	e.mu.Unlock()
 	if only {
 		return nil

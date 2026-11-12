@@ -33,6 +33,7 @@ type LinkedParticipant struct {
 // reconnecting cannot silently rejoin an existing run.
 type FanOut struct {
 	vibrationOnly     bool
+	tempoOnly         bool
 	participants      []LinkedParticipant
 	mu                sync.Mutex
 	playing           bool
@@ -113,6 +114,7 @@ func (f *FanOut) Stop(ctx context.Context, command StopCommand) (CommandResult, 
 	command.Fault = command.Fault || f.fault != nil && !f.faultStopped
 	f.playing = false
 	f.vibrationOnly = false
+	f.tempoOnly = false
 	f.playbackStartedAt = time.Time{}
 	f.mu.Unlock()
 	results := make([]CommandResult, len(f.participants))
@@ -161,19 +163,67 @@ func (f *FanOut) AppendPoints(ctx context.Context, command AppendPointsCommand) 
 	if len(command.Points) > 0 {
 		f.mu.Lock()
 		f.vibrationOnly = command.VibrationOnly
+		f.tempoOnly = command.TempoOnly
 		f.mu.Unlock()
 	}
-	return f.dispatchSelected(ctx, command.Vibration != nil && len(command.Points) == 0, func(t Transport) (CommandResult, error) { return t.AppendPoints(ctx, command) })
+	only := scalarAll
+	switch {
+	case len(command.Points) > 0:
+	case command.Tempo != nil || command.Air != nil:
+		only = scalarTempo
+	case command.Vibration != nil:
+		only = scalarVibration
+	}
+	return f.dispatchSelected(ctx, only, func(t Transport) (CommandResult, error) { return t.AppendPoints(ctx, command) })
+}
+
+// A frame with no points updates one scalar channel's owners only.
+type scalarSelection int
+
+const (
+	scalarAll scalarSelection = iota
+	scalarVibration
+	scalarTempo
+)
+
+func (f *FanOut) playsScalar(index int, only scalarSelection) bool {
+	switch only {
+	case scalarVibration:
+		return f.participants[index].ID == "vibrator"
+	case scalarTempo:
+		output, ok := f.participants[index].Transport.(TempoOutput)
+		return ok && output.TakesTempo()
+	default:
+		return true
+	}
+}
+
+// idleInRunLocked reports a participant a vibration- or tempo-only run leaves
+// idle.
+func (f *FanOut) idleInRunLocked(index int) bool {
+	return (f.vibrationOnly && !f.playsScalar(index, scalarVibration)) || (f.tempoOnly && !f.playsScalar(index, scalarTempo))
+}
+
+// TakesTempo reports whether any active participant plays tempo.
+func (f *FanOut) TakesTempo() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for index := range f.participants {
+		if !f.retired[index] && f.playsScalar(index, scalarTempo) {
+			return true
+		}
+	}
+	return false
 }
 
 // Independent device I/O shares the same frame and runs concurrently, so each
 // extra Cloud device does not add another round trip to every append. All writes
 // finish before rollback/return; no detached command can outlive this operation.
 func (f *FanOut) dispatchParallel(ctx context.Context, send func(Transport) (CommandResult, error)) (CommandResult, error) {
-	return f.dispatchSelected(ctx, false, send)
+	return f.dispatchSelected(ctx, scalarAll, send)
 }
 
-func (f *FanOut) dispatchSelected(ctx context.Context, scalarOnly bool, send func(Transport) (CommandResult, error)) (CommandResult, error) {
+func (f *FanOut) dispatchSelected(ctx context.Context, only scalarSelection, send func(Transport) (CommandResult, error)) (CommandResult, error) {
 	started := time.Now()
 	f.mu.Lock()
 	fault, retired := f.fault, f.inactiveSnapshotLocked()
@@ -181,11 +231,15 @@ func (f *FanOut) dispatchSelected(ctx context.Context, scalarOnly bool, send fun
 	if fault != nil {
 		return CommandResult{}, fault
 	}
+	scalarOnly := only != scalarAll
 	if scalarOnly {
 		active := false
-		for index, p := range f.participants {
-			retired[index] = retired[index] || p.ID != "vibrator"
+		for index := range f.participants {
+			retired[index] = retired[index] || !f.playsScalar(index, only)
 			active = active || !retired[index]
+		}
+		if !active && only == scalarTempo {
+			return CommandResult{}, ErrTempoUnavailable
 		}
 		if !active {
 			return CommandResult{}, ErrVibrationUnavailable
@@ -209,6 +263,11 @@ func (f *FanOut) dispatchSelected(ctx context.Context, scalarOnly bool, send fun
 			continue
 		}
 		if err := errs[index]; err != nil {
+			if errors.Is(err, ErrAirRejected) {
+				// A permission or per-session bound is a rejected adjustment,
+				// not evidence that a healthy participant was lost.
+				return results[index], err
+			}
 			if scalarOnly && ctx.Err() != nil {
 				return results[index], ctx.Err()
 			}
@@ -232,6 +291,7 @@ func (f *FanOut) Play(ctx context.Context, command PlayCommand) (CommandResult, 
 	started := time.Now()
 	f.mu.Lock()
 	f.vibrationOnly = command.VibrationOnly
+	f.tempoOnly = command.TempoOnly
 	fault, retired := f.fault, f.inactiveSnapshotLocked()
 	f.mu.Unlock()
 	if fault != nil {
@@ -331,7 +391,7 @@ func (f *FanOut) retire(ctx context.Context, index int, cause error) bool {
 func (f *FanOut) healthyOthersLocked(index int) int {
 	count := 0
 	for other, retired := range f.retired {
-		if other != index && !retired && (!f.vibrationOnly || f.participants[other].ID == "vibrator") {
+		if other != index && !retired && !f.idleInRunLocked(other) {
 			count++
 		}
 	}
@@ -406,7 +466,7 @@ func (f *FanOut) diagnosticSummaryLocked(states []TransportDiagnostics, latency 
 	reported := -1
 	connected := true
 	for index, state := range states {
-		if f.retired[index] || (f.vibrationOnly && f.participants[index].ID != "vibrator") {
+		if f.retired[index] || f.idleInRunLocked(index) {
 			continue
 		}
 		if reported < 0 {
@@ -493,10 +553,8 @@ func timingOf(owner Transport) MotionTimingCapabilities {
 // latch and global Stop still visits every configured participant.
 func (f *FanOut) inactiveSnapshotLocked() []bool {
 	result := append([]bool(nil), f.retired...)
-	if f.vibrationOnly {
-		for index, p := range f.participants {
-			result[index] = result[index] || p.ID != "vibrator"
-		}
+	for index := range f.participants {
+		result[index] = result[index] || f.idleInRunLocked(index)
 	}
 	return result
 }

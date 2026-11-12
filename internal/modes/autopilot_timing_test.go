@@ -98,13 +98,18 @@ func blockSecondHorizonDecision(manager *Manager, decider *fakeDecider) (<-chan 
 }
 
 // The model chooses the length, but the bounds always hold, the variation is
-// real, and the recent list stays short.
+// real, and the recent list stays short. The floor is half the shortest
+// ordinary stretch at the person's change rate: 10 s at the default level.
 func TestModelHorizonIsBoundedVariedAndRemembered(t *testing.T) {
 	manager := newAutopilotManager(t, &fakeEngine{}, &fakeClock{now: time.Unix(0, 0)}, &fakeDecider{}, nil)
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
-	if got := manager.modelHorizonLocked(2 * time.Second); got != 8*time.Second {
-		t.Fatalf("short horizon = %s, want the 8s floor", got)
+	floor := time.Duration(manager.options.AutopilotSettings().AutoTimingFloorSeconds()) * time.Second
+	if floor != 10*time.Second {
+		t.Fatalf("default floor = %s, want 10s", floor)
+	}
+	if got := manager.modelHorizonLocked(2 * time.Second); got != floor {
+		t.Fatalf("short horizon = %s, want the %s floor", got, floor)
 	}
 	if got := manager.modelHorizonLocked(20 * time.Minute); got != 300*time.Second {
 		t.Fatalf("long horizon = %s, want the 300s ceiling", got)
@@ -125,5 +130,37 @@ func TestModelHorizonIsBoundedVariedAndRemembered(t *testing.T) {
 	}
 	if !slices.Equal(manager.history.recentChecks, []int{30, 45, 60, 90, 120, 300}) {
 		t.Fatalf("recent checks = %v", manager.history.recentChecks)
+	}
+}
+
+// The model's soon, normal and later answers are always felt: each draw stays
+// inside the window, and the three answers land in clearly different places.
+func TestCadenceFollowsTheModelsTimingAnswer(t *testing.T) {
+	manager := newAutopilotManager(t, &fakeEngine{}, &fakeClock{now: time.Unix(0, 0)}, &fakeDecider{}, nil)
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	rng := newCadenceRNG(7, 11)
+	means := map[TimingPreference]float64{}
+	for _, timing := range []TimingPreference{TimingSoon, TimingNormal, TimingLater} {
+		seen := map[time.Duration]bool{}
+		total := 0.0
+		for range 2000 {
+			got := manager.sampleCadenceLocked(20, 60, timing, rng)
+			if got < 20*time.Second || got > 60*time.Second {
+				t.Fatalf("%s drew %s outside 20-60 s", timing, got)
+			}
+			seen[got] = true
+			total += got.Seconds()
+		}
+		means[timing] = total / 2000
+		if len(seen) < 8 {
+			t.Fatalf("%s took only %d values", timing, len(seen))
+		}
+	}
+	if !(means[TimingSoon] < 30 && means[TimingNormal] > 37 && means[TimingNormal] < 43 && means[TimingLater] > 50) {
+		t.Fatalf("means = %v, want soon < 30 s, normal near 40 s, later > 50 s", means)
+	}
+	if got := manager.sampleCadenceLocked(8, 8, TimingLater, rng); got != 8*time.Second {
+		t.Fatalf("a fixed window drew %s", got)
 	}
 }

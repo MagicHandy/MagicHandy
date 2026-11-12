@@ -1,13 +1,13 @@
-// Autoblow's cloud devices (ADR 0069). The Ultra plays positions like The
-// Handy; the VacuGlide follows the pace of the motion and makes its own
-// strokes, with valve steps the person controls. The backend owns both
+// Autoblow's cloud devices (ADRs 0069 and 0071). The Ultra plays positions
+// like The Handy; the VacuGlide plays a tempo and makes its own strokes, with
+// valve steps the person controls. The backend owns both
 // connections; these descriptors render its snapshot.
 import { api } from "../api/client";
 import type { AutoblowDevice, AutoblowStatus } from "../api/types";
 import { t } from "../i18n";
 import {
   AutoblowConnectionSection, AutoblowTestSection, autoblowStatus, autoblowTest, autoblowTestAvailable,
-  VacuGlideConnectionSection, VacuGlideSpeedSection, VacuGlideStrokeSection, VacuGlideTestSection, vacuglideStroke,
+  VacuGlideConnectionSection, VacuGlideStrokeSection, VacuGlideTempoSection, VacuGlideTestSection, vacuglideStroke,
 } from "./AutoblowPage";
 import { AutoblowGlyph, VacuGlideGlyph } from "./glyphs";
 import { actionFor, liveStatus, lockReason } from "./status";
@@ -37,7 +37,7 @@ function strokeLevels(ctx: DeviceContext, status: AutoblowStatus): DeviceLevelGr
       raiseLabel: t("Longer, tighter stroke"),
       testLabel: t("Test the VacuGlide"),
     }],
-    note: status.stroke_follow ? t("The stroke follows the motion's reach. Your steps add to it.") : undefined,
+    note: status.motion_air ? t("Chat and Autopilot may adjust the stroke. Your steps add to theirs.") : undefined,
   };
 }
 
@@ -109,7 +109,7 @@ export const vacuglideDevice: DeviceDescriptor = {
   model: (ctx) => autoblowModel(ctx, "vacuglide"),
   sections: [
     { id: "connection", title: () => t("Connection"), Body: VacuGlideConnectionSection },
-    { id: "speed", title: () => t("Speed"), Body: VacuGlideSpeedSection },
+    { id: "tempo", title: () => t("Tempo"), Body: VacuGlideTempoSection },
     { id: "stroke", title: () => t("Stroke"), Body: VacuGlideStrokeSection },
     { id: "test", title: () => t("Test"), Body: VacuGlideTestSection },
   ],

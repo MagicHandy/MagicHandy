@@ -14,7 +14,8 @@ const (
 	AutopilotSpeechNatural = "natural"
 	// AutopilotSpeechTalkative uses shorter gaps between autonomous lines.
 	AutopilotSpeechTalkative = "talkative"
-	// AutopilotSpeechCustom uses the saved custom speech bounds.
+	// AutopilotSpeechCustom uses the saved custom speech bounds. The UI no
+	// longer offers it; settings that chose it keep working.
 	AutopilotSpeechCustom = "custom"
 
 	// AutopilotMotionSteady changes semantic targets infrequently.
@@ -84,31 +85,15 @@ type AutopilotSettings struct {
 	MotionChangeLevel     int    `json:"motion_change_level"`
 	MotionMinSeconds      int    `json:"motion_min_seconds"`
 	MotionMaxSeconds      int    `json:"motion_max_seconds"`
-	AdaptiveSpeechTiming  bool   `json:"adaptive_speech_timing"`
-	AdaptiveMotionTiming  bool   `json:"adaptive_motion_timing"`
 	SpeechMotionAuthority string `json:"speech_motion_authority"`
-	// AutoMotionTiming lets a hosted Autopilot planner choose how long each
-	// stretch plays before it is reconsidered, inside the auto-timing bounds.
-	// Local planning ignores it and keeps the Motion change rate window.
-	AutoMotionTiming bool `json:"auto_motion_timing"`
-	// PrepareNextDecision plans an external planner's next motion decision as
-	// soon as a stretch begins, for that stretch's end, so the change is ready
-	// at the boundary. Chat, settings changes and Stop discard it. Local
-	// planning ignores it and keeps planning just before the boundary.
-	PrepareNextDecision bool `json:"prepare_next_decision"`
 	// IntermediatePlanning adds a bounded decision note to Intermediate
 	// continuous motion planning. Off restores the shorter request; Simple's
 	// note and Advanced contracts are unchanged. See ADR 0060 for latency.
 	IntermediatePlanning bool `json:"intermediate_planning"`
-	// SessionTracking lets the model see elapsed session time, speed history,
-	// and backend-measured phrase sameness (age, reconsiderations, and holds).
-	// Inert input: it informs decisions and authorizes nothing. Off removes the
-	// facts from the prompt entirely rather than sending zeros.
-	SessionTracking bool `json:"session_tracking"`
 	// SessionArc enables the visible elapsed-session fill bar supplied to the
-	// model as pacing context. It is a separate switch from SessionTracking
-	// because knowing how long a session has run and asking the model to pace
-	// along a configured buildup are different choices.
+	// model as pacing context. Elapsed time, speed history and phrase sameness
+	// always reach the planner as inert facts; the buildup is a separate choice
+	// because it asks the model to pace toward a finish.
 	//
 	// The buildup positions intent inside the user's existing speed band. It never
 	// widens the band, the focus range, or any capability gate.
@@ -126,19 +111,10 @@ func DefaultAutopilotSettings() AutopilotSettings {
 		MotionChangeLevel:     autopilotDefaultMotionChangeLevel,
 		MotionMinSeconds:      AutopilotDefaultMotionMinSeconds,
 		MotionMaxSeconds:      AutopilotDefaultMotionMaxSeconds,
-		AdaptiveSpeechTiming:  true,
-		AdaptiveMotionTiming:  true,
 		SpeechMotionAuthority: AutopilotSpeechMotionChatOnly,
-		// Tracking defaults on: it is read-only context that makes cadence
-		// decisions better informed. Buildup defaults off because it changes what
-		// the model is encouraged to do, which is a choice the user should make.
-		SessionTracking:   true,
-		SessionArc:        false,
-		SessionArcMinutes: AutopilotDefaultArcMinutes,
-		// Preparing changes when an external planner is asked, not what it
-		// decides, and costs no request unless chat discards one.
-		PrepareNextDecision:  true,
-		IntermediatePlanning: true,
+		SessionArc:            false,
+		SessionArcMinutes:     AutopilotDefaultArcMinutes,
+		IntermediatePlanning:  true,
 	}
 }
 
@@ -157,6 +133,16 @@ func (s AutopilotSettings) SpeechWindow() (minimum int, maximum int, enabled boo
 	default:
 		return 35, 120, true
 	}
+}
+
+// AutoTimingFloorSeconds is the shortest stretch a planner that chooses its
+// own timing may ask for: half the shortest ordinary stretch at the person's
+// change rate, never below the scheduler's minimum. The person's own setting
+// therefore bounds how often such a planner is asked again. Long stretches
+// stay possible up to AutopilotAutoTimingMaxSeconds.
+func (s AutopilotSettings) AutoTimingFloorSeconds() int {
+	minimum, _ := s.MotionWindow()
+	return max(AutopilotAutoTimingMinSeconds, minimum/2)
 }
 
 // MotionWindow returns the effective motion-evolution bounds.
@@ -257,12 +243,6 @@ func validateAutopilotSettings(settings AutopilotSettings) error {
 			AutopilotMaximumArcMinutes,
 		)
 	}
-	// The buildup is a reading of session progress, so it cannot exist without the
-	// tracking that produces it. Rejecting the combination keeps the settings
-	// document from expressing a state the runtime would have to silently ignore.
-	if settings.SessionArc && !settings.SessionTracking {
-		return errors.New("autopilot session buildup requires session tracking")
-	}
 	return nil
 }
 
@@ -315,15 +295,8 @@ func applyMissingAutopilotDefaults(
 		settings.MotionChangeLevel = legacyMotionChangeLevel(settings)
 		settings.MotionCadence = AutopilotMotionScaled
 	}
-	// A bool cannot distinguish "absent" from "explicitly false", so the new buildup
-	// length doubles as the presence marker for this field group: it is zero only
-	// in a document written before the group existed. Without this, a document
-	// saved between the cadence release and this one would silently run with
-	// tracking off while the documented default is on. Once the group has been
-	// saved once, the marker is non-zero and an explicit false is preserved.
 	if settings.SessionArcMinutes == 0 {
 		settings.SessionArcMinutes = defaults.SessionArcMinutes
-		settings.SessionTracking = defaults.SessionTracking
 	}
 	return settings
 }

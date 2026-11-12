@@ -79,6 +79,14 @@ function renderPanel(onOpenChange = vi.fn()) {
   return { ...view, onOpenChange, panel: screen.getByRole("region", { name: "Devices" }) };
 }
 
+it("shows the VacuGlide motor range instead of the Handy speed limit", () => {
+  app.state = stateWith({ configured: ["vacuglide"], playing: ["vacuglide"] });
+  renderPanel();
+  expect(screen.getByRole("slider", { name: "Tempo range minimum" })).toHaveValue("5");
+  expect(screen.getByRole("slider", { name: "Tempo range maximum" })).toHaveValue("100");
+  expect(screen.queryByRole("slider", { name: "Speed minimum" })).not.toBeInTheDocument();
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   app.state = stateWith();

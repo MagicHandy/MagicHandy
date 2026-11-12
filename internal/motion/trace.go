@@ -52,6 +52,7 @@ func (e *Engine) snapshotLocked() ActiveMotionState {
 	if !e.startedAt.IsZero() {
 		state.StartedAt = e.startedAt.UTC().Format(timeFormatRFC3339Nano)
 	}
+	state.Tempo = e.tempoReadoutLocked(playbackMillis)
 	if e.plan.ID != "" {
 		state.Phase = e.frozenPhase
 		if e.running {
@@ -259,6 +260,10 @@ func cloneMotionTarget(target MotionTarget) MotionTarget {
 	if target.Vibration != nil {
 		value := *target.Vibration
 		target.Vibration = &value
+	}
+	if target.Tempo != nil {
+		value := target.Tempo.Clone()
+		target.Tempo = &value
 	}
 	target.Flow = CloneFlowSpec(target.Flow)
 	if target.AreaFocus != nil {

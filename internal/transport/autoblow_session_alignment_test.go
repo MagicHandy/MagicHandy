@@ -43,7 +43,7 @@ func TestAutoblowRetiredSessionCannotAlignNewPlayback(t *testing.T) {
 					return err
 				}
 			} else {
-				v := connectedVacuGlide(t, f, AutoblowConfig{SpeedScale: 1})
+				v := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 5, TempoMaxPercent: 100})
 				owner = v
 				reconnect = func() error {
 					if _, err := v.Disconnect(); err != nil {

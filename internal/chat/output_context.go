@@ -19,6 +19,8 @@ type OutputContext struct {
 	Coyote   bool              `json:"estim_follows_motion"`
 	Estim    *EstimContext     `json:"estim,omitempty"`
 	Vibrator *VibrationContext `json:"vibrator,omitempty"`
+	// Tempo is present while a VacuGlide plays (ADR 0071).
+	Tempo *TempoContext `json:"tempo,omitempty"`
 }
 
 // paceOnlyGuide keeps replies truthful with a VacuGlide: its motor follows the

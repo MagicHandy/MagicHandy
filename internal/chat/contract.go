@@ -85,6 +85,10 @@ type AssistantResponse struct {
 // MotionCommand is semantic motion intent, not a transport command.
 type MotionCommand struct {
 	Vibration *motion.VibrationSpec `json:"vibration,omitempty"`
+	// Tempo and AirSteps are the VacuGlide's own controls when tempo leads
+	// (ADR 0071): its tempo, and valve steps within the person's permission.
+	Tempo    *motion.TempoSpec `json:"tempo,omitempty"`
+	AirSteps *int              `json:"air_steps,omitempty"`
 	// VibrationLevel is the Simple/Intermediate level as a percentage of the
 	// user's Max (ADR 0061). Nil keeps the current level.
 	VibrationLevel *int   `json:"vibration_level,omitempty"`

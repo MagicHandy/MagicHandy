@@ -871,8 +871,9 @@ length is in Prompts & memory, and the LLM motion mode with its Pattern library
 options is on the Chat page.
 
 Live controls follow the saved role's backend `features`, not the provider name
-or an unsaved settings draft. Advanced Autopilot exposes Auto timing and Prepare
-decisions early, and Advanced chat exposes repair and independent output help,
-whatever the transport. Different chat and Autopilot routes may have different
+or an unsaved settings draft. An Advanced Autopilot planner chooses its own
+timing and prepares decisions without a switch
+([ADR 0072](decisions/0072-autopilot-timing-without-switches.md)), and Advanced
+chat exposes repair and independent output help, whatever the transport. Different chat and Autopilot routes may have different
 features. Capability never implies device connection, arming, or permission to
 move. See [ADR 0058](decisions/0058-model-capability-levels.md).

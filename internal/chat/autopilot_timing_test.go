@@ -25,7 +25,7 @@ func schemaFields(t *testing.T, raw json.RawMessage) (map[string]any, []string) 
 
 func TestNextCheckSchemaIsRequiredOnlyWhereAdded(t *testing.T) {
 	base := CreativeV2ResponseSchema(config.DefaultSettings().Motion, false)
-	timed := withNextCheckSchema(base)
+	timed := withNextCheckSchema(base, 0)
 	properties, required := schemaFields(t, timed)
 	field, _ := properties[nextCheckField].(map[string]any)
 	if field["type"] != "integer" || field["minimum"] != float64(8) || field["maximum"] != float64(300) ||
@@ -35,7 +35,7 @@ func TestNextCheckSchemaIsRequiredOnlyWhereAdded(t *testing.T) {
 	if strings.Contains(string(base), nextCheckField) {
 		t.Fatal("the shared schema gained next_check_seconds")
 	}
-	if again := withNextCheckSchema(timed); strings.Count(string(again), `"next_check_seconds"`) != 2 {
+	if again := withNextCheckSchema(timed, 0); strings.Count(string(again), `"next_check_seconds"`) != 2 {
 		t.Fatalf("a second pass duplicated the field: %s", again)
 	}
 }

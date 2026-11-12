@@ -49,6 +49,25 @@ func TestSessionFactsAndArcAppearOnlyWhenEnabled(t *testing.T) {
 	if !strings.Contains(arc, "Session buildup: 60%") {
 		t.Fatalf("arc percent missing:\n%s", arc)
 	}
+	if strings.Contains(arc, "-minute session") {
+		t.Fatalf("a buildup without a length must not invent one:\n%s", arc)
+	}
+	timed := AutopilotMotionMessage(AutopilotContext{
+		Style: "balanced", SpeedMinPercent: 20, SpeedMaxPercent: 40,
+		SessionTracking: true, SessionSeconds: 300, ArcEnabled: true, ArcPercent: 60, ArcMinutes: 10,
+	})
+	for _, fragment := range []string{"60% of the 10-minute session the user set", "about 4 minutes left", "finish target", "strongest stretch arrives as it fills"} {
+		if !strings.Contains(timed, fragment) {
+			t.Fatalf("the buildup lost %q:\n%s", fragment, timed)
+		}
+	}
+	full := AutopilotMotionMessage(AutopilotContext{
+		Style: "balanced", SpeedMinPercent: 20, SpeedMaxPercent: 40,
+		SessionTracking: true, SessionSeconds: 600, ArcEnabled: true, ArcPercent: 100, ArcMinutes: 10,
+	})
+	if strings.Contains(full, "minutes left") || !strings.Contains(full, "The finish the user set has arrived") {
+		t.Fatalf("a full buildup must say the finish has arrived:\n%s", full)
+	}
 	if !strings.Contains(arc, "clock and allowed range never move because of your response") {
 		t.Fatalf("the arc must state that model output cannot move its clock or limits:\n%s", arc)
 	}
@@ -223,8 +242,8 @@ func TestContinuousPlanningSeesItsRecentStretchSpeeds(t *testing.T) {
 	message := AutopilotMotionMessage(AutopilotContext{MotionMode: MotionModeLayered, CurrentSpeed: 16, CurrentFlow: &score,
 		SpeedMinPercent: 15, SpeedMaxPercent: 54, RecentSpeeds: []SpeedStep{{SpeedPercent: 30, SecondsAgo: 150}, {SpeedPercent: 18, SecondsAgo: 110, Interactive: true},
 			{SpeedPercent: 16, SecondsAgo: 70}, {SpeedPercent: 15, SecondsAgo: 30}}})
-	if !strings.Contains(message, "Your recent stretch speeds, oldest to newest, over the last 3 minutes: 30%, 18%, 16%, 15%.") ||
-		!strings.Contains(message, "Pace has stayed in the lower third of the saved range for 2 minutes.") {
+	if !strings.Contains(message, "Your recent stretch speeds, oldest to newest, over the last 2 minutes 30 seconds: 30%, 18%, 16%, 15%.") ||
+		!strings.Contains(message, "Pace has stayed in the lower third of the saved range for 1 minute 50 seconds.") {
 		t.Fatalf("recent stretch speeds are missing:\n%s", message)
 	}
 }
@@ -237,7 +256,7 @@ func TestTechnicalPlanningMarksChatSetPaceWithoutWords(t *testing.T) {
 		RecentSpeeds: []SpeedStep{{SpeedPercent: 30, SecondsAgo: 150}, {SpeedPercent: 18, SecondsAgo: 110, Interactive: true}}}
 	message := AutopilotMotionMessage(context)
 	if !strings.Contains(message, "30%, 18% (set in chat).") || !strings.Contains(message, "motion state only") ||
-		!strings.Contains(message, "the person set the pace to 18% through chat 2 minutes ago") || !strings.Contains(message, "within a few points of 18%") ||
+		!strings.Contains(message, "the person set the pace to 18% through chat 1 minute 50 seconds ago") || !strings.Contains(message, "within a few points of 18%") ||
 		strings.Contains(message, "use the width") || strings.Contains(message, "When they say it is too much") {
 		t.Fatalf("technical planning context:\n%s", message)
 	}

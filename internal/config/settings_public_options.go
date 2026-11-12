@@ -26,7 +26,6 @@ func publicSettingsOptionHints() PublicSettingsOptionHints {
 			AutopilotSpeechQuiet,
 			AutopilotSpeechNatural,
 			AutopilotSpeechTalkative,
-			AutopilotSpeechCustom,
 		},
 		AutopilotMotionCadences: []string{
 			AutopilotMotionScaled,

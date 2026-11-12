@@ -6,6 +6,9 @@ type LinkedSessionStatus struct {
 	Status          string   `json:"status"`
 	ContinueHealthy bool     `json:"continue_healthy"`
 	RetiredDevices  []string `json:"retired_devices"`
+	// IdleDevices are selected participants that this scalar-only run does not
+	// drive. The UI must not describe them as following the active device.
+	IdleDevices []string `json:"idle_devices"`
 }
 
 // LinkedSessionStatusProvider exposes state only; it never polls or commands.
@@ -17,11 +20,13 @@ type LinkedSessionStatusProvider interface {
 func (f *FanOut) LinkedSessionStatus() LinkedSessionStatus {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	status := LinkedSessionStatus{Status: "ready", ContinueHealthy: f.continueHealthy, RetiredDevices: []string{}}
+	status := LinkedSessionStatus{Status: "ready", ContinueHealthy: f.continueHealthy, RetiredDevices: []string{}, IdleDevices: []string{}}
 	for index, retired := range f.retired {
 		if retired {
 			status.RetiredDevices = append(status.RetiredDevices, f.participants[index].ID)
 			status.Status = "degraded"
+		} else if f.idleInRunLocked(index) {
+			status.IdleDevices = append(status.IdleDevices, f.participants[index].ID)
 		}
 	}
 	if f.fault != nil {

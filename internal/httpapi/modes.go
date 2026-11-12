@@ -44,6 +44,10 @@ func (s *Server) newModeManager() (*modes.Manager, error) {
 			settings, _ := s.store.Snapshot()
 			return settings.LLM.MotionGenerationMode
 		},
+		TempoLeads: func() bool {
+			settings, _ := s.store.Snapshot()
+			return tempoLeads(settings.Device)
+		},
 		PrepareNextDecision: func() bool {
 			settings, _ := s.store.Snapshot()
 			return prepareAutopilotDecisions(settings)

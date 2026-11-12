@@ -1,5 +1,29 @@
 # MagicHandy Risk Register
 
+## R42: Motion-driven VacuGlide air
+
+Level: Medium, open until hardware calibration (2026-11-12)
+
+With the person's permission, chat and Autopilot may open the VacuGlide's
+stroke valves ([ADR 0071](decisions/0071-vacuglide-native-tempo.md)). Drawing
+air out tightens and lengthens the stroke. Nothing measures the air, so the
+effect of a step is open-loop and unknown on hardware.
+
+Mitigation:
+
+- The permission is off by default, on the VacuGlide's page.
+- Steps happen only while a session plays, at most three either way from
+  where it began, inside the existing 12 per connection. A model step is one
+  or two at a time.
+- Each step opens one valve for 300 ms. Stop closes both valves, and nothing
+  changes the air after Stop.
+- The model is told the steps are relative to how the person set the device,
+  and its reply cannot claim a change it did not make.
+
+Residual risk: without calibration, three steps may tighten more or less than
+expected, and air already drawn out stays after Stop until the person changes
+it.
+
 ## R41: Autoblow cloud-only Stop
 
 Level: High, accepted at the owner's direction (2026-11-11)

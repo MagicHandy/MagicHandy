@@ -1,8 +1,6 @@
 // Autoblow's cloud devices: the Autoblow Ultra and the VacuGlide
-// (internal/config/autoblow.go and internal/transport/autoblow.go, ADR 0069).
-
-/** How the VacuGlide's motor speed matches MagicHandy's speeds. */
-export type VacuGlideSpeedMatch = "handy_pace" | "full_range";
+// (internal/config/autoblow.go and internal/transport/autoblow.go, ADRs 0069
+// and 0071).
 
 /** The Ultra's saved settings. The token itself never reaches a client. */
 export interface AutoblowSettings {
@@ -10,13 +8,14 @@ export interface AutoblowSettings {
   timing_offset_ms: number;
 }
 
-/** The VacuGlide's saved settings. */
+/** The VacuGlide's saved settings: its Tempo range, in percent of motor
+ * speed, and whether chat and Autopilot may step its stroke valves. */
 export interface VacuGlideSettings {
   token_set: boolean;
   timing_offset_ms: number;
-  speed_match: VacuGlideSpeedMatch | string;
-  /** The stroke valves follow how far the motion reaches. */
-  stroke_follow: boolean;
+  tempo_min_percent: number;
+  tempo_max_percent: number;
+  motion_air: boolean;
 }
 
 /** A device's live state. Commanded values are what MagicHandy last sent:
@@ -44,7 +43,9 @@ export interface AutoblowStatus {
   late_segments?: number;
   /** The VacuGlide's net stroke valve steps in this connection. */
   stroke_steps: number;
-  stroke_follow?: boolean;
+  motion_air?: boolean;
+  /** The valve steps chat and Autopilot took since playback began. */
+  motion_air_steps?: number;
   valve_open?: string;
   last_error?: string;
 }
@@ -59,5 +60,5 @@ export type AutoblowDevice = "autoblow" | "vacuglide";
 /** Settings > Devices changes for the two devices; the token has its own Save. */
 export interface AutoblowOptionsPatch {
   autoblow?: { timing_offset_ms?: number; clear_token?: boolean };
-  vacuglide?: { timing_offset_ms?: number; speed_match?: VacuGlideSpeedMatch; stroke_follow?: boolean; clear_token?: boolean };
+  vacuglide?: { timing_offset_ms?: number; tempo_min_percent?: number; tempo_max_percent?: number; motion_air?: boolean; clear_token?: boolean };
 }

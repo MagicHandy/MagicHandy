@@ -14,12 +14,13 @@ import (
 // EdgeContext is technical state for a button action. It deliberately carries
 // no conversation, persona or history and adds no work to ordinary chat turns.
 type EdgeContext struct {
-	PreviousSpeed int `json:"previous_speed_percent"`
-	HoldingSpeed  int `json:"holding_speed_percent"`
-	SpeedMin      int `json:"speed_min_percent"`
-	SpeedMax      int `json:"resume_speed_max_percent"`
-	RangeMin      int `json:"holding_range_min_percent"`
-	RangeMax      int `json:"holding_range_max_percent"`
+	TempoOnly     bool `json:"tempo_only,omitempty"`
+	PreviousSpeed int  `json:"previous_speed_percent"`
+	HoldingSpeed  int  `json:"holding_speed_percent"`
+	SpeedMin      int  `json:"speed_min_percent"`
+	SpeedMax      int  `json:"resume_speed_max_percent"`
+	RangeMin      int  `json:"holding_range_min_percent"`
+	RangeMax      int  `json:"holding_range_max_percent"`
 }
 
 // EdgePlan is the bounded result of one holding-plan request.
@@ -40,10 +41,14 @@ const edgePurpose = "The person pressed Edge to request a slow, gentle holding i
 
 func edgeMessages(state EdgeContext, purpose string) []llm.Message {
 	encoded, _ := json.Marshal(state)
-	return []llm.Message{
+	messages := []llm.Message{
 		{Role: "system", Content: `You plan mechanical motion for an adult device. A gentle holding pattern is already running; do not issue device commands or dialogue. Choose how long to keep it and how Autopilot should return. Respect the explicit request for relief: allow time to settle and use a measured return, not a sudden escalation. The saved minimum remains a hard bound. Return JSON only: {"hold_seconds":integer 8..180,"resume_speed_percent":integer within speed_min_percent..resume_speed_max_percent,"resume_style":"previous" or "gentle"}. "previous" returns to the prior geometry at your chosen pace; "gentle" keeps the soft holding geometry at your chosen pace for the next stretch. Autopilot reconsiders after that stretch. Choose for this state; no fixed favourite duration or pace is required.`},
 		{Role: "user", Content: purpose + "\nCurrent mechanical state: " + string(encoded)},
 	}
+	if state.TempoOnly {
+		messages[0].Content = `A VacuGlide is already holding a low motor tempo after the person pressed Edge. It makes its own strokes; there is no position or geometry control. Plan how long to hold and how Autopilot should return, without dialogue or device commands. Return JSON only: {"hold_seconds":integer 8..180,"resume_speed_percent":integer within speed_min_percent..resume_speed_max_percent,"resume_style":"previous" or "gentle"}. "previous" restarts the exact saved tempo plan, including its own levels and variation; resume_speed_percent is unused for that choice. "gentle" uses your chosen resume_speed_percent as a steady tempo for the next stretch. Levels are relative to the user's saved motor range. Changes blend in through the engine. Allow time to settle and choose a measured return suited to the current state; no fixed favourite duration or tempo is required.`
+	}
+	return messages
 }
 
 // Complete makes one request; refusal or invalid output never triggers a retry.

@@ -1,12 +1,12 @@
-// The Autoblow devices' pages (ADR 0069): Connection for both, Speed and
-// Stroke for the VacuGlide, and Test. Every command, Stop included, reaches
-// these devices only through Autoblow's cloud.
+// The Autoblow devices' pages (ADRs 0069 and 0071): Connection for both, Tempo
+// and Stroke for the VacuGlide, and Test. Every command, Stop included,
+// reaches these devices only through Autoblow's cloud.
 import { api } from "../api/client";
-import type { AutoblowDevice, AutoblowStatus, VacuGlideSpeedMatch } from "../api/types";
-import { SegmentedChoice } from "../components/SetpointControls";
+import type { AutoblowDevice, AutoblowStatus } from "../api/types";
+import { RangeSlider } from "../components/RangeSlider";
 import { t } from "../i18n";
 import { confirmThen } from "../util/confirm";
-import { OptionRow, SwitchRow, useLiveSetting, useSaveDeviceOptions } from "./fields";
+import { OptionRow, SLIDER_SAVE_MS, SwitchRow, useLiveSetting, useSaveDeviceOptions } from "./fields";
 import { ConnectionKeyRow, type SecretRowText } from "./HandyPage";
 import type { DeviceContext, DeviceSectionProps } from "./types";
 
@@ -77,7 +77,7 @@ function AutoblowConnectionRows({ ctx, device }: { ctx: DeviceContext; device: A
         </OptionRow>
       )}
       <OptionRow label={t("Device buttons")} hint={device === "vacuglide"
-        ? t("While connected, the mode button stops all motion like Esc, and the speed buttons raise or lower the Speed limit. Holding the mode button leaves online mode.")
+        ? t("While connected, the mode button stops all motion like Esc, and the speed buttons move the top of the Tempo range. Holding the mode button leaves online mode.")
         : t("While connected, the pause button stops all motion like Esc, and the speed buttons raise or lower the Speed limit.")}>
         <output>{status?.button_events ? t("Listening") : t("Not listening")}</output>
       </OptionRow>
@@ -96,23 +96,32 @@ export function VacuGlideConnectionSection({ ctx }: DeviceSectionProps) {
   return <AutoblowConnectionRows ctx={ctx} device="vacuglide" />;
 }
 
-export function VacuGlideSpeedSection({ ctx }: DeviceSectionProps) {
+/** The lowest motor speed the Tempo range may start at: the motor stalls
+ * below about 4%. */
+export const VACUGLIDE_TEMPO_FLOOR = 5;
+
+export function VacuGlideTempoSection({ ctx, compact = false }: Pick<DeviceSectionProps, "ctx"> & { compact?: boolean }) {
   const save = useSaveDeviceOptions();
   const status = autoblowStatus(ctx, "vacuglide");
   const locked = ctx.locked || !ctx.canConfigureHost;
-  const saved = (ctx.settings?.vacuglide?.speed_match ?? "handy_pace") as VacuGlideSpeedMatch;
-  const [match, setMatch] = useLiveSetting<VacuGlideSpeedMatch>(saved, (speed_match) => save({ vacuglide: { speed_match } }));
+  const vacuglide = ctx.settings?.vacuglide;
+  const [range, setRange] = useLiveSetting(
+    { min: vacuglide?.tempo_min_percent ?? VACUGLIDE_TEMPO_FLOOR, max: vacuglide?.tempo_max_percent ?? 100 },
+    (value) => save({ vacuglide: { tempo_min_percent: value.min, tempo_max_percent: value.max } }), SLIDER_SAVE_MS);
+  if (compact) {
+    return (
+      <div className="form-rows device-rows">
+        <RangeSlider label={t("Tempo range")} floor={VACUGLIDE_TEMPO_FLOOR} ceil={100} minValue={range.min} maxValue={range.max} disabled={locked} onChange={setRange} />
+        <SwitchRow label={t("Chat and Autopilot may adjust the stroke")} hint={t("Up to three valve steps either way a session.")}
+          checked={Boolean(vacuglide?.motion_air)} disabled={locked}
+          onChange={(checked) => void save({ vacuglide: { motion_air: checked } }).catch(() => undefined)} />
+      </div>
+    );
+  }
   return (
     <div className="form-rows device-rows">
-      <OptionRow label={t("Speed match")} hint={match === "full_range"
-        ? t("Scales the reference travel rate toward the motor's full range. Pattern shape and limits still affect the commanded speed.")
-        : t("Maps the shared motion's travel rate to motor speed. Physical pace may differ from The Handy.")}>
-        <SegmentedChoice className="device-segmented" label={t("Speed match")} value={match} disabled={locked}
-          options={[
-            { value: "handy_pace" as const, label: t("Reference pace") },
-            { value: "full_range" as const, label: t("Full motor range") },
-          ]}
-          onChange={setMatch} />
+      <OptionRow label={t("Tempo range")} hint={t("The motor speeds the slowest and the fastest tempo play at. Chat, Autopilot and routines choose a tempo inside this range and never raise it. The device's speed buttons move its top by 10.")}>
+        <RangeSlider label={t("Tempo range")} floor={VACUGLIDE_TEMPO_FLOOR} ceil={100} minValue={range.min} maxValue={range.max} disabled={locked} onChange={setRange} />
       </OptionRow>
       {status?.connected && (
         <OptionRow label={t("Motor speed")} hint={t("The last speed MagicHandy sent, not a measurement.")}>
@@ -120,7 +129,7 @@ export function VacuGlideSpeedSection({ ctx }: DeviceSectionProps) {
         </OptionRow>
       )}
       <div className="form-row form-row-plain">
-        <p className="hint-block">{t("The VacuGlide makes its own strokes and follows the pace of the motion. Depth, stroke length and position changes do not reach it; set its stroke under Stroke.")}</p>
+        <p className="hint-block">{t("The VacuGlide makes its own strokes, so it plays a tempo: how fast it strokes. With only the VacuGlide playing, chat, Autopilot and its routines choose the tempo. When a Handy or an Ultra plays too, the VacuGlide follows the pace of their movement.")}</p>
       </div>
     </div>
   );
@@ -140,10 +149,15 @@ export function VacuGlideStrokeSection({ ctx }: DeviceSectionProps) {
           {connected && <output>{t("Steps this connection: {steps}", { steps: status?.stroke_steps ?? 0 })}</output>}
         </div>
       </OptionRow>
-      <SwitchRow label={t("Follow the motion's reach")}
-        hint={t("Experimental. Takes a valve step when the motion's strokes reach deeper or stay near the tip, at most three steps either way from where playback began. Not yet tuned on a VacuGlide.")}
-        checked={Boolean(ctx.settings?.vacuglide?.stroke_follow)} disabled={hostLocked}
-        onChange={(checked) => void save({ vacuglide: { stroke_follow: checked } }).catch(() => undefined)} />
+      <SwitchRow label={t("Chat and Autopilot may adjust the stroke")}
+        hint={t("Lets them take up to three valve steps either way in one playback session, only while it plays. Nothing measures the air, so each step is relative to how you set the device.")}
+        checked={Boolean(ctx.settings?.vacuglide?.motion_air)} disabled={hostLocked}
+        onChange={(checked) => void save({ vacuglide: { motion_air: checked } }).catch(() => undefined)} />
+      {connected && Boolean(status?.motion_air_steps) && (
+        <OptionRow label={t("Steps by chat and Autopilot")} hint={t("In this playback session.")}>
+          <output>{status?.motion_air_steps ?? 0}</output>
+        </OptionRow>
+      )}
     </div>
   );
 }

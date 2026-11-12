@@ -15,15 +15,21 @@ import (
 // before scheduling it, and chat, pause and Stop keep their usual authority.
 const nextCheckField = "next_check_seconds"
 
-func nextCheckSchema() map[string]any {
+func nextCheckSchema(floor int) map[string]any {
 	return map[string]any{"type": "integer",
-		"minimum": config.AutopilotAutoTimingMinSeconds, "maximum": config.AutopilotAutoTimingMaxSeconds}
+		"minimum": autoTimingFloor(floor), "maximum": config.AutopilotAutoTimingMaxSeconds}
+}
+
+// autoTimingFloor is the shortest stretch a planner may choose: the person's
+// change rate sets it; zero falls back to the scheduler minimum.
+func autoTimingFloor(floor int) int {
+	return max(floor, config.AutopilotAutoTimingMinSeconds)
 }
 
 // withNextCheckSchema requires next_check_seconds at the root of an object
 // response schema. Only auto-timing turns call it, so local schemas keep their
 // exact bytes and field order.
-func withNextCheckSchema(schema json.RawMessage) json.RawMessage {
+func withNextCheckSchema(schema json.RawMessage, floor int) json.RawMessage {
 	if len(schema) == 0 {
 		return schema
 	}
@@ -35,7 +41,7 @@ func withNextCheckSchema(schema json.RawMessage) json.RawMessage {
 	if properties == nil {
 		return schema
 	}
-	properties[nextCheckField] = nextCheckSchema()
+	properties[nextCheckField] = nextCheckSchema(floor)
 	required, _ := root["required"].([]any)
 	if !slices.Contains(required, any(nextCheckField)) {
 		root["required"] = append(required, nextCheckField)
@@ -81,7 +87,7 @@ func takeNextCheck(raw string) (string, int) {
 func writeAutoTiming(builder *strings.Builder, context AutopilotContext, continuous bool) {
 	level := normalizedMotionChangeLevel(context.MotionChangeLevel)
 	fmt.Fprintf(builder, `Timing is yours: also return "next_check_seconds", a whole number from %d to %d, for how long the motion you choose, or keep, plays before you decide again. Until then the person feels this one motion: its texture may breathe, but its character stays the same, so a long stretch is a long time with one pattern.`,
-		config.AutopilotAutoTimingMinSeconds, config.AutopilotAutoTimingMaxSeconds)
+		autoTimingFloor(context.AutoTimingFloor), config.AutopilotAutoTimingMaxSeconds)
 	if minimum, maximum := context.MotionMinSeconds, context.MotionMaxSeconds; minimum > 0 && maximum >= minimum {
 		fmt.Fprintf(builder, " At their change appetite of %d/8 (%s), an ordinary stretch lasts about %d-%d seconds. Treat that as the reference and leave it when the moment gives a reason:",
 			level, motionChangeBias(level), minimum, maximum)

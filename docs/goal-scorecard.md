@@ -1,5 +1,49 @@
 # Goal Scorecard
 
+
+## 2026-11-12 — Native tempo / Graphite review follow-up
+
+- No new shipping dependency or parallel frontend. Canonical main JS:
+  1,354,048 bytes (364,155 gzip), versus base 1,343,882 bytes (360,156 gzip):
+  +10,166 raw / +3,999 gzip bytes for the combined native/UI work.
+- Windows amd64, `CGO_ENABLED=0`, `-trimpath -ldflags='-s -w'`:
+  25,120,256 bytes. The earlier native review build with those flags was
+  25,089,024 bytes; this follow-up adds 31,232 bytes. Unstripped debug builds
+  are not compared with that shipping measurement.
+- Isolated review process: 27.90 MiB idle working set after startup; 37.77 MiB
+  observed during simulated Autopilot/Edge, with 198 trace rows. This is an
+  observation, not a long-duration memory-soak result. Model workers are separate.
+- Full evidence and remaining physical checks:
+  [completion review](vacuglide-completion-review-2026-11-12.md).
+
+## 2026-11-12 — VacuGlide tempo channel
+
+Against alpha.85 `f4e67ef6`, both built on this host with Go **1.26.11**,
+Windows amd64, `CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`:
+
+- **Core, including the canonical embedded UI:** **24,877,056 -> 25,111,040 B**
+  (+233,984 B, 0.94%). Re-measured after Codex's completion and the Graphite
+  realignment. The new code:
+  - the engine's tempo channel, its follower and engine-owned air steps;
+  - six seeded routines;
+  - the tempo chat and Autopilot contracts;
+  - the HTTP routes.
+
+  The VacuGlide's averaging renderer is removed.
+- **Canonical UI:** **2,938,259 -> 2,957,555 B** (+19,296 B, 0.66%), nine files
+  before and after.
+  - Main JS: **1,343,882 -> 1,353,081 B** (+9,199 B); gzip -9 **360,156 ->
+    362,831 B** (+2,675 B). The added weight is the Now playing card and the
+    Play card. The old tempo, vibration and live visualizer readouts are
+    removed, along with the five Autopilot timing switches (ADR 0072).
+  - CSS: **210,443 -> 212,819 B** (+2,376 B).
+- **Runtime:** no new dependency, worker or goroutine. Tempo frames ride the
+  existing engine dispatch only while a tempo device plays. Handy-only runs
+  carry no tempo.
+
+No idle-RSS, cold-start or physical-pace improvement is claimed. See
+[ADR 0071](decisions/0071-vacuglide-native-tempo.md).
+
 ## 2026-11-12 — Alpha.85 reviewed integration
 
 Updates' final integration uses Go **1.26.11** for GO-2026-6859 and includes

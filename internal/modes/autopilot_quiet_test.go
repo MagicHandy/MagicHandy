@@ -21,7 +21,6 @@ func TestSkippedCheckInWaitsForSpeechCadenceWithoutPublication(t *testing.T) {
 			s := config.DefaultAutopilotSettings()
 			s.MotionCadence, s.MotionMinSeconds, s.MotionMaxSeconds = config.AutopilotMotionCustom, 60, 60
 			s.SpeechCadence, s.SpeechMinSeconds, s.SpeechMaxSeconds = config.AutopilotSpeechCustom, 20, 20
-			s.AdaptiveMotionTiming, s.AdaptiveSpeechTiming = false, false
 			return s
 		},
 		Now: clock.Now, Tick: 2 * time.Millisecond, Seed: 42,

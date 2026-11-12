@@ -181,6 +181,11 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	if err != nil {
 		return Result{}, err
 	}
+	// With only a VacuGlide playing, tempo is the motion (ADR 0071).
+	if s.capabilities().Motion && tempoLeadsContext(s.MotionContext) {
+		request.Message = userMessage
+		return s.completeTempo(ctx, request, emit)
+	}
 	if s.capabilities().Motion && (s.capabilities().MotionMode == MotionModeLayered || s.capabilities().MotionMode == MotionModeCreativeV2) {
 		request.Message = userMessage
 		return s.completeLayered(ctx, request, emit)

@@ -1451,15 +1451,31 @@ The Autoblow Ultra and the VacuGlide are two more descriptors
   instructions. It also shows the round trip, any firmware notice, whether the
   device's buttons are being listened to, and that Stop needs Autoblow's cloud.
   The VacuGlide adds:
-  - **Speed**: Speed match, either the same pace as The Handy or the full
-    motor range, and the commanded motor speed;
-  - **Stroke**: Shorter and Longer steps and the experimental Follow the
-    motion's reach.
+  - **Tempo**: the Tempo range, and the motor speed last sent
+    ([ADR 0071](decisions/0071-vacuglide-native-tempo.md));
+  - **Stroke**: Shorter and Longer steps, and whether chat and Autopilot may
+    adjust the stroke (off by default).
 - **Device panel.** The VacuGlide's row has a Stroke level whose − and + are
   shorter and longer, and Test. Its readout is the commanded motor speed; the
   Ultra's is its commanded position.
 - **Visualizer.** With no Handy in playback, it draws the generic track in
   percent instead of a Handy in millimetres.
+- **Now playing.** Chat's first card has one shape for every device mix:
+  - what plays and who chose it (chat, Autopilot, you or the video);
+  - one Tempo or Pace bar, with the next eight seconds while tempo leads;
+  - the device drawing with its commanded position while positions lead;
+  - with more than one device, the devices in this run and what each was
+    sent.
+
+  The details sit behind a disclosure. Every value is a commanded estimate.
+  The status bar shows the same readout as one pill and no longer repeats
+  the title or carries a separate timer.
+- **Play.** While tempo leads, a separate Play card holds the routines, the
+  Tempo slider, the Stroke stepper and Pause the motor, so status never holds
+  controls.
+- **Device panel.** Rows group into "In this run" and "Not in this run".
+  Only devices in the run raise a warning on the panel's chip. While tempo
+  leads, Limits holds the Tempo range and the stroke permission.
 - **Limits.** The Stroke limits and Reverse direction show while a Handy or
   the Ultra plays, since both use the stroke window. With only a VacuGlide,
   the device panel shows Speed alone.
@@ -1520,6 +1536,6 @@ and model checks, whose stale results cannot update a reconnected account.
 See [ADR 0070](decisions/0070-chatgpt-reconnect-through-public-origin.md).
 
 Autoblow device choices are labeled **Experimental**; their pages state that
-validation is simulated. VacuGlide **Reference pace** describes a command
-mapping, not physical equivalence with The Handy. Both valve buttons require
-the controlling administrator and the current Stop sequence.
+validation is simulated. The VacuGlide's **Tempo range** is a range of motor
+commands; nothing measures the stroke rate. Both valve buttons require the
+controlling administrator and the current Stop sequence.

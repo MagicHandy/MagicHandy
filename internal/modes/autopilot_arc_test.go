@@ -7,30 +7,25 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/config"
 )
 
-func arcSettings(enabled bool, tracking bool, minutes int) config.AutopilotSettings {
+func arcSettings(enabled bool, minutes int) config.AutopilotSettings {
 	settings := config.DefaultAutopilotSettings()
 	settings.SessionArc = enabled
-	settings.SessionTracking = tracking
 	settings.SessionArcMinutes = minutes
 	return settings
 }
 
 // The arc is off by default because it changes what the model is encouraged to
-// do, unlike tracking which is inert context.
-func TestSessionArcIsOffAndTrackingIsOnByDefault(t *testing.T) {
-	defaults := config.DefaultAutopilotSettings()
-	if defaults.SessionArc {
+// do; the session facts it reads are always there.
+func TestSessionArcIsOffByDefault(t *testing.T) {
+	if config.DefaultAutopilotSettings().SessionArc {
 		t.Fatal("session buildup must be opt-in")
-	}
-	if !defaults.SessionTracking {
-		t.Fatal("session tracking is inert context and should default on")
 	}
 }
 
 // Disabled means absent, not zero: the model must not receive an arc it could
 // reason about while the user has the bar switched off.
 func TestDisabledArcReportsNothing(t *testing.T) {
-	manager := swayTestManager(t, arcSettings(false, true, 30))
+	manager := swayTestManager(t, arcSettings(false, 30))
 	manager.mu.Lock()
 	percent := manager.arcPercentLocked(time.Unix(0, 0))
 	manager.mu.Unlock()
@@ -44,7 +39,7 @@ func TestDisabledArcReportsNothing(t *testing.T) {
 
 // Time is the floor so a session that is simply left running still progresses.
 func TestArcAdvancesWithElapsedTime(t *testing.T) {
-	manager := swayTestManager(t, arcSettings(true, true, 1))
+	manager := swayTestManager(t, arcSettings(true, 1))
 	start := time.Unix(1000, 0)
 	manager.mu.Lock()
 	manager.history.arc.startedAt = start
@@ -64,7 +59,7 @@ func TestArcAdvancesWithElapsedTime(t *testing.T) {
 }
 
 func TestThirtyMinuteArcHonorsConfiguredDuration(t *testing.T) {
-	manager := swayTestManager(t, arcSettings(true, true, 30))
+	manager := swayTestManager(t, arcSettings(true, 30))
 	start := time.Unix(1500, 0)
 	manager.mu.Lock()
 	manager.history.arc.startedAt = start
@@ -78,7 +73,7 @@ func TestThirtyMinuteArcHonorsConfiguredDuration(t *testing.T) {
 }
 
 func TestTwentyMinuteArcUsesActiveTimeAndFreezesWhilePaused(t *testing.T) {
-	manager := swayTestManager(t, arcSettings(true, true, 20))
+	manager := swayTestManager(t, arcSettings(true, 20))
 	now := time.Date(2026, time.August, 22, 12, 0, 0, 0, time.UTC)
 	manager.options.Now = func() time.Time { return now }
 	manager.options.Tick = time.Minute
@@ -111,7 +106,7 @@ func TestTwentyMinuteArcUsesActiveTimeAndFreezesWhilePaused(t *testing.T) {
 }
 
 func TestMaximumArcDurationDoesNotOverflow(t *testing.T) {
-	manager := swayTestManager(t, arcSettings(true, true, config.AutopilotMaximumArcMinutes))
+	manager := swayTestManager(t, arcSettings(true, config.AutopilotMaximumArcMinutes))
 	start := time.Unix(0, 0)
 	duration := time.Duration(config.AutopilotMaximumArcMinutes) * time.Minute
 	manager.mu.Lock()
@@ -121,12 +116,19 @@ func TestMaximumArcDurationDoesNotOverflow(t *testing.T) {
 	if half < 49 || half > 50 {
 		t.Fatalf("maximum-duration midpoint = %d%%, want about 50%%", half)
 	}
+	manager.mu.Lock()
+	manager.placeArcPercentLocked(start, 75)
+	placed := manager.arcPercentLocked(start)
+	manager.mu.Unlock()
+	if placed < 74 || placed > 75 {
+		t.Fatalf("placing a long buildup overflowed: %d%%", placed)
+	}
 }
 
 // The configured duration is authoritative. Planning churn must not accelerate
 // the bar: the model may react to visible progress, but cannot rewrite it.
 func TestAcceptedDecisionsDoNotAccelerateBuildup(t *testing.T) {
-	manager := swayTestManager(t, arcSettings(true, true, 60))
+	manager := swayTestManager(t, arcSettings(true, 60))
 	now := manager.options.Now()
 	manager.mu.Lock()
 	manager.loop.mode = ModeAutopilot
@@ -153,7 +155,7 @@ func TestAcceptedDecisionsDoNotAccelerateBuildup(t *testing.T) {
 
 // A bar the user cannot pull back is not really an override.
 func TestUserCanPlaceAndResetTheArc(t *testing.T) {
-	manager := swayTestManager(t, arcSettings(true, true, 30))
+	manager := swayTestManager(t, arcSettings(true, 30))
 	manager.mu.Lock()
 	manager.loop.mode = ModeAutopilot
 	manager.mu.Unlock()
@@ -172,7 +174,7 @@ func TestUserCanPlaceAndResetTheArc(t *testing.T) {
 // exists would store a value that is discarded a moment later. Found live: the
 // endpoint returned 200 and reported 0%.
 func TestArcPlacementIsRefusedWithoutASession(t *testing.T) {
-	manager := swayTestManager(t, arcSettings(true, true, 30))
+	manager := swayTestManager(t, arcSettings(true, 30))
 	if manager.SetSessionArcPercent(55) {
 		t.Fatal("placing the arc should be refused while Autopilot is not running")
 	}
@@ -187,5 +189,35 @@ func TestArcPlacementIsRefusedWithoutASession(t *testing.T) {
 	}
 	if got := manager.SessionArcSnapshot().Percent; got < 53 || got > 57 {
 		t.Fatalf("placed at 55%% but the snapshot reads %d%%", got)
+	}
+}
+
+func TestBuildupEditInvalidatesThePreparedDecision(t *testing.T) {
+	for _, reset := range []bool{false, true} {
+		manager := swayTestManager(t, arcSettings(true, 30))
+		now := manager.options.Now()
+		manager.mu.Lock()
+		manager.loop.mode, manager.loop.generation = ModeAutopilot, 7
+		manager.motion.segment = Segment{PatternID: "steady", SpeedPercent: 30}
+		manager.motion.pending = &segmentChoice{segment: Segment{PatternID: "steady", SpeedPercent: 90}}
+		manager.motion.deadline = now.Add(time.Minute)
+		manager.mu.Unlock()
+		if reset {
+			manager.ResetSessionArc()
+		} else {
+			manager.SetSessionArcPercent(20)
+		}
+		manager.mu.Lock()
+		stale := manager.motion.pending != nil || manager.loop.generation == 7
+		changed := manager.motion.segment.SpeedPercent != 30
+		waiting := manager.motion.planAt.After(now)
+		manager.mu.Unlock()
+		if stale || changed || waiting {
+			t.Fatalf("reset=%v stale=%v changed=%v waiting=%v", reset, stale, changed, waiting)
+		}
+		choice := segmentChoice{segment: Segment{PatternID: "steady", SpeedPercent: 90}}
+		if manager.armAutopilotChoice(ModeAutopilot, &choice, 7) {
+			t.Fatal("an old finish target's result was admitted")
+		}
 	}
 }

@@ -11,9 +11,7 @@ import (
 
 	"github.com/mapledaemon/MagicHandy/internal/autoblow"
 	"github.com/mapledaemon/MagicHandy/internal/config"
-	"github.com/mapledaemon/MagicHandy/internal/motion"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
-	"github.com/mapledaemon/MagicHandy/internal/vacuglide"
 )
 
 const (
@@ -75,17 +73,12 @@ func ultraConfig(settings config.Settings) transport.AutoblowConfig {
 	return transport.AutoblowConfig{Token: settings.Autoblow.DeviceToken, OffsetMillis: settings.Autoblow.TimingOffsetMillis}
 }
 
-// vacuglideConfig converts saved settings. The full range reaches the motor's
-// top speed at MagicHandy's 100% on the selected Handy model's scale.
+// vacuglideConfig converts saved settings: the Tempo range the owner plays
+// tempo across, and whether motion may step the valves (ADR 0071).
 func vacuglideConfig(settings config.Settings) transport.AutoblowConfig {
-	scale := 1.0
-	if settings.VacuGlide.SpeedMatch == config.VacuGlideSpeedFullRange {
-		if top := motion.ReferenceTravelRate(100, settings.EffectiveMotion().HandyModel); top > 0 {
-			scale = vacuglide.FullSpeedTravel / top
-		}
-	}
 	return transport.AutoblowConfig{Token: settings.VacuGlide.DeviceToken, OffsetMillis: settings.VacuGlide.TimingOffsetMillis,
-		SpeedScale: scale, StrokeFollow: settings.VacuGlide.StrokeFollow}
+		TempoMinPercent: float64(settings.VacuGlide.TempoMinPercent), TempoMaxPercent: float64(settings.VacuGlide.TempoMaxPercent),
+		MotionAir: settings.VacuGlide.MotionAir}
 }
 
 // deviceRoutes registers the devices that own their connections outside the
@@ -93,6 +86,7 @@ func vacuglideConfig(settings config.Settings) transport.AutoblowConfig {
 func (s *Server) deviceRoutes(mux *http.ServeMux) {
 	s.coyoteRoutes(mux)
 	s.autoblowRoutes(mux)
+	s.tempoRoutes(mux)
 }
 
 func (s *Server) autoblowRoutes(mux *http.ServeMux) {
@@ -400,8 +394,9 @@ func (s *Server) applyAutoblowSettingsTransition(ctx context.Context, previous, 
 
 // autoblowButton acts on a device button. While a device is online its
 // buttons do nothing by themselves (Autoblow's API sends them as events), so
-// the pause or mode button stops everything, like Esc, and the speed buttons
-// nudge the Speed limit's maximum, like the device panel.
+// the pause or mode button stops everything, like Esc. The Ultra's speed
+// buttons nudge the Speed limit's maximum, like the device panel; the
+// VacuGlide's move the top of its own Tempo range (ADR 0071).
 func (s *Server) autoblowButton(device, button string) {
 	if s.quiescing.Load() {
 		return
@@ -426,6 +421,15 @@ func (s *Server) autoblowButton(device, button string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
 			_, _, err, refreshErr := s.updateSettingsAndRuntime(ctx, func(current config.Settings) (config.Settings, error) {
+				if device == transport.VacuGlideDevice {
+					tempo := &current.VacuGlide
+					delta := config.VacuGlideTempoButtonStep
+					if step < 0 {
+						delta = -delta
+					}
+					tempo.TempoMaxPercent = max(tempo.TempoMinPercent, min(100, tempo.TempoMaxPercent+delta))
+					return current, nil
+				}
 				motionSettings := current.Motion
 				motionSettings.SpeedMaxPercent = max(motionSettings.SpeedMinPercent, min(100, motionSettings.SpeedMaxPercent+step))
 				current.Motion = motionSettings

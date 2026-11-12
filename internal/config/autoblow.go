@@ -8,18 +8,20 @@ import (
 )
 
 // Autoblow's cloud devices (ADR 0069). The Autoblow Ultra is a stroker that
-// takes positions; the VacuGlide follows pace and adjusts its stroke with air.
+// takes positions; the VacuGlide plays tempo and sets its stroke with air
+// (ADR 0071).
 const (
 	DeviceAutoblow  = "autoblow"
 	DeviceVacuGlide = "vacuglide"
 )
 
-// How the VacuGlide's motor speed matches MagicHandy's speeds.
+// The VacuGlide's Tempo range is in percent of its motor's speed. Tempo 1
+// plays at the minimum and tempo 100 at the maximum. The floor keeps the
+// motor above its stall point; the device's speed buttons move the maximum
+// by VacuGlideTempoButtonStep.
 const (
-	// VacuGlideSpeedHandyPace keeps the pace a speed has on The Handy.
-	VacuGlideSpeedHandyPace = "handy_pace"
-	// VacuGlideSpeedFullRange reaches the motor's top speed at MagicHandy's.
-	VacuGlideSpeedFullRange = "full_range"
+	VacuGlideTempoFloorPercent = 5
+	VacuGlideTempoButtonStep   = 10
 )
 
 // AutoblowMaxTimingOffsetMs bounds a cloud device's timing offset.
@@ -36,9 +38,12 @@ type AutoblowSettings struct {
 type VacuGlideSettings struct {
 	DeviceToken        string `json:"device_token,omitempty"`
 	TimingOffsetMillis int    `json:"timing_offset_ms"`
-	SpeedMatch         string `json:"speed_match"`
-	// StrokeFollow lets the stroke valves follow how far the motion reaches.
-	StrokeFollow bool `json:"stroke_follow"`
+	// TempoMinPercent and TempoMaxPercent are the motor speeds tempo 1 and
+	// tempo 100 play at.
+	TempoMinPercent int `json:"tempo_min_percent"`
+	TempoMaxPercent int `json:"tempo_max_percent"`
+	// MotionAir lets chat, Autopilot and routines step the stroke valves.
+	MotionAir bool `json:"motion_air"`
 }
 
 // PublicAutoblowSettings is the API-safe view: whether a token is saved.
@@ -49,10 +54,11 @@ type PublicAutoblowSettings struct {
 
 // PublicVacuGlideSettings is the API-safe VacuGlide view.
 type PublicVacuGlideSettings struct {
-	TokenSet           bool   `json:"token_set"`
-	TimingOffsetMillis int    `json:"timing_offset_ms"`
-	SpeedMatch         string `json:"speed_match"`
-	StrokeFollow       bool   `json:"stroke_follow"`
+	TokenSet           bool `json:"token_set"`
+	TimingOffsetMillis int  `json:"timing_offset_ms"`
+	TempoMinPercent    int  `json:"tempo_min_percent"`
+	TempoMaxPercent    int  `json:"tempo_max_percent"`
+	MotionAir          bool `json:"motion_air"`
 }
 
 // AutoblowPatch changes individual Ultra settings. The token keeps its own
@@ -64,16 +70,17 @@ type AutoblowPatch struct {
 
 // VacuGlidePatch changes individual VacuGlide settings.
 type VacuGlidePatch struct {
-	TimingOffsetMillis *int    `json:"timing_offset_ms,omitempty"`
-	SpeedMatch         *string `json:"speed_match,omitempty"`
-	StrokeFollow       *bool   `json:"stroke_follow,omitempty"`
-	ClearToken         bool    `json:"clear_token,omitempty"`
+	TimingOffsetMillis *int  `json:"timing_offset_ms,omitempty"`
+	TempoMinPercent    *int  `json:"tempo_min_percent,omitempty"`
+	TempoMaxPercent    *int  `json:"tempo_max_percent,omitempty"`
+	MotionAir          *bool `json:"motion_air,omitempty"`
+	ClearToken         bool  `json:"clear_token,omitempty"`
 }
 
-// DefaultVacuGlideSettings keeps The Handy's pace and leaves the valves to
+// DefaultVacuGlideSettings spans the motor's full range and leaves the air to
 // the person.
 func DefaultVacuGlideSettings() VacuGlideSettings {
-	return VacuGlideSettings{SpeedMatch: VacuGlideSpeedHandyPace}
+	return VacuGlideSettings{TempoMinPercent: VacuGlideTempoFloorPercent, TempoMaxPercent: 100}
 }
 
 // Public returns the API-safe Ultra view.
@@ -84,7 +91,7 @@ func (s AutoblowSettings) Public() PublicAutoblowSettings {
 // Public returns the API-safe VacuGlide view.
 func (s VacuGlideSettings) Public() PublicVacuGlideSettings {
 	return PublicVacuGlideSettings{TokenSet: s.DeviceToken != "", TimingOffsetMillis: s.TimingOffsetMillis,
-		SpeedMatch: s.SpeedMatch, StrokeFollow: s.StrokeFollow}
+		TempoMinPercent: s.TempoMinPercent, TempoMaxPercent: s.TempoMaxPercent, MotionAir: s.MotionAir}
 }
 
 // AutoblowToken returns the saved token of an Autoblow device.
@@ -113,9 +120,14 @@ func (s Settings) WithAutoblowToken(device, token string) (Settings, error) {
 	return s, nil
 }
 
+// Settings saved before the Tempo range (ADR 0071) have neither bound.
 func applyMissingVacuGlideDefaults(settings VacuGlideSettings) VacuGlideSettings {
-	if settings.SpeedMatch == "" {
-		settings.SpeedMatch = VacuGlideSpeedHandyPace
+	defaults := DefaultVacuGlideSettings()
+	if settings.TempoMinPercent == 0 {
+		settings.TempoMinPercent = defaults.TempoMinPercent
+	}
+	if settings.TempoMaxPercent == 0 {
+		settings.TempoMaxPercent = defaults.TempoMaxPercent
 	}
 	return settings
 }
@@ -126,8 +138,8 @@ func validateAutoblowSettings(settings Settings) error {
 			return fmt.Errorf("the %s timing offset must be between -%d and %d ms", name, AutoblowMaxTimingOffsetMs, AutoblowMaxTimingOffsetMs)
 		}
 	}
-	if settings.VacuGlide.SpeedMatch != VacuGlideSpeedHandyPace && settings.VacuGlide.SpeedMatch != VacuGlideSpeedFullRange {
-		return fmt.Errorf("unknown VacuGlide speed match %q", settings.VacuGlide.SpeedMatch)
+	if low, high := settings.VacuGlide.TempoMinPercent, settings.VacuGlide.TempoMaxPercent; low < VacuGlideTempoFloorPercent || high > 100 || low > high {
+		return fmt.Errorf("the VacuGlide's Tempo range must satisfy %d <= minimum <= maximum <= 100", VacuGlideTempoFloorPercent)
 	}
 	for _, token := range []string{settings.Autoblow.DeviceToken, settings.VacuGlide.DeviceToken} {
 		if token != "" && !autoblow.ValidToken(token) {
@@ -154,9 +166,10 @@ func applyAutoblowPatches(next *Settings, ultra *AutoblowPatch, vacuglide *VacuG
 	}
 	if vacuglide != nil {
 		patchInt(&next.VacuGlide.TimingOffsetMillis, vacuglide.TimingOffsetMillis)
-		patchString(&next.VacuGlide.SpeedMatch, vacuglide.SpeedMatch)
-		if vacuglide.StrokeFollow != nil {
-			next.VacuGlide.StrokeFollow = *vacuglide.StrokeFollow
+		patchInt(&next.VacuGlide.TempoMinPercent, vacuglide.TempoMinPercent)
+		patchInt(&next.VacuGlide.TempoMaxPercent, vacuglide.TempoMaxPercent)
+		if vacuglide.MotionAir != nil {
+			next.VacuGlide.MotionAir = *vacuglide.MotionAir
 		}
 		if vacuglide.ClearToken {
 			next.VacuGlide.DeviceToken = ""

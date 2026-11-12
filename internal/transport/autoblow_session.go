@@ -80,6 +80,12 @@ func (s *autoblowSession) Diagnostics() TransportDiagnostics {
 	return diagnostics
 }
 
+// TakesTempo reports whether this session's device plays the tempo channel.
+func (s *autoblowSession) TakesTempo() bool {
+	output, ok := s.owner.(TempoOutput)
+	return ok && output.TakesTempo()
+}
+
 func (s *autoblowSession) MotionTimingCapabilities() MotionTimingCapabilities {
 	return s.owner.MotionTimingCapabilities()
 }

@@ -179,25 +179,30 @@ supplies coordinates, chooses a replacement, or requires a change.
 `Chat only` is the default. This setting affects only autonomous spoken
 check-ins; interactive user chat keeps its existing capability gates.
 
-### Adaptive timing
+### Model timing
 
-Motion and speech each have an independent adaptive-timing switch. When
-enabled, the model returns `soon`, `normal`, or `later`; code maps that category
-to an overlapping portion of the selected range and samples a concrete delay.
-When disabled, code samples the full selected range. Apart from Auto timing
-below, the model never emits seconds or a deadline.
+The model's `soon`, `normal` or `later` always shapes the delay
+([ADR 0072](decisions/0072-autopilot-timing-without-switches.md)). The
+scheduler draws from a triangle inside the selected window:
+- soon covers the first 40%, peaking at 12%;
+- normal covers the middle 50%;
+- later covers the last 40%, peaking at 88%.
+
+Apart from Auto timing below, the model never emits seconds or a deadline.
 
 Creative v2 and Layered planning returns no category: their turns always
 sample the `normal` portion of the window.
 
 ### Auto timing (hosted planners)
 
-[ADR 0050](decisions/0050-hosted-autopilot-auto-timing.md). An Auto timing
-switch, off by default, lets a hosted Autopilot planner choose how long each
-stretch plays. The Autopilot card offers it only when the Autopilot route is
-hosted, and the backend honors it only then: local planners settle on one
-value (Gemma 12B chose 120 seconds on all twelve turns of a build), so their
-cadence stays sampled.
+[ADR 0050](decisions/0050-hosted-autopilot-auto-timing.md), amended by
+[ADR 0072](decisions/0072-autopilot-timing-without-switches.md).
+
+A planner whose route supports it always chooses how long each stretch plays.
+Its shortest stretch is half the shortest ordinary stretch at the person's
+change rate, never below 8 s. Local planners settle on one value (Gemma 12B
+chose 120 seconds on all twelve turns of a build), so their cadence stays
+sampled.
 
 With the switch on, motion turns require `next_check_seconds` (8–300) in place
 of the category. The scheduler varies it by up to ±12% from the seeded cadence
@@ -435,11 +440,14 @@ advances exactly one percentage point per 12 active seconds, reads 30% after six
 active minutes, remains 30% through five simulated paused minutes, and reaches
 60% only after another six active minutes.
 
-In the Chat control, Motion change rate is an explicit numbered 1–8 scale and
-Spoken check-ins is a labeled set-point slider. Speech reveals its custom timing
-row directly beneath that control. Session buildup and its
-duration are primary controls as well; only adaptive timing, speech-motion
-authority, and the lower-level tracking switch remain under Advanced.
+In the Chat control:
+- **How often it changes** is an explicit numbered 1–8 scale.
+- **Spoken check-ins** is a four-way choice: Off, Quiet, Natural or Talkative.
+  An older Custom choice shows until it is changed.
+- **Session buildup** and its duration are primary controls.
+
+Only speech-motion authority remains under Advanced. Session facts always
+reach the planner (ADR 0072).
 
 ## Scheduling
 

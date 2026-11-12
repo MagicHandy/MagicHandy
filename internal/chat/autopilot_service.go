@@ -95,7 +95,8 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 	// The grouped local dialect improved interactive edits, but degraded
 	// autonomous Layered composition. Keep its proven compact grammar there;
 	// the explicitly selected context/output allocation remains available.
-	s.Capabilities.IntermediateMotion = s.Capabilities.IntermediateMotion && s.Capabilities.MotionMode != MotionModeLayered
+	s.Capabilities.IntermediateMotion = s.Capabilities.IntermediateMotion &&
+		(s.Capabilities.MotionMode != MotionModeLayered || tempoLeadsContext(s.MotionContext))
 	if s.Provider == nil {
 		return AutopilotResponse{}, errors.New("LLM provider is required")
 	}
@@ -110,8 +111,8 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 		return AutopilotResponse{}, errors.New("autopilot context is required")
 	}
 	request.Message = message
-	if s.Capabilities.Motion && (s.Capabilities.MotionMode == MotionModeLayered || s.Capabilities.MotionMode == MotionModeCreativeV2) {
-		return s.completeLayeredAutopilot(ctx, kind, request, localPlan)
+	if response, routed, err := s.completeRoutedAutopilot(ctx, kind, request, localPlan); routed {
+		return response, err
 	}
 	if kind == AutopilotKindSpeech {
 		message += "\n" + autopilotSpeechDecisionInstruction
@@ -179,6 +180,23 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 		parseErr = fmt.Errorf("autopilot response was truncated before valid JSON: %w", parseErr)
 	}
 	return s.repairPatternResponse(ctx, kind, prompt.ID, messages, raw, parseErr)
+}
+
+// completeRoutedAutopilot sends a turn to its own contract: tempo when only a
+// VacuGlide plays (ADR 0071), or the continuous Layered and Creative v2 ones.
+func (s AutopilotService) completeRoutedAutopilot(ctx context.Context, kind AutopilotKind, request Request, localPlan bool) (AutopilotResponse, bool, error) {
+	if tempoLeadsContext(s.MotionContext) && (s.Capabilities.Motion || kind == AutopilotKindSpeech) {
+		response, err := s.completeTempoAutopilot(ctx, request, kind)
+		return response, true, err
+	}
+	if !s.Capabilities.Motion {
+		return AutopilotResponse{}, false, nil
+	}
+	if s.Capabilities.MotionMode == MotionModeLayered || s.Capabilities.MotionMode == MotionModeCreativeV2 {
+		response, err := s.completeLayeredAutopilot(ctx, kind, request, localPlan)
+		return response, true, err
+	}
+	return AutopilotResponse{}, false, nil
 }
 
 func (s AutopilotService) repairPatternResponse(ctx context.Context, kind AutopilotKind, promptID string, messages []llm.Message, raw string, parseErr error) (AutopilotResponse, error) {
@@ -446,7 +464,7 @@ func autopilotContract(kind AutopilotKind, capabilities Capabilities) string {
 		builder.WriteString(autopilotSpeechDecisionContract)
 	} else if capabilities.AutoTiming {
 		fmt.Fprintf(&builder, `The object requires "intent":"<one brief motion concept>", "next_check_seconds":<whole number %d-%d>, and "variability":"settled"|"normal"|"restless". Choose the intent before encoding motion fields. Do not include a "reply" field.`,
-			config.AutopilotAutoTimingMinSeconds, config.AutopilotAutoTimingMaxSeconds)
+			autoTimingFloor(capabilities.AutoTimingFloor), config.AutopilotAutoTimingMaxSeconds)
 	} else {
 		builder.WriteString(`The object requires "intent":"<one brief motion concept>", "next":"soon"|"normal"|"later", and "variability":"settled"|"normal"|"restless". Choose the intent before encoding motion fields. Do not include a "reply" field.`)
 	}

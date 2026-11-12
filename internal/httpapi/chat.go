@@ -660,7 +660,8 @@ func (s *Server) dispatchChatMotion(ctx context.Context, command *chat.MotionCom
 }
 
 func (s *Server) dispatchChatMotionAt(ctx context.Context, command *chat.MotionCommand, stopSequence *uint64) (chatMotionDispatch, error) {
-	if command != nil && (command.Vibration != nil || command.VibrationLevel != nil || (command.Action != "" && command.Action != chat.MotionActionNone && command.Action != chat.MotionActionStop)) {
+	if command != nil && (command.Vibration != nil || command.VibrationLevel != nil || command.Tempo != nil || command.AirSteps != nil ||
+		(command.Action != "" && command.Action != chat.MotionActionNone && command.Action != chat.MotionActionStop)) {
 		release, err := s.beginDeferredMotion(ctx)
 		if err != nil {
 			return chatMotionDispatch{Action: command.Action}, err
@@ -686,22 +687,8 @@ func (s *Server) dispatchChatMotionAt(ctx context.Context, command *chat.MotionC
 // engine admission so a Stop that lands during admission cannot be overtaken
 // by the motion it was meant to prevent.
 func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.MotionCommand, stopSequence *uint64) (chatMotionDispatch, error) {
-	if command != nil && command.VibrationLevel != nil {
-		return s.dispatchChatVibrationLevel(ctx, command, stopSequence)
-	}
-	if command != nil && command.Vibration != nil {
-		if err := s.validateChatVibration(command.Vibration); err != nil {
-			if errors.Is(err, errVibrationUnavailable) && command.Action != "" && command.Action != chat.MotionActionNone {
-				linear := *command
-				linear.Vibration = nil
-				result, linearErr := s.dispatchChatMotionLocked(ctx, &linear, stopSequence)
-				return result, errors.Join(linearErr, err)
-			}
-			return chatMotionDispatch{}, err
-		}
-		if command.Action == "" || command.Action == chat.MotionActionNone {
-			return s.dispatchChatVibration(ctx, *command.Vibration, stopSequence)
-		}
+	if result, handled, err := s.dispatchChatScalars(ctx, command, stopSequence); handled {
+		return result, err
 	}
 	if command == nil || command.Action == "" || command.Action == chat.MotionActionNone {
 		return chatMotionDispatch{Action: chat.MotionActionNone}, nil
@@ -738,6 +725,38 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 	default:
 		return chatMotionDispatch{Action: command.Action}, fmt.Errorf("unsupported motion action %q", command.Action)
 	}
+}
+
+// dispatchChatScalars applies the channels beside positions: the VacuGlide's
+// tempo and air (ADR 0071), a vibration level, or a vibration-only envelope.
+// handled is false when the rest of the command is ordinary linear motion.
+func (s *Server) dispatchChatScalars(ctx context.Context, command *chat.MotionCommand, stopSequence *uint64) (chatMotionDispatch, bool, error) {
+	switch {
+	case command == nil:
+		return chatMotionDispatch{}, false, nil
+	case (command.Tempo != nil || command.AirSteps != nil) && command.Action != chat.MotionActionStop:
+		result, err := s.dispatchChatTempo(ctx, command, stopSequence)
+		return result, true, err
+	case command.VibrationLevel != nil:
+		result, err := s.dispatchChatVibrationLevel(ctx, command, stopSequence)
+		return result, true, err
+	case command.Vibration == nil:
+		return chatMotionDispatch{}, false, nil
+	}
+	if err := s.validateChatVibration(command.Vibration); err != nil {
+		if errors.Is(err, errVibrationUnavailable) && command.Action != "" && command.Action != chat.MotionActionNone {
+			linear := *command
+			linear.Vibration = nil
+			result, linearErr := s.dispatchChatMotionLocked(ctx, &linear, stopSequence)
+			return result, true, errors.Join(linearErr, err)
+		}
+		return chatMotionDispatch{}, true, err
+	}
+	if command.Action == "" || command.Action == chat.MotionActionNone {
+		result, err := s.dispatchChatVibration(ctx, *command.Vibration, stopSequence)
+		return result, true, err
+	}
+	return chatMotionDispatch{}, false, nil
 }
 
 // dispatchChatVibrationLevel applies a Simple or Intermediate level first; it

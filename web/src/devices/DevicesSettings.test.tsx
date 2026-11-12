@@ -423,7 +423,7 @@ describe("additional Handys", () => {
 describe("the VacuGlide's page", () => {
   function vacuglideState(connected: boolean) {
     app.state = stateWith({ configured: ["handy", "vacuglide"] });
-    app.state.settings!.vacuglide = { token_set: true, timing_offset_ms: 0, speed_match: "handy_pace", stroke_follow: false };
+    app.state.settings!.vacuglide = { token_set: true, timing_offset_ms: 0, tempo_min_percent: 5, tempo_max_percent: 100, motion_air: false };
     const status = {
       device: "vacuglide", connected, connecting: false, simulated: true, token_set: true, playback_state: "idle", round_trip_ms: 70,
       testing: false, button_events: connected, requests_sent: 0, request_failures: 0, rate_limited: 0, stroke_steps: 1, commanded_percent: 0,
@@ -431,16 +431,15 @@ describe("the VacuGlide's page", () => {
     app.state.autoblow_transport = { autoblow: { ...status, device: "autoblow", connected: false, button_events: false }, vacuglide: status };
   }
 
-  it("saves the token, the speed match and stroke following, and steps the stroke", async () => {
+  it("saves the token, the Tempo range and the air permission, and steps the stroke", async () => {
     vacuglideState(true);
     renderPage("vacuglide");
     fireEvent.change(screen.getByLabelText("Device token"), { target: { value: "  vacuglide-token  " } });
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save" })));
     expect(api.saveAutoblowToken).toHaveBeenCalledWith("vacuglide", "vacuglide-token");
-    await act(async () => fireEvent.click(screen.getByRole("radio", { name: "Full motor range" })));
-    expect(api.saveDeviceOptions).toHaveBeenCalledWith({ vacuglide: { speed_match: "full_range" } });
-    await act(async () => fireEvent.click(screen.getByRole("switch", { name: /Follow the motion's reach/ })));
-    expect(api.saveDeviceOptions).toHaveBeenCalledWith({ vacuglide: { stroke_follow: true } });
+    expect(screen.getAllByRole("slider", { name: /Tempo range/ })).toHaveLength(2);
+    await act(async () => fireEvent.click(screen.getByRole("switch", { name: /Chat and Autopilot may adjust the stroke/ })));
+    expect(api.saveDeviceOptions).toHaveBeenCalledWith({ vacuglide: { motion_air: true } });
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Longer" })));
     expect(api.vacuglideStroke).toHaveBeenCalledWith("longer", 7);
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Shorter" })));

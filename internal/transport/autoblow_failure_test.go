@@ -20,7 +20,7 @@ func (f autoblowRoundTripFunc) RoundTrip(r *http.Request) (*http.Response, error
 func TestVacuGlideQueuedValveStepCannotOutliveStop(t *testing.T) {
 	f := newAutoblowFixture(t)
 	f.options.HealthInterval = time.Hour
-	v := connectedVacuGlide(t, f, AutoblowConfig{SpeedScale: 1})
+	v := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 5, TempoMaxPercent: 100})
 	generation := v.ControlGeneration()
 	v.laneMu.Lock()
 	done := make(chan error, 1)
@@ -46,7 +46,7 @@ func TestVacuGlideQueuedValveStepCannotOutliveStop(t *testing.T) {
 func TestVacuGlideStopClosesValvesWhenMotorStopFails(t *testing.T) {
 	f := newAutoblowFixture(t)
 	f.options.HealthInterval = time.Hour
-	v := connectedVacuGlide(t, f, AutoblowConfig{SpeedScale: 1})
+	v := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 5, TempoMaxPercent: 100})
 	v.mu.Lock()
 	client := v.client
 	v.valveOpen = "stroke-plus"
@@ -76,7 +76,7 @@ func TestVacuGlideUncertainValveOpenStillCloses(t *testing.T) {
 		}
 		return response, err
 	})}
-	v := connectedVacuGlide(t, f, AutoblowConfig{SpeedScale: 1})
+	v := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 5, TempoMaxPercent: 100})
 	loseReply.Store(true)
 	if err := v.StrokeStepAt(v.ControlGeneration(), true); err == nil {
 		t.Fatal("lost valve acknowledgment must be reported")
@@ -90,7 +90,7 @@ func TestVacuGlideUncertainValveOpenStillCloses(t *testing.T) {
 func TestAutoblowReconnectDoesNotReplayLostStream(t *testing.T) {
 	f := newAutoblowFixture(t)
 	f.options.HealthInterval = 20 * time.Millisecond
-	v := connectedVacuGlide(t, f, AutoblowConfig{SpeedScale: 1})
+	v := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 5, TempoMaxPercent: 100})
 	session, _ := v.MotionTransport()
 	play(t, session, sweep(100, 400))
 	waitFor(t, "initial motion", func() bool { return f.sim.VacuGlideSpeed() > 0 })
@@ -117,7 +117,7 @@ func TestAutoblowHealthErrorsEndSteadyPlayback(t *testing.T) {
 		}
 		return http.DefaultTransport.RoundTrip(r)
 	})}
-	v := connectedVacuGlide(t, f, AutoblowConfig{SpeedScale: 1})
+	v := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 5, TempoMaxPercent: 100})
 	session, _ := v.MotionTransport()
 	play(t, session, sweep(100, 400))
 	waitFor(t, "initial motion", func() bool { return f.sim.VacuGlideSpeed() > 0 })
@@ -131,7 +131,7 @@ func TestAutoblowHealthErrorsEndSteadyPlayback(t *testing.T) {
 func TestVacuGlideConcurrentValveStepsRespectTheLimit(t *testing.T) {
 	f := newAutoblowFixture(t)
 	f.options.HealthInterval = time.Hour
-	v := connectedVacuGlide(t, f, AutoblowConfig{SpeedScale: 1})
+	v := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 5, TempoMaxPercent: 100})
 	v.mu.Lock()
 	v.steps = vacuglideMaxSteps - 1
 	v.mu.Unlock()
@@ -161,7 +161,7 @@ func TestVacuGlideConcurrentValveStepsRespectTheLimit(t *testing.T) {
 func TestAutoblowDelayedStopDoesNotStopFreshPlayback(t *testing.T) {
 	f := newAutoblowFixture(t)
 	f.options.HealthInterval = time.Hour
-	v := connectedVacuGlide(t, f, AutoblowConfig{SpeedScale: 1})
+	v := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 5, TempoMaxPercent: 100})
 	entered, completed := make(chan struct{}), make(chan error, 1)
 	go func() {
 		completed <- v.command(v.ControlGeneration(), 3*time.Second, func(ctx context.Context, _ *autoblow.Client) error {
@@ -198,7 +198,7 @@ func TestVacuGlideUncertainTestStartStillStops(t *testing.T) {
 		}
 		return response, err
 	})}
-	v := connectedVacuGlide(t, f, AutoblowConfig{SpeedScale: 1})
+	v := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 5, TempoMaxPercent: 100})
 	loseReply.Store(true)
 	if err := v.TestAt(v.ControlGeneration()); err == nil {
 		t.Fatal("lost start acknowledgment was accepted")

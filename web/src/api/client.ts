@@ -580,6 +580,8 @@ export const api = {
   startManualTest: (body: { pattern: string; speed_percent: number }) =>
     request("POST", "/api/motion/start", body),
   followVibration: () => request("POST", "/api/motion/vibration/follow", {}),
+  setTempo: (tempo: import("./tempo-types").TempoSpec, stopSequence: number) => request<import("./types").MotionInfo>("POST", "/api/motion/tempo", { tempo }, undefined, { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  tempoRoutines: () => request<{ routines: import("./tempo-types").TempoRoutine[] }>("GET", "/api/motion/tempo/routines"),
   pauseMotion: () => request("POST", "/api/motion/pause", {}),
   resumeMotion: () => request("POST", "/api/motion/resume", {}),
   resetMotionPosition: (failureID: string) => request<import("./types").MotionInfo>("POST", "/api/motion/reset-position", { failure_id: failureID }),

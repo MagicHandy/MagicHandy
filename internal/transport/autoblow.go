@@ -65,9 +65,11 @@ type AutoblowOptions struct {
 type AutoblowConfig struct {
 	Token        string
 	OffsetMillis int
-	// SpeedScale and StrokeFollow apply to the VacuGlide only.
-	SpeedScale   float64
-	StrokeFollow bool
+	// The VacuGlide's Tempo range: the motor speeds tempo 1 and 100 play
+	// at, in percent, and whether motion may step its valves (ADR 0071).
+	TempoMinPercent float64
+	TempoMaxPercent float64
+	MotionAir       bool
 }
 
 // AutoblowStatus is a safe snapshot. Commanded values are what MagicHandy
@@ -94,7 +96,8 @@ type AutoblowStatus struct {
 	RateLimitRemaining *int     `json:"rate_limit_remaining,omitempty"`
 	LateSegments       uint64   `json:"late_segments,omitempty"`
 	StrokeSteps        int      `json:"stroke_steps"`
-	StrokeFollow       bool     `json:"stroke_follow,omitempty"`
+	MotionAir          bool     `json:"motion_air,omitempty"`
+	MotionAirSteps     int      `json:"motion_air_steps,omitempty"`
 	ValveOpen          string   `json:"valve_open,omitempty"`
 	LastError          string   `json:"last_error,omitempty"`
 }

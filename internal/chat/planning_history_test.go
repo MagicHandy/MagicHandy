@@ -18,7 +18,7 @@ func TestPlanningHistoryMarksWhenEachHumanLineWasSaid(t *testing.T) {
 	}
 	at := []time.Time{start, start.Add(2 * time.Second), start.Add(100 * time.Second)}
 	marked := PlanningHistory(history, at, start.Add(140*time.Second))
-	if marked[0].Content != "[said 2 minutes ago] that's too much" || marked[1].Content != "Slowing down." || marked[2].Content != "[said 40 seconds ago] better" {
+	if marked[0].Content != "[said 2 minutes 20 seconds ago] that's too much" || marked[1].Content != "Slowing down." || marked[2].Content != "[said 40 seconds ago] better" {
 		t.Fatalf("marked history %+v", marked)
 	}
 	if history[0].Content != "that's too much" {

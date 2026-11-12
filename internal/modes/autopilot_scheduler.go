@@ -155,8 +155,8 @@ func (m *Manager) applyAutopilotChoice(
 	reason string,
 ) {
 	if choice.source == "hold" {
-		if err := applyHeldVibration(ctx, engine, choice.vibration); err != nil {
-			m.backoff(ModeAutopilot, generation, "vibration_failed", err)
+		if err := m.applyHeldChannels(ctx, engine, choice); err != nil {
+			m.backoff(ModeAutopilot, generation, "held_channel_failed", err)
 			return
 		}
 		if !m.armAutopilotChoice(ModeAutopilot, &choice, generation) {
@@ -574,7 +574,7 @@ func (m *Manager) applyAutopilotSpeechMotion(
 	choice segmentChoice,
 ) {
 	if choice.source == "hold" || !choice.segment.hasContent() {
-		if err := applyHeldVibration(ctx, engine, choice.vibration); err != nil {
+		if err := m.applyHeldChannels(ctx, engine, choice); err != nil {
 			m.trace(ModeAutopilot, "speech_vibration_failed", nil, err.Error())
 		}
 		return
@@ -683,13 +683,7 @@ func (m *Manager) sampleMotionDelayLocked(timing TimingPreference) time.Duration
 	settings := m.options.AutopilotSettings()
 	minimum, maximum := settings.MotionWindow()
 	m.ensureCadenceRNGsLocked()
-	return m.sampleCadenceLocked(
-		minimum,
-		maximum,
-		timing,
-		settings.AdaptiveMotionTiming,
-		m.motion.cadenceRNG,
-	)
+	return m.sampleCadenceLocked(minimum, maximum, timing, m.motion.cadenceRNG)
 }
 
 func (m *Manager) sampleSpeechDelayLocked(timing TimingPreference) time.Duration {
@@ -699,13 +693,7 @@ func (m *Manager) sampleSpeechDelayLocked(timing TimingPreference) time.Duration
 		return 0
 	}
 	m.ensureCadenceRNGsLocked()
-	return m.sampleCadenceLocked(
-		minimum,
-		maximum,
-		timing,
-		settings.AdaptiveSpeechTiming,
-		m.speech.cadenceRNG,
-	)
+	return m.sampleCadenceLocked(minimum, maximum, timing, m.speech.cadenceRNG)
 }
 
 // modelHorizonLocked turns a planner's own horizon into a segment duration.
@@ -714,7 +702,7 @@ func (m *Manager) sampleSpeechDelayLocked(timing TimingPreference) time.Duration
 func (m *Manager) modelHorizonLocked(requested time.Duration) time.Duration {
 	m.ensureCadenceRNGsLocked()
 	seconds := requested.Seconds() * (1 + autoTimingJitter*(2*m.motion.cadenceRNG.Float64()-1))
-	seconds = min(max(math.Round(seconds), float64(config.AutopilotAutoTimingMinSeconds)),
+	seconds = min(max(math.Round(seconds), float64(m.options.AutopilotSettings().AutoTimingFloorSeconds())),
 		float64(config.AutopilotAutoTimingMaxSeconds))
 	return time.Duration(seconds) * time.Second
 }
@@ -723,47 +711,48 @@ func (m *Manager) modelHorizonLocked(requested time.Duration) time.Duration {
 // them within the bounds, so the next turn can see whether it has settled on
 // one length. Callers hold m.mu.
 func (m *Manager) rememberCheckLocked(requested time.Duration) {
-	seconds := min(max(int(requested/time.Second), config.AutopilotAutoTimingMinSeconds), config.AutopilotAutoTimingMaxSeconds)
+	seconds := min(max(int(requested/time.Second), m.options.AutopilotSettings().AutoTimingFloorSeconds()), config.AutopilotAutoTimingMaxSeconds)
 	m.history.recentChecks = append(m.history.recentChecks, seconds)
 	if len(m.history.recentChecks) > recentCheckLimit {
 		m.history.recentChecks = m.history.recentChecks[len(m.history.recentChecks)-recentCheckLimit:]
 	}
 }
 
-func (m *Manager) sampleCadenceLocked(
-	minimumSeconds int,
-	maximumSeconds int,
-	timing TimingPreference,
-	adaptive bool,
-	rng *rand.Rand,
-) time.Duration {
+// cadenceBands place the model's timing answer inside the person's window:
+// each is a share of the window and the triangle's peak within it. Soon and
+// later sit near the ends with little overlap, so the model's answer is felt;
+// the triangle keeps every draw varied and away from a metronome.
+var cadenceBands = map[TimingPreference]struct{ low, peak, high float64 }{
+	TimingSoon:   {0, 0.12, 0.4},
+	TimingNormal: {0.25, 0.5, 0.75},
+	TimingLater:  {0.6, 0.88, 1},
+}
+
+// sampleCadenceLocked draws a delay inside the window, shaped by the model's
+// soon/normal/later answer (always: the answer is the model's to make).
+func (m *Manager) sampleCadenceLocked(minimumSeconds, maximumSeconds int, timing TimingPreference, rng *rand.Rand) time.Duration {
 	if minimumSeconds > maximumSeconds {
 		minimumSeconds, maximumSeconds = maximumSeconds, minimumSeconds
 	}
-	if minimumSeconds < config.AutopilotMinimumIntervalSeconds {
-		minimumSeconds = config.AutopilotMinimumIntervalSeconds
+	minimumSeconds = max(minimumSeconds, config.AutopilotMinimumIntervalSeconds)
+	maximumSeconds = max(maximumSeconds, minimumSeconds)
+	span := float64(maximumSeconds - minimumSeconds)
+	band := cadenceBands[normalizeTiming(timing)]
+	share := triangular(rng.Float64(), band.low, band.peak, band.high)
+	return time.Duration(minimumSeconds+int(math.Round(share*span))) * time.Second
+}
+
+// triangular maps u in [0,1) onto a triangle from low to high peaking at peak.
+func triangular(u, low, peak, high float64) float64 {
+	width := high - low
+	if width <= 0 {
+		return low
 	}
-	low, high := minimumSeconds, maximumSeconds
-	if adaptive && maximumSeconds > minimumSeconds {
-		span := maximumSeconds - minimumSeconds
-		switch normalizeTiming(timing) {
-		case TimingSoon:
-			high = minimumSeconds + (span*55)/100
-		case TimingLater:
-			low = minimumSeconds + (span*45)/100
-		default:
-			low = minimumSeconds + (span*20)/100
-			high = minimumSeconds + (span*80)/100
-		}
+	split := (peak - low) / width
+	if u < split {
+		return low + math.Sqrt(u*width*(peak-low))
 	}
-	if high < low {
-		high = low
-	}
-	seconds := low
-	if spread := high - low; spread > 0 {
-		seconds += rng.Intn(spread + 1)
-	}
-	return time.Duration(seconds) * time.Second
+	return high - math.Sqrt((1-u)*width*(high-peak))
 }
 
 func (m *Manager) ensureCadenceRNGsLocked() {

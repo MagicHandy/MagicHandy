@@ -324,6 +324,12 @@ describe("the device chip", () => {
   it("reads Chat only without devices", () => {
     expect(chipSummary([])).toEqual({ title: "Devices", status: "Chat only" });
   });
+
+  it("never warns about a device outside the run", () => {
+    const playing = { ...handyDevice.model(ctx), name: "VacuGlide", inPlayback: true, status: "playing" as const, details: [] };
+    const idle = { ...handyDevice.model(ctx), name: "The Handy", inPlayback: false, status: "needs_setup" as const, details: ["connection key"] };
+    expect(chipSummary([idle, playing]).status).toBe("Playing");
+  });
 });
 
 
@@ -355,13 +361,13 @@ describe("Autoblow's cloud devices", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("needs a device token before it can connect", () => {
-    const ctx = makeCtx({ autoblow: snapshot({ connected: false, commanded_percent: undefined }) }, { vacuglide: { token_set: false, timing_offset_ms: 0, speed_match: "handy_pace", stroke_follow: false } });
+    const ctx = makeCtx({ autoblow: snapshot({ connected: false, commanded_percent: undefined }) }, { vacuglide: { token_set: false, timing_offset_ms: 0, tempo_min_percent: 5, tempo_max_percent: 100, motion_air: false } });
     expect(vacuglideDevice.model(ctx)).toMatchObject({ status: "needs_setup", details: ["device token"], action: { kind: "setup" } });
   });
 
   it("shows the cloud, the round trip, the commanded motor speed and the stroke steps", () => {
     const ctx = makeCtx({ configured: ["vacuglide"], playing: ["vacuglide"], engineActive: true, autoblow: snapshot({ stroke_steps: 2 }) },
-      { vacuglide: { token_set: true, timing_offset_ms: 0, speed_match: "handy_pace", stroke_follow: false } });
+      { vacuglide: { token_set: true, timing_offset_ms: 0, tempo_min_percent: 5, tempo_max_percent: 100, motion_air: false } });
     const model = vacuglideDevice.model(ctx);
     expect(model).toMatchObject({ name: "VacuGlide", status: "playing", details: ["Autoblow cloud", "84 ms"], readout: "Motor 42%", inPlayback: true });
     const level = model.levels!.levels[0];
@@ -373,14 +379,14 @@ describe("Autoblow's cloud devices", () => {
   });
 
   it("requires host permission for either stroke valve", () => {
-    const ctx = makeCtx({ canConfigureHost: false, autoblow: snapshot({ stroke_follow: true }) }, { vacuglide: { token_set: true, timing_offset_ms: 0, speed_match: "handy_pace", stroke_follow: true } });
+    const ctx = makeCtx({ canConfigureHost: false, autoblow: snapshot({ motion_air: true }) }, { vacuglide: { token_set: true, timing_offset_ms: 0, tempo_min_percent: 5, tempo_max_percent: 100, motion_air: true } });
     const group = vacuglideDevice.model(ctx).levels!;
     expect(group.levels[0]).toMatchObject({ canLower: false, canRaise: false, canTest: false });
-    expect(group.note).toMatch(/follows the motion's reach/);
+    expect(group.note).toMatch(/may adjust the stroke/);
   });
 
   it("tests while motion is idle and the device is connected", () => {
-    const ctx = makeCtx({ autoblow: snapshot() }, { vacuglide: { token_set: true, timing_offset_ms: 0, speed_match: "handy_pace", stroke_follow: false } });
+    const ctx = makeCtx({ autoblow: snapshot() }, { vacuglide: { token_set: true, timing_offset_ms: 0, tempo_min_percent: 5, tempo_max_percent: 100, motion_air: false } });
     const level = vacuglideDevice.model(ctx).levels!.levels[0];
     expect(level.canTest).toBe(true);
     level.test();
@@ -394,12 +400,12 @@ describe("Autoblow's cloud devices", () => {
   });
 
   it("reports a device that left online mode as lost", () => {
-    const ctx = makeCtx({ autoblow: snapshot({ connected: false, playback_state: "stale" }) }, { vacuglide: { token_set: true, timing_offset_ms: 0, speed_match: "handy_pace", stroke_follow: false } });
+    const ctx = makeCtx({ autoblow: snapshot({ connected: false, playback_state: "stale" }) }, { vacuglide: { token_set: true, timing_offset_ms: 0, tempo_min_percent: 5, tempo_max_percent: 100, motion_air: false } });
     expect(vacuglideDevice.model(ctx)).toMatchObject({ status: "lost", action: { kind: "reconnect" } });
   });
 
   it("retires a reachable connection before reconnecting after it left a run", async () => {
-    const ctx = makeCtx({ engineActive: true, retired: ["vacuglide"], autoblow: snapshot() }, { vacuglide: { token_set: true, timing_offset_ms: 0, speed_match: "handy_pace", stroke_follow: false } });
+    const ctx = makeCtx({ engineActive: true, retired: ["vacuglide"], autoblow: snapshot() }, { vacuglide: { token_set: true, timing_offset_ms: 0, tempo_min_percent: 5, tempo_max_percent: 100, motion_air: false } });
     vi.mocked(api.autoblowDisconnect).mockResolvedValue(snapshot({ connected: false }));
     vi.mocked(api.autoblowConnect).mockResolvedValue(snapshot());
     const action = vacuglideDevice.model(ctx).action;

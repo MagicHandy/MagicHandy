@@ -14,7 +14,56 @@ import (
 type edgeTestEngine struct{ *fakeEngine }
 
 func (e edgeTestEngine) snapshotLocked() motion.ActiveMotionState {
-	return motion.ActiveMotionState{Running: e.running, Paused: e.paused, Target: e.target, PlanID: fmt.Sprint(len(e.targets)), CurrentSample: &motion.MotionSample{PositionPercent: 50}}
+	state := motion.ActiveMotionState{Running: e.running, Paused: e.paused, Target: e.target, PlanID: fmt.Sprint(len(e.targets)), CurrentSample: &motion.MotionSample{PositionPercent: 50}}
+	if e.target.TempoOnly && e.target.Tempo != nil {
+		state.Tempo = &motion.TempoReadout{LevelPercent: 60}
+		if e.target.Tempo.Mode == motion.TempoModeSteady {
+			state.Tempo.LevelPercent = float64(e.target.Tempo.LevelPercent)
+		}
+	}
+	return state
+}
+
+func TestTempoEdgeKeepsNativeMotionAndReturnsTheSavedRoutine(t *testing.T) {
+	for _, style := range []string{"manual", "previous", "gentle"} {
+		t.Run(style, func(t *testing.T) {
+			m, e, clock := edgeManager(t)
+			previous := motion.TempoSpec{Mode: motion.TempoModeRoutine, Routine: "wandering", Seed: 3721}
+			e.target = motion.MotionTarget{TempoOnly: true, Tempo: &previous}
+			if style != "manual" {
+				m.loop.mode = ModeAutopilot
+				m.options.DecideEdge = func(_ context.Context, input EdgeInput) (EdgeDecision, error) {
+					if !input.TempoOnly || input.PreviousSpeed != 60 || input.SpeedMin != 1 || input.RangeMin != 0 || input.RangeMax != 0 {
+						t.Fatalf("native Edge input = %+v", input)
+					}
+					return EdgeDecision{HoldSeconds: 12, ResumeSpeed: 30, ResumeStyle: style}, nil
+				}
+			}
+			if _, err := m.ActivateEdge(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			if hold := e.Snapshot().Target; !hold.TempoOnly || hold.Flow != nil || hold.Tempo.Mode != motion.TempoModeSteady || hold.Tempo.LevelPercent != 20 {
+				t.Fatalf("native hold = %+v", hold)
+			}
+			if style == "manual" {
+				if _, err := m.ResumeEdge(t.Context()); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				m.tickEdge(t.Context())
+				clock.Advance(13 * time.Second)
+				m.tickEdge(t.Context())
+			}
+			got := e.Snapshot().Target
+			want := previous
+			if style == "gentle" {
+				want = motion.TempoSpec{Mode: motion.TempoModeSteady, LevelPercent: 30}
+			}
+			if !got.TempoOnly || got.Tempo == nil || !got.Tempo.Equal(want) || m.Status().EdgeHold != nil {
+				t.Fatalf("return = %+v, status=%+v", got, m.Status().EdgeHold)
+			}
+		})
+	}
 }
 func (e edgeTestEngine) Snapshot() motion.ActiveMotionState {
 	e.mu.Lock()
