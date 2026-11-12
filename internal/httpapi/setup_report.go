@@ -32,6 +32,7 @@ func (s *Server) configureSetupManager() {
 		settings, _ := s.store.Snapshot()
 		return append(settings.Device.PrivateDeviceValues(),
 			settings.Estim.RememberedAddress, settings.Voice.ElevenLabsAPIKey, settings.Voice.OpenAITTSAPIKey,
+			settings.Autoblow.DeviceToken, settings.VacuGlide.DeviceToken,
 		)
 	}
 }

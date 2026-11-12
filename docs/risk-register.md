@@ -1,5 +1,38 @@
 # MagicHandy Risk Register
 
+## R41: Autoblow cloud-only Stop
+
+Level: High, accepted at the owner's direction (2026-11-11)
+
+The Autoblow Ultra and the VacuGlide take commands only through Autoblow's
+cloud ([ADR 0069](decisions/0069-autoblow-cloud-devices.md)). Stop travels the
+same way, so it needs the person's internet connection and Autoblow's servers.
+The VacuGlide's target-speed mode has no keepalive: if MagicHandy exits
+uncleanly or loses the cloud, the motor keeps its last speed until the device
+is switched off or its own four-hour limit stops it. While online, the devices'
+buttons are sent as events, so they stop motion only through MagicHandy.
+
+Mitigation:
+
+- Emergency Stop reaches every connected Autoblow device beside the engine's
+  Stop, whether or not it plays. A command still on the wire after 300 ms is
+  canceled, and Stop is sent again 750 ms later in case the cloud applies it
+  late.
+- Commands are fenced by a generation and sent one at a time, so nothing
+  queued before Stop follows it.
+- A frame that runs out stops the VacuGlide's motor at once.
+- Closing the app stops connected devices.
+- A health read every five seconds marks a device that left online mode as
+  lost and ends its run.
+- The Ultra's pause button and the VacuGlide's mode button run Emergency Stop.
+- The device pages say that Stop needs the internet and Autoblow's cloud, and
+  to switch the device off when either is down.
+
+Residual risk: a lost connection, an Autoblow outage or a crash leaves a
+VacuGlide running at its last speed and an Ultra at rest or finishing its last
+move. Stop latency is one cloud round trip and is unmeasured on hardware.
+Valve steps are open-loop: nothing reports the air in the sleeve.
+
 ## R40: Hidden desktops acting for their phone
 
 Level: Medium

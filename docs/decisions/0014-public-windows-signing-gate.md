@@ -2,16 +2,38 @@
 
 ## Status
 
-Accepted; amended 2026-11-09 after Microsoft completed the false-positive
+Accepted; amended 2026-11-12 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.64 and alpha.66 through alpha.84
+reviewed alpha.14 through alpha.64 and alpha.66 through alpha.85
 package-preserving releases.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.85 amendment
+
+The maintainer requested another critically reviewed release of Claude's scene
+motion option and experimental Autoblow Ultra/VacuGlide support, together with
+same-host ChatGPT reconnection through the public address. The
+[alpha.85 review](../alpha85-release-review-2026-11-12.md) records source PR
+#368 at `64a38562`, reproduced safety/security defects and their corrections,
+simulation evidence, physical acceptance limits and the accepted cloud-only
+Stop limitation in ADR 0069. Updates owns integration and publication.
+
+Only `0.1.0-alpha.85` joins ReviewedUnsignedPublic. Alpha.86 and later need a
+new review; alpha.65 stays excluded. CI identified reachable GO-2026-6859 in
+Go 1.26.10, so this release uses Go 1.26.11 and source installers reject the
+unpatched Go 1.27.0–1.27.3 line. No vulnerability gate is waived. All five
+shipping executables retain symbols for exact scans. The native x64 loader,
+non-solid ZIP, three assets, Defender scan of the exact public directory,
+full installer lifecycle, manifests/checksums, green PR/main/tag gates and
+immutable exact-current-main provenance remain mandatory. The previous
+Microsoft decision does not approve new hashes; trusted signing remains the
+target. Hardware and installed sessions are preserved.
+
 
 ### Alpha.84 amendment
 
@@ -1118,11 +1140,11 @@ Negative:
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
   alpha.8 through alpha.11, alpha.13 through alpha.64, or alpha.66 through
-  alpha.84 version, the recorded Microsoft case ID, the
+  alpha.85 version, the recorded Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
 - Alpha.9 through alpha.11, alpha.13 through alpha.64, and alpha.66 through
-  alpha.84 reviewed setup workflows run Microsoft Defender against the exact public artifact directory
+  alpha.85 reviewed setup workflows run Microsoft Defender against the exact public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,
   timestamped Authenticode from the explicitly pinned signer on the setup

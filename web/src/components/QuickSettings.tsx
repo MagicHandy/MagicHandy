@@ -5,7 +5,7 @@ import { t, translateKnown } from "../i18n";
 // backend-offline clients with a visible reason.
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import { isHandy, playbackDevices } from "../api/devices";
+import { playbackDevices, playsPositions } from "../api/devices";
 import type { HandyModel, MotionSettings } from "../api/types";
 import { RangeSlider } from "./RangeSlider";
 import { SegmentedChoice } from "./SetpointControls";
@@ -116,11 +116,11 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
 
   if (!vals) return <p className="form-status">{t("Loading…")}</p>;
 
-  // Without a Handy in playback, only Speed still matters: it sets the pace
-  // the other devices follow. The stroke window is for every Handy that
-  // plays. Calibration lives on the Handy's own page, so it shows whether or
-  // not it plays.
-  const handyShown = playbackDevices(state?.settings?.device).some(isHandy);
+  // Without a device that plays positions, only Speed still matters: it sets
+  // the pace the other devices follow. The stroke window is for every Handy
+  // and Autoblow Ultra that plays. Calibration lives on the Handy's own page,
+  // so it shows whether or not it plays.
+  const handyShown = playbackDevices(state?.settings?.device).some(playsPositions);
   const calibration = section === "calibration";
   const showLimits = section === "all" || section === "limits";
   const showDirection = calibration || (handyShown && section === "all");

@@ -2,7 +2,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $script:InstallStateSchema = 3
-$script:MinimumGoVersion = [Version]'1.26.10'
+$script:MinimumGoVersion = [Version]'1.26.11'
 # How long to wait for a launched app's verified local URL.
 $script:MagicHandyStartupSeconds = 30
 $script:ParakeetRunnerURL = 'https://github.com/mudler/parakeet.cpp/releases/download/v0.4.0/parakeet-v0.4.0-bin-win-cpu-x64.zip'
@@ -953,9 +953,9 @@ function Test-MagicHandySupportedGoVersion {
     if ($null -eq $Version -or $Version -lt $script:MinimumGoVersion) {
         return $false
     }
-    # GO-2026-6809 is fixed in both maintained release lines. A numeric
-    # minimum of 1.26.10 alone would still admit unpatched Go 1.27.0-1.27.2.
-    return $Version.Major -ne 1 -or $Version.Minor -ne 27 -or $Version -ge [Version]'1.27.3'
+    # GO-2026-6859 is fixed in both maintained release lines. A numeric
+    # minimum of 1.26.11 alone would still admit unpatched Go 1.27.0-1.27.3.
+    return $Version.Major -ne 1 -or $Version.Minor -ne 27 -or $Version -ge [Version]'1.27.4'
 }
 
 function Ensure-MagicHandyGo {
@@ -969,7 +969,7 @@ function Ensure-MagicHandyGo {
         $version = Get-MagicHandyGoVersion
     }
     if (-not (Test-MagicHandySupportedGoVersion -Version $version)) {
-        throw "Go $script:MinimumGoVersion or newer is required; Go 1.27 requires 1.27.3 or newer. Restart PowerShell and rerun install.ps1 if Go was just installed."
+        throw "Go $script:MinimumGoVersion or newer is required; Go 1.27 requires 1.27.4 or newer. Restart PowerShell and rerun install.ps1 if Go was just installed."
     }
     $go = Resolve-MagicHandyExecutable -Name 'go'
     Write-Host "Found $(& $go version)" -ForegroundColor Green

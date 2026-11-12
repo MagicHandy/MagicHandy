@@ -10,6 +10,7 @@ import type { CoyoteTransportSnapshot, EstimSettings } from "./coyote-types";
 export type { CoyoteStatus, CoyoteTransportSnapshot, DeviceId, DeviceKind, DeviceOptionsPatch, DeviceOutput, EstimSettings, HandyInstanceId } from "./coyote-types";
 export type { IntifaceLinearActuator, IntifaceScalarActuator, IntifaceDevice, IntifaceDispatchStatus, IntifaceTransportSnapshot, IntifaceVibratorMotor, IntifaceVibratorStatus, VibrationSettings } from "./intiface-types";
 export type { FreestyleSettings, FreestyleStatus } from "./freestyle-types";
+export type { AutoblowDevice, AutoblowSettings, AutoblowStatus, AutoblowTransportSnapshot, VacuGlideSettings, VacuGlideSpeedMatch } from "./autoblow-types";
 import type { AccountCapabilities } from "./access-types";
 export type { AccountRole, ManagedSession, ManagedSessionsResponse, UserAccount, ControlIdentity, AuthenticationStatus, AccountCapabilities, ControlGrant, NetworkConfig, NetworkStatus, InternetDiscovery, CertificatePreparation } from "./access-types";
 
@@ -1115,6 +1116,8 @@ export interface PublicSettings {
   device: import("./coyote-types").PublicDeviceSettings;
   estim?: EstimSettings & { remembered_device?: boolean };
   vibration?: VibrationSettings;
+  autoblow?: import("./autoblow-types").AutoblowSettings;
+  vacuglide?: import("./autoblow-types").VacuGlideSettings;
   motion: MotionSettings;
   freestyle?: FreestyleSettings;
   autopilot: AutopilotSettings;
@@ -1442,6 +1445,7 @@ export interface AppState {
   bluetooth_bridge?: BluetoothBridgeSnapshot;
   intiface_transport?: IntifaceTransportSnapshot;
   coyote_transport?: CoyoteTransportSnapshot;
+  autoblow_transport?: import("./autoblow-types").AutoblowTransportSnapshot;
   native_bluetooth_transport?: import("./native-bluetooth-types").NativeBluetoothSnapshot;
   handy_connections?: import("./handy-types").HandyConnectionState[];
   trace?: Record<string, unknown>;

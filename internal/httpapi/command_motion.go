@@ -21,8 +21,8 @@ func motionCommandRoute(route string) bool {
 		"/api/motion/reset-position",
 		"/api/motion/edge", "/api/motion/edge/resume", "/api/motion/vibration/follow",
 		"/api/settings", "/api/settings/reset", "/api/settings/labs", "/api/settings/llm-motion-mode", "/api/settings/device/connection-key",
-		"/api/settings/device", "/api/settings/device/output", "/api/settings/device/connections",
-		"/api/transport/coyote/strength", "/api/transport/coyote/test",
+		"/api/settings/device", "/api/settings/device/output", "/api/settings/device/connections", "/api/settings/device/autoblow-token",
+		"/api/transport/coyote/strength", "/api/transport/coyote/test", "/api/transport/autoblow/test", "/api/transport/autoblow/stroke",
 		"/api/media/sync", "/api/media/script-offset", "/api/media/playback":
 		return true
 	}

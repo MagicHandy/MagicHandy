@@ -4,6 +4,7 @@ import { t, translateKnown } from "../i18n";
 // disclosures. Motion controls remain in their routed workspaces.
 import { LiveVibrationReadout, showsVibration } from "../components/VibrationReadout";
 import { MotionVisualizer } from "../components/MotionVisualizer";
+import { visualizerDeviceFor } from "../components/LiveMotionVisualizer";
 import { useAppState, useMotionState } from "../state/app-state";
 import { formatClock } from "../util/format";
 import { DevicePanel } from "./DevicePanel";
@@ -148,7 +149,7 @@ export function StatusBar({
           <span className="status-text status-controller-short" aria-hidden="true">{t("You")}</span>
         </span>
       ))}
-      {showsVibration(state?.settings, motion) ? <LiveVibrationReadout mini /> : <MotionVisualizer motion={motion} mini device={{ owner: state?.settings?.device?.hsp_dispatch_owner, model: state?.settings?.motion?.handy_model }} />}
+      {showsVibration(state?.settings, motion) ? <LiveVibrationReadout mini /> : <MotionVisualizer motion={motion} mini device={visualizerDeviceFor(state?.settings)} />}
       {authenticationStatus?.authenticated && authenticationStatus.control_identities?.length && onLogout && onSelectControlIdentity ? (
         <ControlIdentitySelector
           identities={authenticationStatus.control_identities}

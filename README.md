@@ -74,7 +74,7 @@ and voice choices remain in the GUI. To update the same source installation:
 .\update.ps1
 ```
 
-Developers with Go 1.26.10+ (Go 1.27 requires 1.27.3+) can run:
+Developers with Go 1.26.11+ (Go 1.27 requires 1.27.4+) can run:
 
 ```powershell
 go run ./cmd/magichandy

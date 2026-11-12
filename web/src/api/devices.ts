@@ -5,7 +5,7 @@
 import type { DeviceId, DeviceKind, DeviceOutput, HandyInstanceId } from "./coyote-types";
 
 /** The device kinds in run-clock order: the first playing device is the clock. */
-export const DEVICE_ORDER: DeviceKind[] = ["handy", "coyote", "vibrator"];
+export const DEVICE_ORDER: DeviceKind[] = ["handy", "autoblow", "vacuglide", "coyote", "vibrator"];
 
 /** The most Handys, the primary one included. The backend enforces it. */
 export const MAX_HANDYS = 8;
@@ -20,12 +20,21 @@ export function isHandy(id: string): boolean {
   return id === "handy" || isHandyInstance(id);
 }
 
-// The primary Handy, the additional Handys in the backend's order, the
-// Coyote, then the vibrator.
+/** A device that plays positions, so the stroke window and direction apply:
+ * a Handy or the Autoblow Ultra. The VacuGlide follows pace only. */
+export function playsPositions(id: string): boolean {
+  return isHandy(id) || id === "autoblow";
+}
+
+// The primary Handy, the additional Handys in the backend's order, Autoblow's
+// Ultra and VacuGlide, the Coyote, then the vibrator.
+const LATER_KINDS: string[] = ["autoblow", "vacuglide", "coyote", "vibrator"];
+
 function rank(id: string): number {
   if (id === "handy") return 0;
   if (isHandyInstance(id)) return 1;
-  return id === "coyote" ? 2 : id === "vibrator" ? 3 : -1;
+  const later = LATER_KINDS.indexOf(id);
+  return later < 0 ? -1 : 2 + later;
 }
 
 /** A device this client can show: a device kind or an additional Handy. */

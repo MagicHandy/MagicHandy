@@ -1,0 +1,97 @@
+package transport
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/mapledaemon/MagicHandy/internal/autoblow"
+)
+
+// StrokeStepAt opens one valve for a short pulse: longer draws air out of
+// the sleeve for a longer, tighter stroke; shorter lets air in. It works
+// whether or not motion plays, and Stop closes the valve if it is still open.
+func (v *VacuGlide) StrokeStepAt(generation uint64, longer bool) error {
+	if generation == 0 {
+		generation = v.ControlGeneration()
+	}
+	return v.pulse(generation, longer, false)
+}
+
+// pulse opens a valve, waits, and always closes it again.
+func (v *VacuGlide) pulse(generation uint64, longer, following bool) error {
+	v.valveMu.Lock()
+	defer v.valveMu.Unlock()
+	client, loops, err := v.admitValveStep(generation, longer, following)
+	if err != nil {
+		return err
+	}
+	defer loops.done.Done()
+	valve, step := autoblow.ValveStrokeMinus, -1
+	if longer {
+		valve, step = autoblow.ValveStrokePlus, 1
+	}
+	attempted := false
+	err = v.commandBound(client, generation, autoblowCommandTimeout, func(ctx context.Context, client *autoblow.Client) error {
+		attempted = true
+		v.mu.Lock()
+		v.valveOpen = valve
+		v.mu.Unlock()
+		_, err := client.Valve(ctx, valve, true)
+		return err
+	})
+	if !attempted {
+		return err
+	}
+	if err == nil {
+		timer := time.NewTimer(vacuglideValvePulse)
+		select {
+		case <-timer.C:
+		case <-loops.stop:
+		}
+		timer.Stop()
+	}
+	// A timeout can mean the cloud applied the opening but lost the reply.
+	// Cleanup must still run, and must never target a replacement connection.
+	closeErr := v.commandBound(client, 0, autoblowStopTimeout, func(ctx context.Context, client *autoblow.Client) error {
+		_, err := client.Valve(ctx, valve, false)
+		return err
+	})
+	v.mu.Lock()
+	if v.client == client {
+		if closeErr == nil {
+			v.valveOpen = ""
+		}
+		v.steps += step
+		if following && err == nil && closeErr == nil && v.generation == generation {
+			v.stream.followSteps += step
+		}
+		if combined := errors.Join(err, closeErr); combined != nil {
+			v.lastError = combined.Error()
+			go v.failConnection(client, combined)
+		}
+	}
+	v.mu.Unlock()
+	return errors.Join(err, closeErr)
+}
+
+// Admit the entire pulse before retirement can join the connection workers.
+func (v *VacuGlide) admitValveStep(generation uint64, longer, following bool) (*autoblow.Client, *autoblowLoops, error) {
+	v.mu.Lock()
+	if v.client == nil {
+		v.mu.Unlock()
+		return nil, nil, errAutoblowNotConnected
+	}
+	if v.generation != generation || v.stopHolds > 0 || v.state == "stale" || (following && !v.config.StrokeFollow) {
+		v.mu.Unlock()
+		return nil, nil, errAutoblowSuperseded
+	}
+	if longer && v.steps >= vacuglideMaxSteps || !longer && v.steps <= -vacuglideMaxSteps {
+		v.mu.Unlock()
+		return nil, nil, errVacuGlideStrokeLimit
+	}
+	client, loops := v.client, v.loops
+	loops.done.Add(1)
+	v.mu.Unlock()
+	return client, loops, nil
+}

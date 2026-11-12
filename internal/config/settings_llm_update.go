@@ -15,6 +15,11 @@ func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) 
 		enabled := *update.HostedResponseRepairEnabled
 		repairEnabled = &enabled
 	}
+	sceneMotion := current.SceneMotionEnabled
+	if update.SceneMotionEnabled != nil {
+		enabled := *update.SceneMotionEnabled
+		sceneMotion = &enabled
+	}
 	retryRefusalLocally := current.RetryRefusalLocally
 	if update.RetryRefusalLocally != nil {
 		retryRefusalLocally = *update.RetryRefusalLocally
@@ -73,6 +78,7 @@ func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) 
 		ConversationConnectionID:    conversation,
 		RetryRefusalLocally:         retryRefusalLocally,
 		HostedResponseRepairEnabled: repairEnabled,
+		SceneMotionEnabled:          sceneMotion,
 		MotionPlanner:               planner,
 		MotionReviewer:              reviewer,
 		Provider:                    update.Provider,

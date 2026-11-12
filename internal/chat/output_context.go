@@ -12,10 +12,25 @@ import (
 // OutputContext contains only backend-confirmed effect/participation facts.
 // It cannot identify a physical device or authorize changing its limits.
 type OutputContext struct {
-	Strokers int               `json:"linear_devices"`
+	Strokers int `json:"linear_devices"`
+	// PaceOnly counts the strokers among Strokers that follow only pace: a
+	// VacuGlide sets its own stroke length and depth (ADR 0069).
+	PaceOnly int               `json:"pace_only_strokers,omitempty"`
 	Coyote   bool              `json:"estim_follows_motion"`
 	Estim    *EstimContext     `json:"estim,omitempty"`
 	Vibrator *VibrationContext `json:"vibrator,omitempty"`
+}
+
+// paceOnlyGuide keeps replies truthful with a VacuGlide: its motor follows the
+// pace of the timeline, and its own air sets how long and deep each stroke is.
+const paceOnlyGuide = `PACE-ONLY STROKER: pace_only_strokers of the linear_devices follow only how fast the movement is. Such a device makes its own strokes and sets their length and depth itself, so pace changes, builds, slowdowns and pauses reach it, while position, depth, zone and stroke-length choices do not. When every linear device is pace-only, describe pace and rhythm, and never claim depth, reach, tip or base focus, or a stroke length you chose.`
+
+// simplePaceOnlyGuide is the compact Simple form.
+const simplePaceOnlyGuide = `STROKER: The stroker follows only the pace of the movement and sets its own stroke length and depth. Describe speed and rhythm; never claim depth, tip or base focus, or a stroke length.`
+
+// paceOnlyOnly reports a playback whose every stroker follows pace only.
+func paceOnlyOnly(outputs *OutputContext) bool {
+	return outputs != nil && outputs.PaceOnly > 0 && outputs.PaceOnly == outputs.Strokers
 }
 
 // EstimContext is what a model may know about the Coyote: how movement shapes
@@ -107,11 +122,14 @@ func outputContextInstructions(outputs *OutputContext) string {
 // outputContextInstructionsWith writes the level example with this mode's
 // empty edits.
 func outputContextInstructionsWith(outputs *OutputContext, emptyEdits string) string {
-	if outputs == nil || (outputs.Vibrator == nil && outputs.Estim == nil) {
+	if outputs == nil || (outputs.Vibrator == nil && outputs.Estim == nil && outputs.PaceOnly == 0) {
 		return ""
 	}
 	encoded, _ := json.Marshal(outputs)
 	var guides []string
+	if outputs.PaceOnly > 0 {
+		guides = append(guides, paceOnlyGuide)
+	}
 	if outputs.Vibrator != nil {
 		guide := outputContextGuide
 		if outputs.Vibrator.Independent {
@@ -140,6 +158,9 @@ func playbackOutputInstructions(caps Capabilities, state *MotionContext) string 
 	}
 	if simpleContinuous(caps) && !caps.VibrationControl {
 		var guides []string
+		if paceOnlyOnly(state.Outputs) {
+			guides = append(guides, simplePaceOnlyGuide)
+		}
 		if vibrationLevelAvailable(caps, state) {
 			guides = append(guides, simpleVibrationInstructions(state.Outputs, continuousEmptyEdits(caps)))
 		}

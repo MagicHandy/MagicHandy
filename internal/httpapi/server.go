@@ -20,6 +20,7 @@ import (
 
 	"github.com/mapledaemon/MagicHandy/internal/accounts"
 	"github.com/mapledaemon/MagicHandy/internal/audit"
+	"github.com/mapledaemon/MagicHandy/internal/autoblow"
 	"github.com/mapledaemon/MagicHandy/internal/ble"
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/chatapp"
@@ -70,6 +71,11 @@ type Runtime struct {
 	// CoyoteConnector replaces the Bluetooth worker, for simulation and tests.
 	CoyoteConnector          estim.Connector
 	NativeBluetoothConnector ble.Connector
+	// AutoblowClient points the Autoblow devices at a simulator in
+	// -simulate-motion builds and tests; the zero value reaches Autoblow's
+	// cloud. AutoblowSimulated names them as simulated.
+	AutoblowClient    autoblow.Options
+	AutoblowSimulated bool
 	// ExecutablePath makes first-party worker discovery deterministic and
 	// injectable in tests. Empty falls back to os.Executable.
 	ExecutablePath      string
@@ -111,6 +117,7 @@ type Server struct {
 	bluetooth           bluetoothRuntime
 	intiface            intifaceRuntime
 	coyote              coyoteRuntime
+	autoblow            autoblowRuntime
 	nativeBluetooth     nativeBluetoothRuntime
 	handys              handyConnectionsRuntime
 	motion              motionRuntime
@@ -450,7 +457,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/transport/bluetooth/events", s.handleBluetoothEvents)
 	mux.HandleFunc("POST /api/transport/bluetooth/stop", s.handleBluetoothStop)
 	s.intifaceRoutes(mux)
-	s.coyoteRoutes(mux)
+	s.deviceRoutes(mux)
 	s.nativeBluetoothRoutes(mux)
 	s.handyConnectionRoutes(mux)
 	mux.HandleFunc("GET /api/motion/state", s.handleMotionState)
@@ -706,6 +713,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"bluetooth_bridge":           s.clientBluetoothSnapshot(r),
 		"intiface_transport":         s.clientIntifaceSnapshot(r),
 		"coyote_transport":           s.clientCoyoteSnapshot(r),
+		"autoblow_transport":         s.clientAutoblowSnapshot(r),
 		"native_bluetooth_transport": s.nativeBluetoothSnapshot(),
 		"handy_connections":          s.handyConnectionSnapshots(),
 		"trace":                      s.traces.Summary(),

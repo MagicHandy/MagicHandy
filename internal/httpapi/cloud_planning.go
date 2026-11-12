@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net"
 	"net/http"
 	"slices"
 	"sync"
@@ -122,7 +121,7 @@ func (s *Server) cloudManager(w http.ResponseWriter, r *http.Request, mutating b
 	return s.cloudPlanning.auth, true
 }
 
-func (s *Server) cloudStatus(ctx context.Context) any {
+func (s *Server) cloudStatus(ctx context.Context) map[string]any {
 	connection := s.cloudPlanning.auth.Status(ctx)
 	s.cloudPlanning.mu.Lock()
 	models := append([]llm.CloudModel{}, s.cloudPlanning.models...)
@@ -149,11 +148,6 @@ func (s *Server) handleCloudPlanningStatus(w http.ResponseWriter, r *http.Reques
 func (s *Server) handleCloudSignIn(w http.ResponseWriter, r *http.Request) {
 	manager, ok := s.cloudManager(w, r, true)
 	if !ok {
-		return
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || !net.ParseIP(host).IsLoopback() {
-		writeError(w, http.StatusConflict, errors.New("open MagicHandy on its host computer to connect ChatGPT; sign-in returns to that computer"))
 		return
 	}
 	var body struct {
@@ -294,7 +288,7 @@ func (s *Server) handleCloudModels(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.cloudStatus(ctx))
+	writeJSON(w, http.StatusOK, s.cloudStatus(r.Context()))
 }
 
 func (s *Server) handleCloudTest(w http.ResponseWriter, r *http.Request) {
@@ -343,7 +337,7 @@ func (s *Server) handleCloudTest(w http.ResponseWriter, r *http.Request) {
 		connection := config.ModelConnection{ID: "chatgpt", Name: "ChatGPT", Provider: config.LLMProviderChatGPT, Model: body.Model}.Normalize()
 		s.recordConnectionReadiness(connection, generation, readiness.Ready, readiness.Message, 0)
 	}
-	writeJSON(w, http.StatusOK, s.cloudStatus(ctx))
+	writeJSON(w, http.StatusOK, s.cloudStatus(r.Context()))
 }
 
 func (s *Server) testCloudGeneration(ctx context.Context, providerID, model string) error {

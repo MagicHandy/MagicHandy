@@ -1164,6 +1164,7 @@ func chatCapabilities(settings config.LLMSettings, active *persona.Persona) chat
 		AdvancedMotion:           settings.AdvancedMotion(),
 		IntermediateMotion:       settings.IntermediateMotion(),
 		ChatPlanNote:             settings.ChatPlanNote(),
+		SceneMotionOff:           !settings.SceneMotion(),
 		SchemaUnenforced:         schemaUnenforced(settings),
 		PreserveConversationText: settings.AdvancedMotion(),
 		Motion:                   resolved.Motion && mode != chat.MotionModeOff,

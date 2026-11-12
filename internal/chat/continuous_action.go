@@ -73,9 +73,18 @@ Interpret the whole request: a question can accompany an edit, and preserving on
 func liveActionGuide(capabilities Capabilities, current MotionContext) string {
 	action := continuousActionGuideFor(current)
 	if capabilities.AdvancedMotion && !unavailableVibrationOnly(current) {
-		action += "\n" + advancedStopGuide + "\n" + hostedLiveIntentGuide + "\n" + hostedSceneGuide
+		action += "\n" + advancedStopGuide + "\n" + hostedLiveIntentGuide
+		if sceneMotion(capabilities) {
+			action += "\n" + hostedSceneGuide
+		}
 	}
 	return action
+}
+
+// sceneMotion reports Advanced chat that answers roleplay cues with motion
+// (ADR 0067) and has not been switched to quicker replies (ADR 0068).
+func sceneMotion(capabilities Capabilities) bool {
+	return capabilities.AdvancedMotion && !capabilities.SceneMotionOff
 }
 
 const advancedStopGuide = `Use action "stop" with empty edits to stop all playback, including Autopilot. It is also allowed while paused; it never resumes motion. Omit vibration or use null with stop. Easing off while continuing uses update instead. Claim a complete rest or stopped device only with stop, or when already stopped.`

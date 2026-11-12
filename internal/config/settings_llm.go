@@ -2,27 +2,30 @@ package config
 
 // LLMSettings contains local defaults, named providers, and model role settings.
 type LLMSettings struct {
-	RequestRole                 string                 `json:"-"`
-	Connections                 []ModelConnection      `json:"connections,omitempty"`
-	ConversationConnectionID    string                 `json:"conversation_connection_id,omitempty"`
-	RetryRefusalLocally         bool                   `json:"retry_refusal_locally,omitempty"`
-	HostedResponseRepairEnabled *bool                  `json:"hosted_response_repair_enabled,omitempty"`
-	ActiveConnection            *ModelConnection       `json:"-"`
-	MotionPlanner               MotionPlannerSettings  `json:"motion_planner"`
-	MotionReviewer              MotionReviewerSettings `json:"motion_reviewer"`
-	Provider                    string                 `json:"provider"`
-	LocalCapabilityLevel        string                 `json:"local_capability_level,omitempty"`
-	LlamaCPPMode                string                 `json:"llama_cpp_mode"`
-	ManagedLoadPolicy           string                 `json:"managed_load_policy"`
-	LlamaCPPBaseURL             string                 `json:"llama_cpp_base_url"`
-	LlamaCPPContextSize         int                    `json:"llama_cpp_context_size"`
-	OllamaBaseURL               string                 `json:"ollama_base_url"`
-	OllamaModelsPath            string                 `json:"ollama_models_path,omitempty"`
-	Model                       string                 `json:"model"`
-	PromptSet                   string                 `json:"prompt_set"`
-	RequestTimeoutMillis        int                    `json:"request_timeout_ms"`
-	MaxOutputTokens             int                    `json:"max_output_tokens"`
-	ReasoningMode               string                 `json:"reasoning_mode"`
+	RequestRole                 string            `json:"-"`
+	Connections                 []ModelConnection `json:"connections,omitempty"`
+	ConversationConnectionID    string            `json:"conversation_connection_id,omitempty"`
+	RetryRefusalLocally         bool              `json:"retry_refusal_locally,omitempty"`
+	HostedResponseRepairEnabled *bool             `json:"hosted_response_repair_enabled,omitempty"`
+	// SceneMotionEnabled lets Advanced chat answer roleplay cues with motion
+	// (ADR 0067). Nil means on; off trades that for quicker replies (ADR 0068).
+	SceneMotionEnabled   *bool                  `json:"scene_motion_enabled,omitempty"`
+	ActiveConnection     *ModelConnection       `json:"-"`
+	MotionPlanner        MotionPlannerSettings  `json:"motion_planner"`
+	MotionReviewer       MotionReviewerSettings `json:"motion_reviewer"`
+	Provider             string                 `json:"provider"`
+	LocalCapabilityLevel string                 `json:"local_capability_level,omitempty"`
+	LlamaCPPMode         string                 `json:"llama_cpp_mode"`
+	ManagedLoadPolicy    string                 `json:"managed_load_policy"`
+	LlamaCPPBaseURL      string                 `json:"llama_cpp_base_url"`
+	LlamaCPPContextSize  int                    `json:"llama_cpp_context_size"`
+	OllamaBaseURL        string                 `json:"ollama_base_url"`
+	OllamaModelsPath     string                 `json:"ollama_models_path,omitempty"`
+	Model                string                 `json:"model"`
+	PromptSet            string                 `json:"prompt_set"`
+	RequestTimeoutMillis int                    `json:"request_timeout_ms"`
+	MaxOutputTokens      int                    `json:"max_output_tokens"`
+	ReasoningMode        string                 `json:"reasoning_mode"`
 	// ChatVoice selects how sexual the model's reply register may be. It only
 	// shapes prompt composition; the motion contract and every motion safety
 	// gate are identical at every level.
@@ -53,6 +56,12 @@ type LLMSettings struct {
 // It affects hosted interactive chat only; local generation keeps its own policy.
 func (s LLMSettings) HostedResponseRepair() bool {
 	return s.HostedResponseRepairEnabled == nil || *s.HostedResponseRepairEnabled
+}
+
+// SceneMotion defaults on for settings saved before this option existed. It
+// affects Advanced interactive chat only; other levels never receive the guide.
+func (s LLMSettings) SceneMotion() bool {
+	return s.SceneMotionEnabled == nil || *s.SceneMotionEnabled
 }
 
 // LLMMotionCapabilities is the user-selected checkbox list of control methods

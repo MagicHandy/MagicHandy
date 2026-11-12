@@ -228,6 +228,10 @@ type Capabilities struct {
 	// ChatPlanNote adds a private planning note before Advanced chat edits in
 	// the same generation (ADR 0065). It requires AdvancedMotion.
 	ChatPlanNote bool
+	// SceneMotionOff withholds the scene guidance from Advanced chat (ADR 0068):
+	// roleplay cues then read as conversation again, which keeps more replies
+	// text-only and quicker. The zero value keeps the guidance.
+	SceneMotionOff bool
 	// Evaluation can exercise the compact local grammar without changing production.
 	VibrationControl bool
 	// DirectionalPace lets opt-in evaluations exercise a compact candidate

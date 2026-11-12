@@ -36,6 +36,22 @@ export const VibratorGlyph: DeviceGlyph = ({ size = 16, className }) => (
   </svg>
 );
 
+/** The Autoblow Ultra: a stroker body with its travel. */
+export const AutoblowGlyph: DeviceGlyph = ({ size = 16, className }) => (
+  <svg {...frame(size, className)}>
+    <rect x="4.5" y="1.5" width="7" height="13" rx="2" />
+    <path d="M8 4.5v7M6.6 5.9 8 4.5l1.4 1.4M6.6 10.1 8 11.5l1.4-1.4" />
+  </svg>
+);
+
+/** The VacuGlide: a receiver tube with its air hose. */
+export const VacuGlideGlyph: DeviceGlyph = ({ size = 16, className }) => (
+  <svg {...frame(size, className)}>
+    <rect x="5.5" y="1.5" width="5" height="9" rx="2.5" />
+    <path d="M8 10.5v1.2c0 1.5-1.2 2.8-2.8 2.8H2.5M6.8 4.5h2.4M6.8 6.8h2.4" />
+  </svg>
+);
+
 export const IntifaceGlyph: DeviceGlyph = ({ size = 16, className }) => (
   <svg {...frame(size, className)}>
     <circle cx="8" cy="7.5" r="2" />

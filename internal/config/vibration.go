@@ -80,13 +80,17 @@ func applyMissingVibrationDefaults(settings VibrationSettings) VibrationSettings
 	return settings
 }
 
-// validateCompanionSettings checks the settings of outputs that follow the
-// shared frame through a conversion profile.
+// validateCompanionSettings checks the settings of outputs beyond The Handy:
+// those that follow the shared frame through a conversion profile, and
+// Autoblow's cloud devices.
 func validateCompanionSettings(settings Settings) error {
 	if err := validateEstimSettings(settings.Estim); err != nil {
 		return err
 	}
-	return validateVibrationSettings(settings.Vibration)
+	if err := validateVibrationSettings(settings.Vibration); err != nil {
+		return err
+	}
+	return validateAutoblowSettings(settings)
 }
 
 func validateVibrationSettings(settings VibrationSettings) error {

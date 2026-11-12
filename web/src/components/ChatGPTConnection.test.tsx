@@ -67,4 +67,19 @@ describe("ChatGPT account presentation", () => {
     expect(screen.getByRole("button", { name: "Reconnect" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Add account" })).toBeDisabled();
   });
+
+  it("offers reconnect through the configured address and explains host-browser completion", async () => {
+    vi.mocked(api.cloudPlanningStatus).mockResolvedValue(connected);
+    const popup = { opener: window, location: { href: "about:blank" }, close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+    render(<ChatGPTConnection />);
+    await screen.findByText("ChatGPT connected");
+    expect(screen.getByText("Complete ChatGPT sign-in in a browser on the computer running MagicHandy. Signing in on another device cannot finish the connection.")).toBeVisible();
+    expect(screen.queryByRole("link", { name: "Open local sign-in" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Manage account"));
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect" }));
+    await waitFor(() => expect(api.cloudSignIn).toHaveBeenCalledWith("test"));
+    expect(popup.opener).toBeNull();
+    expect(popup.location.href).toBe("https://auth.openai.com/authorize");
+  });
 });

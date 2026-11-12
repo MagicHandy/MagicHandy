@@ -85,6 +85,8 @@ import type {
   InternetDiscovery,
   CertificatePreparation,
   CommandReceipt,
+  AutoblowDevice,
+  AutoblowTransportSnapshot,
   CoyoteTransportSnapshot,
   DeviceId,
   DeviceOptionsPatch,
@@ -895,6 +897,18 @@ export const api = {
     request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/test", { channel }, undefined,
       { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
   coyoteZero: () => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/zero", {}),
+  // Autoblow's cloud devices (ADR 0069). The token has its own explicit Save.
+  autoblowStatus: () => request<AutoblowTransportSnapshot>("GET", "/api/transport/autoblow/status"),
+  autoblowConnect: (device: AutoblowDevice) => request<AutoblowTransportSnapshot>("POST", "/api/transport/autoblow/connect", { device }),
+  autoblowDisconnect: (device: AutoblowDevice) => request<AutoblowTransportSnapshot>("POST", "/api/transport/autoblow/disconnect", { device }),
+  autoblowTest: (device: AutoblowDevice, stopSequence: number) =>
+    request<AutoblowTransportSnapshot>("POST", "/api/transport/autoblow/test", { device }, undefined,
+      { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  vacuglideStroke: (direction: "longer" | "shorter", stopSequence?: number) =>
+    request<AutoblowTransportSnapshot>("POST", "/api/transport/autoblow/stroke", { direction }, undefined,
+      stopSequence === undefined ? undefined : { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  saveAutoblowToken: (device: AutoblowDevice, token: string) =>
+    request<{ settings: PublicSettings }>("PUT", "/api/settings/device/autoblow-token", { device, token }),
   // Additional Handys take include and exclude by their instance ID; adding
   // and removing one goes through /api/settings/handys.
   changeDeviceConnection: (device: DeviceId, action: "add" | "remove" | "include" | "exclude") =>

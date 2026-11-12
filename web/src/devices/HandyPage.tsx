@@ -106,20 +106,42 @@ export function MethodChoice({ ctx, device, current, methods, hint, note, confir
   );
 }
 
-// The one device option with an explicit Save: a key is pasted whole.
-export function ConnectionKeyRow({ ctx, device, keySet, save, forget }: {
+/** The words a secret row uses; the Handy's connection key is the default. */
+export interface SecretRowText {
+  label: string;
+  hint: string;
+  placeholder: string;
+  saved: string;
+  forget: string;
+}
+
+function connectionKeyText(): SecretRowText {
+  return {
+    label: t("Connection key"),
+    hint: t("From the Handy app. Stored on this computer and never shown again."),
+    placeholder: t("Paste connection key"),
+    saved: t("Handy connection key saved."),
+    forget: t("Forget key"),
+  };
+}
+
+// The one device option with an explicit Save: a key or token is pasted whole.
+export function ConnectionKeyRow({ ctx, device, keySet, save, forget, text }: {
   ctx: DeviceContext;
   device: DeviceId;
   keySet: boolean;
   save: (key: string) => Promise<unknown>;
   /** Asks first, then forgets the saved key. */
   forget: () => void;
+  /** Another device's secret, such as an Autoblow device token. */
+  text?: SecretRowText;
 }) {
   const id = useId();
   const hintId = useId();
   const [key, setKey] = useState("");
   const busy = ctx.busy[device] === "key";
   const locked = ctx.locked || !ctx.canConfigureHost;
+  const words = text ?? connectionKeyText();
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -128,23 +150,23 @@ export function ConnectionKeyRow({ ctx, device, keySet, save, forget }: {
     void ctx.run(device, "key", async () => {
       await save(next);
       setKey("");
-      return t("Handy connection key saved.");
+      return words.saved;
     });
   }
 
   return (
     <form className="form-row device-key-row" onSubmit={submit}>
       <span className="form-row-label">
-        <label htmlFor={id}><strong>{t("Connection key")}</strong></label>
-        <small id={hintId}>{t("From the Handy app. Stored on this computer and never shown again.")}</small>
+        <label htmlFor={id}><strong>{words.label}</strong></label>
+        <small id={hintId}>{words.hint}</small>
       </span>
       <div className="form-input-action">
         <input id={id} type="password" autoComplete="off" spellCheck={false} aria-describedby={hintId}
-          placeholder={keySet ? t("Saved · paste to replace") : t("Paste connection key")}
+          placeholder={keySet ? t("Saved · paste to replace") : words.placeholder}
           value={key} disabled={locked || busy} onChange={(event) => setKey(event.target.value)} />
         <button type="submit" className="btn btn-secondary" disabled={locked || busy || !key.trim()}>{busy ? t("Saving") : t("Save")}</button>
       </div>
-      {keySet && <button type="button" className="btn btn-quiet device-key-forget" disabled={locked || Boolean(ctx.busy[device])} onClick={forget}>{t("Forget key")}</button>}
+      {keySet && <button type="button" className="btn btn-quiet device-key-forget" disabled={locked || Boolean(ctx.busy[device])} onClick={forget}>{words.forget}</button>}
     </form>
   );
 }

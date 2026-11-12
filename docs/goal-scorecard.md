@@ -1,5 +1,64 @@
 # Goal Scorecard
 
+## 2026-11-12 — Alpha.85 reviewed integration
+
+Updates' final integration uses Go **1.26.11** for GO-2026-6859 and includes
+the public-origin reconnect correction plus stale-pacer/client-bound-clock
+guards. Matched Windows amd64 builds with `CGO_ENABLED=0 -trimpath
+-buildvcs=false -ldflags '-s -w'` measure alpha.84 at **24,494,080 B** and
+the final candidate at **24,877,056 B** (+382,976 B, 1.56%). The separate
+Go 1.26.10 source measurements below remain historical.
+
+The final canonical UI is **2,938,259 B** across nine files (+52,726 B,
+1.83% against alpha.84). Main JS is **1,343,882 B**, gzip **360,156 B**
+(+20,241 / +4,510 B). CSS remains **210,443 / 36,663 B**. Gzip uses Python
+with `mtime=0`. No new dependency or worker, and no idle-RSS, cold-start or
+physical-pace improvement is claimed.
+
+### Original source handoff measurement
+
+Same-host alpha.84 baseline and final source, Windows amd64 Go 1.26.10,
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`:
+
+- Core including the canonical UI: **24,495,104 -> 24,881,152 B**
+  (+386,048 B, 1.58%). The symbol-retaining `-w` review builds, with identical
+  version flags, measured 26,119,168 -> 26,541,056 B (+421,888 B).
+- Canonical UI: **2,885,533 -> 2,938,413 B** (+52,880 B, 1.83%).
+  This includes both Claude features, corrected device wording and ChatGPT
+  host-sign-in guidance in all five locales.
+- No dependency or worker added. No idle RSS/cold-start improvement is claimed.
+  The new device pacers run only for connected devices; default Handy-only
+  operation keeps the existing motion path.
+
+See [the integration review](alpha85-release-review-2026-11-12.md). The
+November 11 figures below describe Claude's earlier device-only snapshot.
+
+## 2026-11-11 — Autoblow Ultra and VacuGlide
+
+Against alpha.84 `0af9655d`, Windows amd64 Go 1.26.10, `CGO_ENABLED=0
+-trimpath -buildvcs=false -ldflags '-s -w'`, both built on this host:
+
+- Core including the canonical embedded UI: **24,495,104 -> 24,836,608 B**
+  (+341,504 B). By unstripped symbol size, the new code is:
+  - the two transport owners, about 70 KB;
+  - the in-process Autoblow simulator, about 26 KB (compiled in for
+    `-simulate-motion`, like the Intiface one);
+  - HTTP handlers, about 22 KB;
+  - the cloud client, about 13 KB.
+
+  The rest is the runtime's function tables, which grow with code, and the UI.
+- Canonical UI: **2,885,533 -> 2,932,203 B** (+46,670 B), nine files before
+  and after, including 60 new strings in each of five locales. Main JS
+  **1,323,641 -> 1,341,577 B** (+17,936 B), gzip **355,646 -> 359,551 B**
+  (+3,905 B; Python gzip, `mtime=0`). CSS unchanged at **210,443 / 36,663 B**.
+- No new third-party dependency or worker process. Each connected device
+  holds one HTTP keep-alive connection and one event stream. It also runs a
+  pacer goroutine and a health read every five seconds. Nothing runs for a
+  device that is not connected.
+
+No idle RSS or cold-start change is claimed. See
+[ADR 0069](decisions/0069-autoblow-cloud-devices.md).
+
 ## 2026-11-09 — Alpha.84 scene feedback and explicit Advanced Stop
 
 Same Windows amd64 Go 1.26.10, `CGO_ENABLED=0 -trimpath -buildvcs=false

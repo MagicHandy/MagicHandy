@@ -6,6 +6,7 @@ import type { CloudPlanningStatus } from "../api/cloud-types";
 import type { PublicSettings } from "../api/types";
 import { newModelConnection } from "../util/model-connections";
 import { ModelConnectionsPanel } from "./ModelConnectionsPanel";
+import { ModelConnectionEditor } from "./ModelConnectionEditor";
 
 const chatgpt = { ...newModelConnection("chatgpt", []), model: "hosted-model" };
 const compatible = { ...newModelConnection("compatible", []), model: "same-model", no_authentication: true };
@@ -144,6 +145,23 @@ describe("model roles and external providers", () => {
     expect(toggle).toBeDisabled();
   });
 
+  it("offers quicker replies only for Advanced chat in continuous motion modes", () => {
+    quietCatalog();
+    const local = { connections: [], conversation_connection_id: "local", motion_generation_mode: "layered" } as unknown as PublicSettings["llm"];
+    const view = render(<ModelConnectionsPanel settings={local} saved={local} locked={false} patch={vi.fn()} />);
+    expect(screen.queryByRole("checkbox", { name: /^Answer roleplay cues with motion/ })).not.toBeInTheDocument();
+    const patch = vi.fn();
+    const advanced = { ...local, local_capability_level: "advanced" as const };
+    view.rerender(<ModelConnectionsPanel settings={advanced} saved={advanced} locked={false} patch={patch} />);
+    const toggle = screen.getByRole("checkbox", { name: /^Answer roleplay cues with motion/ });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    expect(patch).toHaveBeenCalledWith({ scene_motion_enabled: false });
+    const pattern = { ...advanced, motion_generation_mode: "pattern" };
+    view.rerender(<ModelConnectionsPanel settings={pattern} saved={pattern} locked={false} patch={vi.fn()} />);
+    expect(screen.queryByRole("checkbox", { name: /^Answer roleplay cues with motion/ })).not.toBeInTheDocument();
+  });
+
   it("never creates a provider from a role choice; adding one leaves both roles alone", async () => {
     quietCatalog();
     render(<Panel initial={{ connections: [chatgpt], conversation_connection_id: chatgpt.id } as PublicSettings["llm"]} />);
@@ -243,6 +261,50 @@ describe("model roles and external providers", () => {
     await act(async () => { finish({ models: [{ id: "private-account-model", name: "Private account model" }] }); });
     expect(screen.queryByRole("option", { name: "Private account model" })).not.toBeInTheDocument();
     expect(screen.getByLabelText("API key")).toBeVisible();
+  });
+
+  it("keeps Reconnect available during discovery and drops the old account's late catalog", async () => {
+    let current = { ...status };
+    vi.spyOn(api, "cloudPlanningStatus").mockImplementation(async () => current);
+    let finish!: (result: { models: Array<{ id: string; name: string }> }) => void;
+    vi.spyOn(api, "modelConnectionModels").mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })).mockResolvedValue({ models: [] });
+    vi.spyOn(window, "open").mockReturnValue({ opener: window, location: { href: "" }, close: vi.fn() } as unknown as Window);
+    vi.spyOn(api, "cloudSignIn").mockImplementation(async () => {
+      current = { ...current, connection: { ...current.connection, generation: 5 } };
+      return { authorization_url: "https://auth.openai.com/authorize" };
+    });
+    render(<ModelConnectionEditor connection={chatgpt} locked={false} patch={() => {}} />);
+    await screen.findByText("Fetching models...");
+    fireEvent.click(screen.getByText("Manage account"));
+    expect(screen.getByRole("button", { name: "Reconnect" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect" }));
+    await waitFor(() => expect(api.cloudSignIn).toHaveBeenCalledWith("test"));
+    await act(async () => { finish({ models: [{ id: "old-account", name: "Old account model" }] }); });
+    await waitFor(() => expect(api.modelConnectionModels).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("option", { name: "Old account model" })).not.toBeInTheDocument();
+  });
+
+  it("does not let an old model check mark the reconnected account ready", async () => {
+    let current = { ...status, connection_readiness: {} };
+    vi.spyOn(api, "cloudPlanningStatus").mockImplementation(async () => current);
+    vi.spyOn(api, "modelConnectionModels").mockResolvedValue({ models: [] });
+    let finish!: (result: Awaited<ReturnType<typeof api.modelConnectionTest>>) => void;
+    vi.spyOn(api, "modelConnectionTest").mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    vi.spyOn(window, "open").mockReturnValue({ opener: window, location: { href: "" }, close: vi.fn() } as unknown as Window);
+    vi.spyOn(api, "cloudSignIn").mockImplementation(async () => {
+      current = { ...current, connection: { ...current.connection, generation: 5 } };
+      return { authorization_url: "https://auth.openai.com/authorize" };
+    });
+    const ready = vi.fn();
+    render(<ModelConnectionEditor connection={chatgpt} locked={false} patch={() => {}} onReady={ready} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Check model" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Check model" }));
+    await screen.findByRole("button", { name: "Checking model..." });
+    fireEvent.click(screen.getByText("Manage account"));
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect" }));
+    await waitFor(() => expect(api.cloudSignIn).toHaveBeenCalled());
+    await act(async () => { finish({ provider: "chatgpt", model: chatgpt.model, ready: true, state: "ready", message: "Ready" }); });
+    expect(ready).not.toHaveBeenCalledWith(true);
   });
 
   it("shows exact readiness and drops it once the endpoint is edited", async () => {

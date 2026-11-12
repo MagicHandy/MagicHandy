@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import type { MotionInfo } from "../../api/types";
+import type { MotionInfo, PublicSettings } from "../../api/types";
+import { visualizerDeviceFor } from "../LiveMotionVisualizer";
 import { MotionVisualizer } from "../MotionVisualizer";
 import { DISABLED_VISUALIZER_KINDS, handyTravelMillimetres, visualizerKind, type VisualizerKind } from "./device";
 import { dotText, dotTextSpan } from "./dotFont";
@@ -27,6 +28,16 @@ describe("visualizer device selection", () => {
     expect(visualizerKind({ owner: "browser_bluetooth", model: "handy_2_standard" })).toBe("handy-dots");
     expect(visualizerKind({ owner: "cloud_rest", model: "handy_2_pro" })).toBe("handy-dots");
     expect(visualizerKind(undefined)).toBe("handy-dots");
+  });
+
+  it("draws a generic track in percent when an Autoblow device plays without a Handy", () => {
+    expect(visualizerKind({ owner: "cloud_rest", model: "handy_original", generic: true })).toBe("scan");
+    const only = (playback_devices: string[]) => visualizerDeviceFor({ device: { playback_devices, hsp_dispatch_owner: "cloud_rest" }, motion: { handy_model: "handy_original" } } as unknown as PublicSettings);
+    expect(only(["vacuglide"]).generic).toBe(true);
+    expect(only(["autoblow", "coyote"]).generic).toBe(true);
+    expect(only(["handy", "vacuglide"]).generic).toBe(false);
+    expect(only(["handy-0123456789ab", "autoblow"]).generic).toBe(false);
+    expect(only(["coyote"]).generic).toBe(false);
   });
 
   it("never selects a published-but-disabled design on its own", () => {
@@ -76,6 +87,12 @@ describe("visualizer drawings", () => {
     const { container } = render(<MotionVisualizer motion={running("handy_2_pro", 50)} device={{ owner: "intiface" }} />);
     expect(screen.getByRole("img", { name: /motion running/i })).toHaveAttribute("data-kind", "scan");
     expect(container.querySelector(".viz-scan-bar")).toBeInTheDocument();
+    expect(screen.queryByText(/ mm$/)).not.toBeInTheDocument();
+  });
+
+  it("shows the scanning bar in percent when only an Autoblow device plays", () => {
+    render(<MotionVisualizer motion={running("handy_original", 50)} device={{ owner: "cloud_rest", model: "handy_original", generic: true }} />);
+    expect(screen.getByRole("img", { name: /motion running/i })).toHaveAttribute("data-kind", "scan");
     expect(screen.queryByText(/ mm$/)).not.toBeInTheDocument();
   });
 

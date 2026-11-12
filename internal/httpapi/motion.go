@@ -439,6 +439,7 @@ func (s *Server) dispatchEmergencyStop(ctx context.Context, reason string, reque
 	// Stop rather than after it.
 	waitCoyote := s.startCoyoteZero()
 	waitIntiface := s.startIntifaceEmergencyStop()
+	waitAutoblow := s.startAutoblowEmergencyStop()
 
 	// The engine and the selected fallback transport are mutually exclusive.
 	// Holding lifecycleMu prevents a replacement engine from appearing between
@@ -450,7 +451,7 @@ func (s *Server) dispatchEmergencyStop(ctx context.Context, reason string, reque
 	}
 	// Complete shared Stop replies only after both outputs have finished, and
 	// include a failed zero in confirmation rather than only logging it.
-	defer func() { err = errors.Join(err, waitCoyote(), waitIntiface()) }()
+	defer func() { err = errors.Join(err, waitCoyote(), waitIntiface(), waitAutoblow()) }()
 	engine, engineOwner := s.currentMotionEngineWithOwner()
 	if engine != nil {
 		outside := make(chan error, 2)
@@ -720,7 +721,8 @@ func (s *Server) applyDeviceSettingsTransition(ctx context.Context, previous, ne
 		previous.Device.APIApplicationIDOverride != next.Device.APIApplicationIDOverride ||
 		previous.Device.HandyConnectionKey != next.Device.HandyConnectionKey
 	if !ownerChanged && !intifaceAddressChanged && !cloudConfigChanged {
-		return namedStopped, errors.Join(namedErr, s.applyCoyoteSettingsTransition(previous, next), s.applyVibratorSettingsTransition(ctx, previous, next))
+		return namedStopped, errors.Join(namedErr, s.applyCoyoteSettingsTransition(previous, next), s.applyVibratorSettingsTransition(ctx, previous, next),
+			s.applyAutoblowSettingsTransition(ctx, previous, next))
 	}
 	reason := "transport_config_changed"
 	if ownerChanged {
@@ -746,7 +748,8 @@ func (s *Server) applyDeviceSettingsTransition(ctx context.Context, previous, ne
 	if handyRemoved {
 		removeErr = errors.Join(removeErr, s.removeHandyConnection(ctx, previous))
 	}
-	return true, errors.Join(namedErr, stopErr, removeErr, s.applyCoyoteSettingsTransition(previous, next), s.applyVibratorSettingsTransition(ctx, previous, next))
+	return true, errors.Join(namedErr, stopErr, removeErr, s.applyCoyoteSettingsTransition(previous, next), s.applyVibratorSettingsTransition(ctx, previous, next),
+		s.applyAutoblowSettingsTransition(ctx, previous, next))
 }
 
 func (s *Server) applyPlanningSettingsTransition(previous, next config.Settings) {
@@ -908,6 +911,9 @@ func (s *Server) Quiesce() {
 		s.closeIntiface()
 		s.closeNamedHandys(ctx)
 		s.closeCoyote()
+		// Closing stops a connected Autoblow device: nothing else would, since
+		// its motor keeps its last speed until told otherwise.
+		s.closeAutoblow()
 		_ = s.nativeBluetooth.owner.Close()
 	})
 }

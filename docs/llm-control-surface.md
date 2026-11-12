@@ -58,6 +58,13 @@ also write a required private `basis` string before `edits`. The parser removes
 it before validation. It is never reply text, speech, memory or a motion
 command, and it grants no authority.
 
+The Autoblow Ultra counts as a linear stroker. A VacuGlide counts as a
+pace-only stroker ([ADR 0069](decisions/0069-autoblow-cloud-devices.md)): it
+follows the motion's pace and makes its own strokes. When it is the only
+stroker, every level is told to describe pace and rhythm, not depth or stroke
+length. The model has no control of its valves; only the person and the
+optional follower step them. The Handy-only prompt keeps its bytes.
+
 Replies and motion descriptions still assume a linear stroker, which is
 untrue when only the Coyote or a vibrator plays. The
 [device-aware model responses plan](device-aware-prompts-plan-2026-10-15.md)

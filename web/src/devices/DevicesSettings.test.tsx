@@ -19,6 +19,12 @@ vi.mock("../state/app-state", () => ({
 
 vi.mock("../api/client", () => ({
   api: {
+    autoblowStatus: vi.fn(() => new Promise(() => undefined)),
+    autoblowConnect: vi.fn(),
+    autoblowDisconnect: vi.fn(),
+    autoblowTest: vi.fn(async () => undefined),
+    saveAutoblowToken: vi.fn(async () => ({ settings: {} })),
+    vacuglideStroke: vi.fn(async () => undefined),
     applyQuick: vi.fn(async () => undefined),
     addHandy: vi.fn(),
     updateHandy: vi.fn(async () => ({ settings: {} })),
@@ -117,12 +123,22 @@ describe("Settings > Devices", () => {
   it("adds a device without connecting it and opens its page", async () => {
     app.state = stateWith({ configured: ["handy"] });
     renderPage("add");
+    // Choices follow the run-clock order: strokers first, then companions.
+    expect(screen.getByRole("button", { name: /Autoblow Ultra Experimental · Stroker/ })).toHaveFocus();
     const choice = screen.getByRole("button", { name: /Coyote Two-channel e-stim/ });
-    expect(choice).toHaveFocus();
     await act(async () => fireEvent.click(choice));
     expect(api.changeDeviceConnection).toHaveBeenCalledWith("coyote", "add");
     expect(api.coyoteConnect).not.toHaveBeenCalled();
     expect(window.location.hash).toBe("#/settings/devices/coyote");
+  });
+
+  it("adds a VacuGlide and says what it can and cannot follow", async () => {
+    app.state = stateWith({ configured: ["handy"] });
+    renderPage("add");
+    expect(screen.getByText(/makes its own strokes; you set how long and tight they are/)).toBeInTheDocument();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: /VacuGlide Experimental · Suction stroker/ })));
+    expect(api.changeDeviceConnection).toHaveBeenCalledWith("vacuglide", "add");
+    expect(window.location.hash).toBe("#/settings/devices/vacuglide");
   });
 
   it("saves the failure policy and the timing offsets as they change", async () => {
@@ -401,5 +417,44 @@ describe("additional Handys", () => {
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Disconnect" })));
     expect(api.intifaceDisconnect).toHaveBeenCalledWith("handy");
     expect(api.handyDisconnect).toHaveBeenCalledWith(id);
+  });
+});
+
+describe("the VacuGlide's page", () => {
+  function vacuglideState(connected: boolean) {
+    app.state = stateWith({ configured: ["handy", "vacuglide"] });
+    app.state.settings!.vacuglide = { token_set: true, timing_offset_ms: 0, speed_match: "handy_pace", stroke_follow: false };
+    const status = {
+      device: "vacuglide", connected, connecting: false, simulated: true, token_set: true, playback_state: "idle", round_trip_ms: 70,
+      testing: false, button_events: connected, requests_sent: 0, request_failures: 0, rate_limited: 0, stroke_steps: 1, commanded_percent: 0,
+    };
+    app.state.autoblow_transport = { autoblow: { ...status, device: "autoblow", connected: false, button_events: false }, vacuglide: status };
+  }
+
+  it("saves the token, the speed match and stroke following, and steps the stroke", async () => {
+    vacuglideState(true);
+    renderPage("vacuglide");
+    fireEvent.change(screen.getByLabelText("Device token"), { target: { value: "  vacuglide-token  " } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save" })));
+    expect(api.saveAutoblowToken).toHaveBeenCalledWith("vacuglide", "vacuglide-token");
+    await act(async () => fireEvent.click(screen.getByRole("radio", { name: "Full motor range" })));
+    expect(api.saveDeviceOptions).toHaveBeenCalledWith({ vacuglide: { speed_match: "full_range" } });
+    await act(async () => fireEvent.click(screen.getByRole("switch", { name: /Follow the motion's reach/ })));
+    expect(api.saveDeviceOptions).toHaveBeenCalledWith({ vacuglide: { stroke_follow: true } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Longer" })));
+    expect(api.vacuglideStroke).toHaveBeenCalledWith("longer", 7);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Shorter" })));
+    expect(api.vacuglideStroke).toHaveBeenCalledWith("shorter", 7);
+    expect(screen.getByText("Steps this connection: 1")).toBeInTheDocument();
+    expect(screen.getByText("Simulated cloud")).toBeInTheDocument();
+  });
+
+  it("keeps the stroke steps and test off until the VacuGlide is connected", () => {
+    vacuglideState(false);
+    renderPage("vacuglide");
+    expect(screen.getByRole("button", { name: "Longer" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Shorter" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Test" })).toBeDisabled();
+    expect(screen.getByText(/MagicHandy cannot stop it: switch it off on the device/)).toBeInTheDocument();
   });
 });

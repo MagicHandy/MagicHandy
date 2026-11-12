@@ -16,8 +16,9 @@ const (
 )
 
 // knownDevices lists the device IDs in run-clock order: the first playing
-// device anchors a linked session's timeline.
-var knownDevices = []string{DeviceOutputHandy, DeviceOutputCoyote, DeviceVibrator}
+// device anchors a linked session's timeline. Named Handys follow the primary
+// one; position devices come before the companions that follow them.
+var knownDevices = []string{DeviceOutputHandy, DeviceAutoblow, DeviceVacuGlide, DeviceOutputCoyote, DeviceVibrator}
 
 // HasDevice checks the saved inventory, independent of connection state and
 // playback participation. Nil migrates the old output-only configuration; an
@@ -68,15 +69,15 @@ func configuredFromOutput(output string) []string {
 func canonicalDevices(devices []string) []string {
 	ordered := make([]string, 0, len(devices))
 	for _, known := range knownDevices {
-		if known == DeviceOutputCoyote {
+		if slices.Contains(devices, known) {
+			ordered = append(ordered, known)
+		}
+		if known == DeviceOutputHandy {
 			for _, device := range devices {
 				if IsHandyConnectionID(device) {
 					ordered = append(ordered, device)
 				}
 			}
-		}
-		if slices.Contains(devices, known) {
-			ordered = append(ordered, known)
 		}
 	}
 	for _, device := range devices {

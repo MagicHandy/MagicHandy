@@ -21,6 +21,10 @@ func deviceLabel(device string) string {
 		return "Coyote"
 	case config.DeviceVibrator:
 		return "Vibrator"
+	case config.DeviceAutoblow:
+		return "Autoblow Ultra"
+	case config.DeviceVacuGlide:
+		return "VacuGlide"
 	default:
 		return device
 	}
@@ -57,7 +61,7 @@ func (s *Server) engineOwnerKey(device config.DeviceSettings) string {
 	if device.Plays(config.DeviceVibrator) {
 		owner += s.vibratorEngineSuffix()
 	}
-	return owner + s.namedHandyOwnerSuffix(device)
+	return owner + s.autoblowEngineSuffix(device) + s.namedHandyOwnerSuffix(device)
 }
 
 // engineOwnerPlays reports whether the engine built for owner drives device.
@@ -105,6 +109,8 @@ func (s *Server) playbackDeviceTransport(settings config.Settings, device string
 		return s.coyoteMotionTransport()
 	case config.DeviceVibrator:
 		return s.vibratorMotionTransport()
+	case config.DeviceAutoblow, config.DeviceVacuGlide:
+		return s.autoblowMotionTransport(device)
 	default:
 		return nil, fmt.Errorf("unknown playback device %q", device)
 	}
@@ -137,6 +143,12 @@ func (s *Server) newSelectedStopTransport() (transport.Transport, error) {
 	}
 	if vibrator, err := s.currentVibrator(); err == nil && settings.Device.HasDevice(config.DeviceVibrator) {
 		participants = append(participants, transport.LinkedParticipant{ID: config.DeviceVibrator, Label: deviceLabel(config.DeviceVibrator), Transport: vibrator})
+	}
+	if s.autoblow.ultra != nil && s.autoblow.ultra.Connected() {
+		participants = append(participants, transport.LinkedParticipant{ID: config.DeviceAutoblow, Label: deviceLabel(config.DeviceAutoblow), Transport: s.autoblow.ultra})
+	}
+	if s.autoblow.vacuglide != nil && s.autoblow.vacuglide.Connected() {
+		participants = append(participants, transport.LinkedParticipant{ID: config.DeviceVacuGlide, Label: deviceLabel(config.DeviceVacuGlide), Transport: s.autoblow.vacuglide})
 	}
 	switch len(participants) {
 	case 0:

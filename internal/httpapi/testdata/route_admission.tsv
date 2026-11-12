@@ -120,6 +120,7 @@ shared	GET /api/transport/diagnostics
 host	GET /api/transport/intiface/diagnostics
 shared	GET /api/transport/intiface/status
 shared	GET /api/transport/coyote/status
+shared	GET /api/transport/autoblow/status
 shared	GET /api/update
 shared	GET /api/voice/requests/{id}
 shared	GET /api/voice/requests/{id}/audio
@@ -247,6 +248,10 @@ host	POST /api/transport/coyote/disconnect
 control	POST /api/transport/coyote/strength
 control	POST /api/transport/coyote/test
 control	POST /api/transport/coyote/zero
+host	POST /api/transport/autoblow/connect
+host	POST /api/transport/autoblow/disconnect
+control	POST /api/transport/autoblow/test
+control	POST /api/transport/autoblow/stroke
 host	POST /api/voice/module/update
 control	POST /api/voice/requests/{id}/cancel
 control	POST /api/voice/requests/{id}/played
@@ -273,6 +278,7 @@ host	PUT /api/network
 host	PUT /api/prompt-sets/{id}
 host	PUT /api/settings
 host	PUT /api/settings/device/connection-key
+host	PUT /api/settings/device/autoblow-token
 host	PUT /api/settings/device/output
 host	PUT /api/settings/estim/safety
 host	PUT /api/settings/labs

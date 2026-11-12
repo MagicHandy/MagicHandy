@@ -56,6 +56,13 @@ recent user messages. Correction mechanics stay in a disclosure; backend
 outcomes use the standard dismissible notice in Chat. Removing its provider
 turns the second opinion off.
 
+An Advanced Chat model in Layered or Creative v2 also exposes **Answer roleplay
+cues with motion** below it, on by default
+([ADR 0068](decisions/0068-quicker-replies-without-scene-motion.md)). Its hint
+states the trade: cues move the device and replies describe only what it does,
+but replies that change motion take longer, while off keeps replies quicker and
+motion changes mostly when asked for.
+
 An Advanced Chat model, external or local, exposes **Automatically repair rejected chat responses**
 in Model roles, using the shared switch row and the normal Save settings flow.
 It defaults on and discloses the extra request, waiting time and potential quota
@@ -1431,6 +1438,32 @@ timing offset. A degraded linked run shows one notice naming the devices it
 continues without, and marks them Connection lost; reconnecting never silently
 rejoins a run. Emergency Stop remains unconditional and reaches all outputs.
 
+## Autoblow devices (2026-11-11)
+
+The Autoblow Ultra and the VacuGlide are two more descriptors
+([ADR 0069](decisions/0069-autoblow-cloud-devices.md)); neither adds a panel.
+
+- **Add device** lists them after the Handys, in run-clock order. Each says how
+  it reaches the device; the VacuGlide's notice says that it follows pace and
+  makes its own strokes.
+- **Device pages.** Each page's Connection section holds the device token,
+  saved with an explicit Save like the Handy key, and the online-mode
+  instructions. It also shows the round trip, any firmware notice, whether the
+  device's buttons are being listened to, and that Stop needs Autoblow's cloud.
+  The VacuGlide adds:
+  - **Speed**: Speed match, either the same pace as The Handy or the full
+    motor range, and the commanded motor speed;
+  - **Stroke**: Shorter and Longer steps and the experimental Follow the
+    motion's reach.
+- **Device panel.** The VacuGlide's row has a Stroke level whose − and + are
+  shorter and longer, and Test. Its readout is the commanded motor speed; the
+  Ultra's is its commanded position.
+- **Visualizer.** With no Handy in playback, it draws the generic track in
+  percent instead of a Handy in millimetres.
+- **Limits.** The Stroke limits and Reverse direction show while a Handy or
+  the Ultra plays, since both use the stroke window. With only a VacuGlide,
+  the device panel shows Speed alone.
+
 ## Autopilot planning status (2026-10-26)
 
 Autopilot's Chat panel shows a compact caution notice after two consecutive
@@ -1473,3 +1506,20 @@ last-good snapshot with its time and disables stale runtime actions until a
 successful refresh. Operation epochs prevent an old Start or Test response
 from changing a newer action or queuing speech after Stop. See the
 [voice review](voice-reliability-review-2026-10-26.md).
+
+
+## Host ChatGPT sign-in recovery (2026-11-12)
+
+Reconnect stays available to the authenticated controlling administrator at
+the configured public address. The UI explains that sign-in must complete in
+a browser on the computer running MagicHandy. OAuth retains its host-loopback
+callback; initiation does not prove browser locality. The configured origin,
+TLS, authentication and controller gates remain; no socket-IP link or alternate
+certificate is needed. Account controls remain usable during catalog discovery
+and model checks, whose stale results cannot update a reconnected account.
+See [ADR 0070](decisions/0070-chatgpt-reconnect-through-public-origin.md).
+
+Autoblow device choices are labeled **Experimental**; their pages state that
+validation is simulated. VacuGlide **Reference pace** describes a command
+mapping, not physical equivalence with The Handy. Both valve buttons require
+the controlling administrator and the current Stop sequence.

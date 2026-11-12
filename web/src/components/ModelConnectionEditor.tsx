@@ -48,9 +48,12 @@ export function ModelConnectionEditor({ connection, locked, patch, onReady = () 
 
   async function run(kind: string, work: () => Promise<void>) {
     if (busyRef.current || lockedRef.current) return;
+    const snapshot = signatureRef.current;
+    const generation = accountGeneration.current;
+    const chatgpt = connectionRef.current.provider === "chatgpt";
     busyRef.current = true; setOperation(kind); setError("");
     try { await work(); }
-    catch (reason) { if (mounted.current) { setError(reason instanceof Error ? reason.message : String(reason)); if (kind !== "catalog") readyRef.current(false); } }
+    catch (reason) { if (mounted.current && signatureRef.current === snapshot && (!chatgpt || generation === accountGeneration.current)) { setError(reason instanceof Error ? reason.message : String(reason)); if (kind !== "catalog") readyRef.current(false); } }
     finally {
       busyRef.current = false;
       if (mounted.current) {
@@ -62,13 +65,14 @@ export function ModelConnectionEditor({ connection, locked, patch, onReady = () 
   async function fetchModels() {
     const current = connectionRef.current;
     const snapshot = connectionSignature(current);
+    const generation = accountGeneration.current;
     if (key.trim()) {
       keyRevision.current++;
       await api.modelConnectionKey(current, key);
       if (mounted.current) { setKey(""); savedKey.current = true; setKeySaved(true); setTestMessage(""); readyRef.current(false); }
     }
     const result = await api.modelConnectionModels(current);
-    if (!mounted.current || signatureRef.current !== snapshot) return;
+    if (!mounted.current || signatureRef.current !== snapshot || (current.provider === "chatgpt" && generation !== accountGeneration.current)) return;
     setModels(result.models);
     if (current.provider === "chatgpt" && !current.model && result.models[0]) {
       const recommended = result.models.find(model => model.id === "gpt-6.1-terra") ?? result.models.find(model => model.id === "gpt-6-sol") ?? result.models.find(model => model.id === "gpt-6.1-sol") ?? result.models[0];
@@ -87,7 +91,7 @@ export function ModelConnectionEditor({ connection, locked, patch, onReady = () 
     const profile = status.connection.profiles.find(item => item.id === status.connection.active);
     const connected = Boolean(profile?.connected && profile.plan_authorized);
     setAccountReady(connected);
-    if (!connected) readyRef.current(false);
+    if (!connected) { pendingCatalog.current = undefined; readyRef.current(false); }
     if (accountGeneration.current !== status.connection.generation) {
       if (accountGeneration.current !== undefined) { setModels([]); setTestMessage(""); setNeedsAuthorization(false); readyRef.current(false); }
       accountGeneration.current = status.connection.generation;
@@ -125,9 +129,10 @@ export function ModelConnectionEditor({ connection, locked, patch, onReady = () 
   const checkModel = () => void run("check", async () => {
     const current = connectionRef.current;
     const snapshot = connectionSignature(current);
+    const generation = accountGeneration.current;
     if (key.trim()) { keyRevision.current++; await api.modelConnectionKey(current, key); if (mounted.current) { setKey(""); savedKey.current = true; setKeySaved(true); } }
     const result = await api.modelConnectionTest(current);
-    if (!mounted.current || signatureRef.current !== snapshot) return;
+    if (!mounted.current || signatureRef.current !== snapshot || (current.provider === "chatgpt" && generation !== accountGeneration.current)) return;
     setTestMessage(result.ready ? modelReadyMessage(result.elapsed_ms) : result.message); readyRef.current(result.ready);
     if (current.provider === "chatgpt") setNeedsAuthorization(result.state === "signed_out" || result.state === "permission");
   });
@@ -141,7 +146,7 @@ export function ModelConnectionEditor({ connection, locked, patch, onReady = () 
     {full && <FieldRow id={`connection-name-${connection.id}`} label={t("Name")} hint={t("Shown in role choices next to the provider.")}>
       <input id={`connection-name-${connection.id}`} aria-describedby={`connection-name-${connection.id}-hint`} type="text" value={connection.name} disabled={disabled} onChange={event => patch({ name: event.target.value })} />
     </FieldRow>}
-    {connection.provider === "chatgpt" ? <ChatGPTConnection presentation="setup" locked={disabled} needsAuthorization={needsAuthorization} onChange={accountChanged} /> : <>
+    {connection.provider === "chatgpt" ? <ChatGPTConnection presentation="setup" locked={locked} needsAuthorization={needsAuthorization} onChange={accountChanged} /> : <>
       {connection.provider === "compatible" && <label className="form-row form-row-stack"><span className="form-row-label"><strong>{t("API base URL")}</strong></span><input type="text" value={connection.base_url} disabled={disabled} onChange={event => patch({ base_url: event.target.value })} /></label>}
       {!connection.no_authentication && <div className="form-row form-row-stack">
         <span className="form-row-label"><label htmlFor={`setup-key-${connection.id}`}><strong>{t("API key")}</strong></label><small id={`setup-key-help-${connection.id}`}>{t("API providers use their own key and separate billing. Your key stays on this computer.")}</small></span>

@@ -8,6 +8,7 @@ import { ApplicationAudience } from "../state/application-audience";
 const app = vi.hoisted(() => ({
   hostAdministration: true,
   output: "handy",
+  playback: undefined as string[] | undefined,
   motion: null as MotionSettings | null,
   refresh: vi.fn(),
   show: vi.fn(),
@@ -19,7 +20,7 @@ vi.mock("../api/client", () => ({
 
 vi.mock("../state/app-state", () => ({
   useAppState: () => ({
-    state: { capabilities: { configure_host: app.hostAdministration }, settings: { device: { output: app.output }, motion: app.motion, options: { handy_models: ["handy_original", "handy_2_standard", "handy_2_pro"] } } },
+    state: { capabilities: { configure_host: app.hostAdministration }, settings: { device: { output: app.output, playback_devices: app.playback }, motion: app.motion, options: { handy_models: ["handy_original", "handy_2_standard", "handy_2_pro"] } } },
     backendOnline: true,
     readOnly: false,
     refresh: app.refresh,
@@ -43,6 +44,7 @@ describe("QuickSettings", () => {
   beforeEach(() => {
     app.hostAdministration = true;
     app.output = "handy";
+    app.playback = undefined;
     vi.useFakeTimers();
     app.motion = { ...initialMotion };
     app.refresh.mockReset();
@@ -77,6 +79,17 @@ describe("QuickSettings", () => {
     expect(screen.queryByRole("radiogroup", { name: "Handy model" })).not.toBeInTheDocument();
     expect(screen.queryByText("Stroke")).not.toBeInTheDocument();
     expect(screen.queryByText("Reverse direction")).not.toBeInTheDocument();
+    expect(screen.getByText("Speed")).toBeInTheDocument();
+  });
+
+  it("keeps the stroke window for the Autoblow Ultra, but not for a VacuGlide alone", () => {
+    app.playback = ["autoblow"];
+    const view = render(<QuickSettings section="limits" />);
+    expect(screen.getByRole("slider", { name: "Stroke minimum" })).toBeInTheDocument();
+    view.unmount();
+    app.playback = ["vacuglide"];
+    render(<QuickSettings section="limits" />);
+    expect(screen.queryByText("Stroke")).not.toBeInTheDocument();
     expect(screen.getByText("Speed")).toBeInTheDocument();
   });
 

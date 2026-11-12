@@ -115,3 +115,65 @@ func (t *Timeline) Covers(from, to float64) bool {
 	count := len(t.points)
 	return count > 0 && from >= float64(t.points[0].TimeMillis) && to <= float64(t.points[count-1].TimeMillis)
 }
+
+// PointAfter returns the first point later than millis.
+func (t *Timeline) PointAfter(millis float64) (Point, bool) {
+	index := sort.Search(len(t.points), func(index int) bool { return float64(t.points[index].TimeMillis) > millis })
+	if index >= len(t.points) {
+		return Point{}, false
+	}
+	return t.points[index], true
+}
+
+// Travel is the exact distance the frame moves over [from, to], in semantic
+// percent, following its linear segments. Uncovered time adds nothing.
+func (t *Timeline) Travel(from, to float64) float64 {
+	travel := 0.0
+	t.eachSpan(from, to, func(start, end float64) {
+		travel += math.Abs(end - start)
+	})
+	return travel
+}
+
+// Lowest is the lowest position the frame reaches over [from, to]; false
+// where it covers none of that interval.
+func (t *Timeline) Lowest(from, to float64) (float64, bool) {
+	lowest, found := math.Inf(1), false
+	t.eachSpan(from, to, func(start, end float64) {
+		lowest, found = math.Min(lowest, math.Min(start, end)), true
+	})
+	return lowest, found
+}
+
+// eachSpan visits the frame's linear pieces clipped to [from, to], by their
+// start and end positions.
+func (t *Timeline) eachSpan(from, to float64, visit func(start, end float64)) {
+	count := len(t.points)
+	if count == 0 || to < from {
+		return
+	}
+	from = math.Max(from, float64(t.points[0].TimeMillis))
+	to = math.Min(to, float64(t.points[count-1].TimeMillis))
+	if to < from {
+		return
+	}
+	cursor := from
+	for cursor < to {
+		next, ok := t.PointAfter(cursor)
+		end := to
+		if ok && float64(next.TimeMillis) < to {
+			end = float64(next.TimeMillis)
+		}
+		startPosition, _ := t.At(cursor)
+		endPosition, _ := t.At(end)
+		visit(startPosition, endPosition)
+		if end <= cursor {
+			break
+		}
+		cursor = end
+	}
+	if from == to {
+		position, _ := t.At(from)
+		visit(position, position)
+	}
+}

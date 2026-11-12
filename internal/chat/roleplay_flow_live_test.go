@@ -24,6 +24,8 @@ import (
 // comma-separated parts. MAGICHANDY_ROLEPLAY_MODE=creative_v2 uses Creative v2
 // instead of Layered, and MAGICHANDY_ROLEPLAY_AUTOPILOT=1 has Autopilot
 // composing between chat turns (the planner itself is not simulated).
+// MAGICHANDY_ROLEPLAY_SCENE_OFF=1 plays the scenes with scene motion switched
+// off for quicker replies (ADR 0068).
 func TestHostedRoleplayFlowLive(t *testing.T) {
 	provider, model := hostedLayeredLiveProvider(t)
 	rows := []map[string]any{}
@@ -151,7 +153,8 @@ func runRoleplayScene(t *testing.T, provider *hostedLayeredCapture, model string
 		}
 		state = withFollowthroughFacts(t, state)
 		caps := Capabilities{Motion: true, MotionMode: mode, AdvancedMotion: true, PreserveConversationText: true,
-			Voice: scene.persona.voice, Style: scene.persona.style, ReplyLength: ReplyLengthBalanced, HistoryMessages: 256, HistoryBytes: 96000}
+			Voice: scene.persona.voice, Style: scene.persona.style, ReplyLength: ReplyLengthBalanced, HistoryMessages: 256, HistoryBytes: 96000,
+			SceneMotionOff: os.Getenv("MAGICHANDY_ROLEPLAY_SCENE_OFF") == "1"}
 		conversation := &ConversationContext{PersonaName: scene.persona.name, PersonaDescription: scene.persona.desc,
 			RecentAssistantReplies: replies[max(0, len(replies)-3):]}
 		svc := Service{Provider: provider, Model: model, MaxTokens: 1024, ReasoningMode: roleplayReasoning(), Capabilities: &caps,
