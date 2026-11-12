@@ -264,7 +264,7 @@ describe("model roles and external providers", () => {
   });
 
   it("keeps Reconnect available during discovery and drops the old account's late catalog", async () => {
-    let current = { ...status, sign_in_host: { available: true } };
+    let current = { ...status };
     vi.spyOn(api, "cloudPlanningStatus").mockImplementation(async () => current);
     let finish!: (result: { models: Array<{ id: string; name: string }> }) => void;
     vi.spyOn(api, "modelConnectionModels").mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })).mockResolvedValue({ models: [] });
@@ -285,7 +285,7 @@ describe("model roles and external providers", () => {
   });
 
   it("does not let an old model check mark the reconnected account ready", async () => {
-    let current = { ...status, connection_readiness: {}, sign_in_host: { available: true } };
+    let current = { ...status, connection_readiness: {} };
     vi.spyOn(api, "cloudPlanningStatus").mockImplementation(async () => current);
     vi.spyOn(api, "modelConnectionModels").mockResolvedValue({ models: [] });
     let finish!: (result: Awaited<ReturnType<typeof api.modelConnectionTest>>) => void;

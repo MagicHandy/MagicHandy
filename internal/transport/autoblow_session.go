@@ -15,6 +15,7 @@ type autoblowOwner interface {
 	PlaybackStartTimeProvider
 	MotionTimingCapabilitiesProvider
 	MotionSamplingCapabilitiesProvider
+	alignPlaybackStart(*autoblow.Client, time.Time)
 	shared() *autoblowBase
 }
 
@@ -95,7 +96,7 @@ func (s *autoblowSession) PlaybackStartTime() time.Time {
 }
 
 func (s *autoblowSession) AlignPlaybackStart(start time.Time) {
-	if current, _ := s.current(); current {
-		s.owner.AlignPlaybackStart(start)
-	}
+	// Check connection identity under the same lock as the clock change;
+	// reconnect may retire this session while alignment waits for that lock.
+	s.owner.alignPlaybackStart(s.client, start)
 }

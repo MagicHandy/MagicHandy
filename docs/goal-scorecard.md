@@ -2,6 +2,21 @@
 
 ## 2026-11-12 — Alpha.85 reviewed integration
 
+Updates' final integration uses Go **1.26.11** for GO-2026-6859 and includes
+the public-origin reconnect correction plus stale-pacer/client-bound-clock
+guards. Matched Windows amd64 builds with `CGO_ENABLED=0 -trimpath
+-buildvcs=false -ldflags '-s -w'` measure alpha.84 at **24,494,080 B** and
+the final candidate at **24,877,056 B** (+382,976 B, 1.56%). The separate
+Go 1.26.10 source measurements below remain historical.
+
+The final canonical UI is **2,938,259 B** across nine files (+52,726 B,
+1.83% against alpha.84). Main JS is **1,343,882 B**, gzip **360,156 B**
+(+20,241 / +4,510 B). CSS remains **210,443 / 36,663 B**. Gzip uses Python
+with `mtime=0`. No new dependency or worker, and no idle-RSS, cold-start or
+physical-pace improvement is claimed.
+
+### Original source handoff measurement
+
 Same-host alpha.84 baseline and final source, Windows amd64 Go 1.26.10,
 `CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`:
 

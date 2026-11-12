@@ -357,9 +357,13 @@ func (v *VacuGlide) PlaybackStartTime() time.Time {
 
 // AlignPlaybackStart re-anchors a playing stream on another owner's start.
 func (v *VacuGlide) AlignPlaybackStart(start time.Time) {
+	v.alignPlaybackStart(nil, start)
+}
+
+func (v *VacuGlide) alignPlaybackStart(client *autoblow.Client, start time.Time) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if v.stream.origin.Playing() && !start.IsZero() {
+	if (client == nil || v.client == client) && v.stream.origin.Playing() && !start.IsZero() {
 		v.stream.origin.StartAt(start)
 	}
 }
@@ -395,7 +399,7 @@ type vacuglideAction struct {
 
 func (v *VacuGlide) paceOnce() {
 	v.mu.Lock()
-	if v.client == nil || !v.stream.origin.Playing() || v.stopHolds != 0 {
+	if v.client == nil || !v.stream.origin.Playing() || v.stopHolds != 0 || v.state == "stale" {
 		v.mu.Unlock()
 		return
 	}

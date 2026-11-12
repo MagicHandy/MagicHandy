@@ -330,9 +330,13 @@ func (u *AutoblowUltra) PlaybackStartTime() time.Time {
 
 // AlignPlaybackStart re-anchors a playing stream on another owner's start.
 func (u *AutoblowUltra) AlignPlaybackStart(start time.Time) {
+	u.alignPlaybackStart(nil, start)
+}
+
+func (u *AutoblowUltra) alignPlaybackStart(client *autoblow.Client, start time.Time) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	if u.stream.origin.Playing() && !start.IsZero() {
+	if (client == nil || u.client == client) && u.stream.origin.Playing() && !start.IsZero() {
 		u.stream.origin.StartAt(start)
 	}
 }
@@ -360,7 +364,7 @@ func (u *AutoblowUltra) pace(loops *autoblowLoops) {
 
 func (u *AutoblowUltra) paceOnce() {
 	u.mu.Lock()
-	if u.client == nil || !u.stream.origin.Playing() || u.stopHolds != 0 {
+	if u.client == nil || !u.stream.origin.Playing() || u.stopHolds != 0 || u.state == "stale" {
 		u.mu.Unlock()
 		return
 	}

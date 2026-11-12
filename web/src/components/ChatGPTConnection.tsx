@@ -12,7 +12,6 @@ export function ChatGPTConnection({ onChange, presentation = "settings", locked 
   const busyRef = useRef(false);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
-  const hostBrowser = status?.sign_in_host?.available ?? ["127.0.0.1", "localhost", "[::1]"].includes(window.location.hostname);
   const active = status?.connection.profiles.find(profile => profile.id === status.connection.active);
   const refresh = useCallback(async () => {
     try { const next = await api.cloudPlanningStatus(); if (mounted.current) { setStatus(next); onChangeRef.current?.(next); } }
@@ -31,7 +30,7 @@ export function ChatGPTConnection({ onChange, presentation = "settings", locked 
     finally { busyRef.current = false; if (mounted.current) setBusy(false); }
   }
   async function signIn(profile = "") {
-    if (busyRef.current || locked || !hostBrowser) return;
+    if (busyRef.current || locked) return;
     const popup = window.open("about:blank", "_blank");
     if (!popup) { setError(t("Allow a sign-in window, then try again.")); return; }
     if (popup) popup.opener = null;
@@ -49,15 +48,13 @@ export function ChatGPTConnection({ onChange, presentation = "settings", locked 
     <span className="form-row-label"><strong>{t("ChatGPT account")}</strong></span>
     <select value={status.connection.active} disabled={disabled} onChange={event => {
       const profile = status.connection.profiles.find(item => item.id === event.target.value);
-      if (profile?.connected) void run(() => api.cloudSelect(profile.id)); else if (profile && hostBrowser) void signIn(profile.id);
+      if (profile?.connected) void run(() => api.cloudSelect(profile.id)); else if (profile) void signIn(profile.id);
     }}>
       <option value="" disabled>{t("Select an account")}</option>
-      {status.connection.profiles.map(profile => <option key={profile.id} value={profile.id} disabled={!profile.connected && !hostBrowser}>{profile.label}</option>)}
+      {status.connection.profiles.map(profile => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
     </select>
   </label>;
   const pending = Boolean(status?.connection.pending);
-  const localSignIn = !hostBrowser && status?.sign_in_host?.url
-    ? <a className="btn btn-secondary" href={status.sign_in_host.url} target="_blank" rel="noreferrer">{t("Open local sign-in")}</a> : null;
   const summary = pending ? t("Complete sign-in in the opened window.")
     : connected ? active?.label
       : active && !active.plan_authorized ? t("Authorize ChatGPT plan use to enable inference.")
@@ -72,23 +69,21 @@ export function ChatGPTConnection({ onChange, presentation = "settings", locked 
       </span>
       {pending ? <button className="btn btn-secondary" type="button" disabled={disabled} onClick={() => void run(api.cloudCancelSignIn)}>{t("Cancel sign-in")}</button>
         : connected ? <span className="form-row-state"><span className="status-dot" data-state="ok" aria-hidden="true" />{t("Connected")}</span>
-          : localSignIn || <button className="btn btn-secondary chatgpt-sign-in" type="button" disabled={disabled || !hostBrowser} onClick={() => void signIn(active?.id)}>{active ? t("Reconnect") : t("Continue with ChatGPT")}</button>}
+          : <button className="btn btn-secondary chatgpt-sign-in" type="button" disabled={disabled} onClick={() => void signIn(active?.id)}>{active ? t("Reconnect") : t("Continue with ChatGPT")}</button>}
     </div>
     {!pending && !connected && accountPicker}
     {connected && <details className="form-row-details"><summary>{t("Manage account")}</summary>
       {accountPicker}
       <div className="button-row">
-        {localSignIn || <>
-          <button className="btn btn-secondary" type="button" disabled={disabled || !hostBrowser} onClick={() => void signIn()}>{t("Add account")}</button>
-          <button className="btn btn-secondary" type="button" disabled={disabled || !hostBrowser} onClick={() => void signIn(active?.id)}>{t("Reconnect")}</button>
-        </>}
+        <button className="btn btn-secondary" type="button" disabled={disabled} onClick={() => void signIn()}>{t("Add account")}</button>
+        <button className="btn btn-secondary" type="button" disabled={disabled} onClick={() => void signIn(active?.id)}>{t("Reconnect")}</button>
         <button className="btn btn-secondary" type="button" disabled={disabled} onClick={() => void run(async () => (await api.cloudAccountDisconnect(active?.id ?? "")).status)}>{t("Disconnect")}</button>
         <a className="btn btn-quiet" href="https://chatgpt.com/settings/usage" target="_blank" rel="noreferrer">{t("Manage usage")}</a>
       </div>
     </details>}
-    {!hostBrowser && <div className="form-row-note">
-      <p className="hint">{t("Connect ChatGPT from MagicHandy on the host computer. Sign-in returns to that computer.")}</p>
-    </div>}
+    <div className="form-row-note">
+      <p className="hint">{t("Complete ChatGPT sign-in in a browser on the computer running MagicHandy. Signing in on another device cannot finish the connection.")}</p>
+    </div>
     {status?.connection.message && !pending && <p className="hint form-row-note" role="status">{status.connection.message}</p>}
     {connected && active?.welcome_pending && <div className="chatgpt-welcome notice" role="note" aria-label={t("You're using your ChatGPT plan")}>
       <strong>{t("You're using your ChatGPT plan")}</strong>

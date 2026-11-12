@@ -91,7 +91,7 @@ func (s *Server) handleCloudCredentialReset(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusConflict, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.cloudStatusForRequest(r))
+	writeJSON(w, http.StatusOK, s.cloudStatus(r.Context()))
 }
 
 func (s *Server) handleCloudWelcome(w http.ResponseWriter, r *http.Request) {
@@ -103,7 +103,7 @@ func (s *Server) handleCloudWelcome(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.cloudStatusForRequest(r))
+	writeJSON(w, http.StatusOK, s.cloudStatus(r.Context()))
 }
 
 func (s *Server) cloudManager(w http.ResponseWriter, r *http.Request, mutating bool) (*openaiauth.Manager, bool) {
@@ -142,16 +142,12 @@ func (s *Server) handleCloudPlanningStatus(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, s.cloudStatusForRequest(r))
+	writeJSON(w, http.StatusOK, s.cloudStatus(r.Context()))
 }
 
 func (s *Server) handleCloudSignIn(w http.ResponseWriter, r *http.Request) {
 	manager, ok := s.cloudManager(w, r, true)
 	if !ok {
-		return
-	}
-	if !chatGPTSignInHost(r).Available {
-		writeError(w, http.StatusConflict, errors.New("open MagicHandy on its host computer to connect ChatGPT; sign-in returns to that computer"))
 		return
 	}
 	var body struct {
@@ -180,7 +176,7 @@ func (s *Server) handleCancelCloudSignIn(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	manager.Cancel()
-	writeJSON(w, http.StatusOK, s.cloudStatusForRequest(r))
+	writeJSON(w, http.StatusOK, s.cloudStatus(r.Context()))
 }
 
 func (s *Server) handleCloudSelect(w http.ResponseWriter, r *http.Request) {
@@ -200,7 +196,7 @@ func (s *Server) handleCloudSelect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.cloudStatusForRequest(r))
+	writeJSON(w, http.StatusOK, s.cloudStatus(r.Context()))
 }
 
 func (s *Server) handleCloudAccountDisconnect(w http.ResponseWriter, r *http.Request) {
@@ -223,7 +219,7 @@ func (s *Server) handleCloudAccountDisconnect(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"revocation_confirmed": confirmed, "status": s.cloudStatusForRequest(r)})
+	writeJSON(w, http.StatusOK, map[string]any{"revocation_confirmed": confirmed, "status": s.cloudStatus(r.Context())})
 }
 
 func (s *Server) handleDecisionsKey(w http.ResponseWriter, r *http.Request) {
@@ -243,7 +239,7 @@ func (s *Server) handleDecisionsKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.cloudStatusForRequest(r))
+	writeJSON(w, http.StatusOK, s.cloudStatus(r.Context()))
 }
 
 func (s *Server) cloudOptions(ctx context.Context, provider, model string) (llm.OpenAIOptions, error) {
@@ -292,7 +288,7 @@ func (s *Server) handleCloudModels(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.cloudStatusForRequest(r))
+	writeJSON(w, http.StatusOK, s.cloudStatus(r.Context()))
 }
 
 func (s *Server) handleCloudTest(w http.ResponseWriter, r *http.Request) {
@@ -341,7 +337,7 @@ func (s *Server) handleCloudTest(w http.ResponseWriter, r *http.Request) {
 		connection := config.ModelConnection{ID: "chatgpt", Name: "ChatGPT", Provider: config.LLMProviderChatGPT, Model: body.Model}.Normalize()
 		s.recordConnectionReadiness(connection, generation, readiness.Ready, readiness.Message, 0)
 	}
-	writeJSON(w, http.StatusOK, s.cloudStatusForRequest(r))
+	writeJSON(w, http.StatusOK, s.cloudStatus(r.Context()))
 }
 
 func (s *Server) testCloudGeneration(ctx context.Context, providerID, model string) error {

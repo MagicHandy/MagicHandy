@@ -31,7 +31,6 @@ export interface ModelConnection {
 export interface HostedModel { id: string; name: string; supported_parameters?: string[]; reasoning_efforts?: string[]; default_reasoning_effort?: string; reasoning_supported?: boolean; reasoning_mandatory?: boolean; context_length?: number }
 
 export interface CloudPlanningStatus {
-  sign_in_host?: { available: boolean; url?: string };
   connection: {
     profiles: Array<{ id: string; label: string; connected: boolean; plan_authorized: boolean; welcome_pending: boolean }>;
     active: string;

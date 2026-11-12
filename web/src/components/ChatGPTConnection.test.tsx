@@ -68,24 +68,14 @@ describe("ChatGPT account presentation", () => {
     expect(screen.getByRole("button", { name: "Add account" })).toBeDisabled();
   });
 
-  it("uses the backend's host decision and offers a local route for a public-address browser", async () => {
-    vi.mocked(api.cloudPlanningStatus).mockResolvedValue({ ...connected,
-      sign_in_host: { available: false, url: "https://192.168.0.12:49717/#/settings/chat/model" },
-    });
-    render(<ChatGPTConnection />);
-    await screen.findByText("ChatGPT connected");
-    fireEvent.click(screen.getByText("Manage account"));
-    expect(screen.queryByRole("button", { name: "Reconnect" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open local sign-in" })).toHaveAttribute("href", "https://192.168.0.12:49717/#/settings/chat/model");
-    expect(api.cloudSignIn).not.toHaveBeenCalled();
-  });
-
-  it("allows reconnect when the backend confirms a host browser", async () => {
-    vi.mocked(api.cloudPlanningStatus).mockResolvedValue({ ...connected, sign_in_host: { available: true } });
+  it("offers reconnect through the configured address and explains host-browser completion", async () => {
+    vi.mocked(api.cloudPlanningStatus).mockResolvedValue(connected);
     const popup = { opener: window, location: { href: "about:blank" }, close: vi.fn() };
     vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
     render(<ChatGPTConnection />);
     await screen.findByText("ChatGPT connected");
+    expect(screen.getByText("Complete ChatGPT sign-in in a browser on the computer running MagicHandy. Signing in on another device cannot finish the connection.")).toBeVisible();
+    expect(screen.queryByRole("link", { name: "Open local sign-in" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("Manage account"));
     fireEvent.click(screen.getByRole("button", { name: "Reconnect" }));
     await waitFor(() => expect(api.cloudSignIn).toHaveBeenCalledWith("test"));

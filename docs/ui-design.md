@@ -1510,13 +1510,14 @@ from changing a newer action or queuing speech after Stop. See the
 
 ## Host ChatGPT sign-in recovery (2026-11-12)
 
-The backend supplies sign-in availability and a local URL derived from the
-actual listening socket. A host browser using the public address sees
-**Open local sign-in** instead of an unusable disabled Reconnect. Direct
-same-host LAN access is eligible, as is loopback; other peers and forwarded
-traffic remain ineligible. The local link may need the user's normal app
-sign-in. Account controls remain usable during catalog discovery and model
-checks, whose stale results cannot update a reconnected account.
+Reconnect stays available to the authenticated controlling administrator at
+the configured public address. The UI explains that sign-in must complete in
+a browser on the computer running MagicHandy. OAuth retains its host-loopback
+callback; initiation does not prove browser locality. The configured origin,
+TLS, authentication and controller gates remain; no socket-IP link or alternate
+certificate is needed. Account controls remain usable during catalog discovery
+and model checks, whose stale results cannot update a reconnected account.
+See [ADR 0070](decisions/0070-chatgpt-reconnect-through-public-origin.md).
 
 Autoblow device choices are labeled **Experimental**; their pages state that
 validation is simulated. VacuGlide **Reference pace** describes a command
