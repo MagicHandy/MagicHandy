@@ -83,6 +83,7 @@ One JSON motion contract and one shared engine remain.
 | Coyote only | pulse rate, width and channel balance from the frame, per profile | stroke wording replaced; zones/anchors offered only for profiles that render position | rhythm and sensation; no strokes, depth or reach |
 | Vibrator only | vibration level from pace, position or steady | follow-speed and steady: no zones or anchors; follow-depth: zones described as intensity regions | vibration intensity and rhythm; no strokes or depth |
 | Coyote + vibrator | both follow; no linear motion | union of what the two profiles render | rhythm and sensation |
+| VacuGlide only ([ADR 0069](decisions/0069-autoblow-cloud-devices.md)) | motor speed from the frame's pace; stroke length set by its air | zones and anchors could be withheld, since nothing renders position | pace and rhythm; strokes, but no depth or stroke length (a pace-only fact ships now) |
 | Chat only | no device | existing chat-only text | existing |
 
 The same participant facts feed every model-facing surface: chat, Autopilot

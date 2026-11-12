@@ -18,6 +18,8 @@ type DeviceOptionsPatch struct {
 	ClearConnectionKey       bool            `json:"clear_connection_key,omitempty"`
 	Estim                    *EstimPatch     `json:"estim,omitempty"`
 	Vibration                *VibrationPatch `json:"vibration,omitempty"`
+	Autoblow                 *AutoblowPatch  `json:"autoblow,omitempty"`
+	VacuGlide                *VacuGlidePatch `json:"vacuglide,omitempty"`
 }
 
 // EstimPatch changes individual Coyote settings. The safety notes keep their
@@ -94,6 +96,7 @@ func (s Settings) ApplyDeviceOptionsPatch(patch DeviceOptionsPatch) (Settings, e
 		patchInt(&next.Vibration.TimingOffsetMillis, vibration.TimingOffsetMillis)
 		patchString(&next.Vibration.LevelControl, vibration.LevelControl)
 	}
+	applyAutoblowPatches(&next, patch.Autoblow, patch.VacuGlide)
 	return NormalizeSettings(next)
 }
 
@@ -101,7 +104,8 @@ func (p DeviceOptionsPatch) empty() bool {
 	estimEmpty := p.Estim == nil || *p.Estim == EstimPatch{}
 	vibrationEmpty := p.Vibration == nil || *p.Vibration == VibrationPatch{}
 	return p.LinkedFailurePolicy == nil && p.IntifaceServerAddress == nil && p.APIApplicationIDSource == nil &&
-		p.APIApplicationIDOverride == nil && !p.ClearConnectionKey && estimEmpty && vibrationEmpty
+		p.APIApplicationIDOverride == nil && !p.ClearConnectionKey && estimEmpty && vibrationEmpty &&
+		p.Autoblow.empty() && p.VacuGlide.empty()
 }
 
 func patchString(target *string, value *string) {

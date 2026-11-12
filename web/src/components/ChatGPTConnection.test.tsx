@@ -67,4 +67,29 @@ describe("ChatGPT account presentation", () => {
     expect(screen.getByRole("button", { name: "Reconnect" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Add account" })).toBeDisabled();
   });
+
+  it("uses the backend's host decision and offers a local route for a public-address browser", async () => {
+    vi.mocked(api.cloudPlanningStatus).mockResolvedValue({ ...connected,
+      sign_in_host: { available: false, url: "https://192.168.0.12:49717/#/settings/chat/model" },
+    });
+    render(<ChatGPTConnection />);
+    await screen.findByText("ChatGPT connected");
+    fireEvent.click(screen.getByText("Manage account"));
+    expect(screen.queryByRole("button", { name: "Reconnect" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open local sign-in" })).toHaveAttribute("href", "https://192.168.0.12:49717/#/settings/chat/model");
+    expect(api.cloudSignIn).not.toHaveBeenCalled();
+  });
+
+  it("allows reconnect when the backend confirms a host browser", async () => {
+    vi.mocked(api.cloudPlanningStatus).mockResolvedValue({ ...connected, sign_in_host: { available: true } });
+    const popup = { opener: window, location: { href: "about:blank" }, close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+    render(<ChatGPTConnection />);
+    await screen.findByText("ChatGPT connected");
+    fireEvent.click(screen.getByText("Manage account"));
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect" }));
+    await waitFor(() => expect(api.cloudSignIn).toHaveBeenCalledWith("test"));
+    expect(popup.opener).toBeNull();
+    expect(popup.location.href).toBe("https://auth.openai.com/authorize");
+  });
 });

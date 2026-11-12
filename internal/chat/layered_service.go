@@ -68,7 +68,7 @@ func layeredContextInstructions(state MotionContext, capabilities Capabilities) 
 	}
 	encoded, _ := json.Marshal(context)
 	closing := "A stopped device starts only for a direct motion request; a paused device cannot be resumed by model edits. Ordinary conversation and questions require reply only."
-	if capabilities.AdvancedMotion {
+	if sceneMotion(capabilities) {
 		// A scene's reactions are motion feedback for hosted models (hostedSceneGuide).
 		closing = "A stopped device starts only when the person asks for motion or invites you to begin, never for a reaction to earlier motion; a paused device cannot be resumed by model edits. Questions and talk that is not about the motion require reply only."
 	}

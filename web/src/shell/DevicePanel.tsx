@@ -3,7 +3,7 @@
 // the Speed and Stroke limits. Setup and configuration live in Settings >
 // Devices, which Device settings opens (docs/ui-design-guidelines.md).
 import { useEffect, useId, useRef } from "react";
-import { isHandy } from "../api/devices";
+import { playsPositions } from "../api/devices";
 import { QuickSettings } from "../components/QuickSettings";
 import { StartupRecoveryNotice } from "../components/StartupRecoveryNotice";
 import { DeviceRow } from "../devices/DeviceRow";
@@ -192,7 +192,7 @@ function LimitsReadout({ ctx }: { ctx: DeviceContext }) {
   return (
     <dl className="device-limits-readout">
       <div><dt>{t("Speed")}</dt><dd>{t("{a}–{b}%", { a: motion.speed_min_percent, b: motion.speed_max_percent })}</dd></div>
-      {ctx.playing.some(isHandy) && <div><dt>{t("Stroke")}</dt><dd>{t("{a}–{b}%", { a: motion.stroke_min_percent, b: motion.stroke_max_percent })}</dd></div>}
+      {ctx.playing.some(playsPositions) && <div><dt>{t("Stroke")}</dt><dd>{t("{a}–{b}%", { a: motion.stroke_min_percent, b: motion.stroke_max_percent })}</dd></div>}
     </dl>
   );
 }

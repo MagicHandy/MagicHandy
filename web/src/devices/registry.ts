@@ -5,6 +5,7 @@
 import { DEVICE_ORDER, MAX_HANDYS, isHandy, isHandyInstance } from "../api/devices";
 import type { DeviceId, DeviceKind } from "../api/types";
 import { additionalHandyDevice } from "./additional-handy";
+import { autoblowDevice, vacuglideDevice } from "./autoblow";
 import { coyoteDevice } from "./coyote";
 import { handyDevice } from "./handy";
 import { useDeviceContext } from "./runtime";
@@ -13,6 +14,8 @@ import { vibratorDevice } from "./vibrator";
 
 const DESCRIPTORS: Record<DeviceKind, DeviceDescriptor> = {
   handy: handyDevice,
+  autoblow: autoblowDevice,
+  vacuglide: vacuglideDevice,
   coyote: coyoteDevice,
   vibrator: vibratorDevice,
 };

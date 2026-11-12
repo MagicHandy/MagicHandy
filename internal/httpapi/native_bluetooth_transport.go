@@ -148,4 +148,5 @@ func (s *Server) handleNativeBluetoothForget(w http.ResponseWriter, r *http.Requ
 func (s *Server) configureDeviceWorkers(app Runtime, settings config.Settings, logger *slog.Logger) {
 	s.configureCoyote(app, settings, logger)
 	s.configureNativeBluetooth(app, logger)
+	s.configureAutoblow(app, settings)
 }

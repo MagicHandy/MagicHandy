@@ -113,7 +113,7 @@ func continuousEmptyEdits(capabilities Capabilities) string {
 
 func continuousOutputGuard(capabilities Capabilities) string {
 	quiet := `Conversation requires "edits":`
-	if capabilities.AdvancedMotion {
+	if sceneMotion(capabilities) {
 		quiet = `Questions and talk that is not about the motion require "edits":`
 	}
 	guard := `FINAL OUTPUT RULE: Return one JSON object using this mode's contract. ` + quiet + continuousEmptyEdits(capabilities) + `; no evolution. Reply in the selected voice, not the technical examples' style. Never output a "motion" field. Close JSON after the final sentence; no trailing blank lines.`

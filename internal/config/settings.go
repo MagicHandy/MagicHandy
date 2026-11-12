@@ -248,6 +248,8 @@ type Settings struct {
 	Device      DeviceSettings      `json:"device"`
 	Estim       EstimSettings       `json:"estim"`
 	Vibration   VibrationSettings   `json:"vibration"`
+	Autoblow    AutoblowSettings    `json:"autoblow"`
+	VacuGlide   VacuGlideSettings   `json:"vacuglide"`
 	Motion      MotionSettings      `json:"motion"`
 	Freestyle   FreestyleSettings   `json:"freestyle"`
 	Autopilot   AutopilotSettings   `json:"autopilot"`
@@ -470,6 +472,8 @@ type PublicSettings struct {
 	Device       PublicDeviceSettings      `json:"device"`
 	Estim        PublicEstimSettings       `json:"estim"`
 	Vibration    VibrationSettings         `json:"vibration"`
+	Autoblow     PublicAutoblowSettings    `json:"autoblow"`
+	VacuGlide    PublicVacuGlideSettings   `json:"vacuglide"`
 	Motion       MotionSettings            `json:"motion"`
 	Freestyle    FreestyleSettings         `json:"freestyle"`
 	Autopilot    AutopilotSettings         `json:"autopilot"`
@@ -528,6 +532,7 @@ type LLMUpdate struct {
 	ConversationConnectionID    *string                 `json:"conversation_connection_id,omitempty"`
 	RetryRefusalLocally         *bool                   `json:"retry_refusal_locally,omitempty"`
 	HostedResponseRepairEnabled *bool                   `json:"hosted_response_repair_enabled,omitempty"`
+	SceneMotionEnabled          *bool                   `json:"scene_motion_enabled,omitempty"`
 	MotionPlanner               *MotionPlannerSettings  `json:"motion_planner,omitempty"`
 	MotionReviewer              *MotionReviewerSettings `json:"motion_reviewer,omitempty"`
 	Provider                    string                  `json:"provider"`
@@ -571,6 +576,7 @@ func LLMUpdateFromSettings(settings LLMSettings) LLMUpdate {
 		ConversationConnectionID:    &settings.ConversationConnectionID,
 		RetryRefusalLocally:         &settings.RetryRefusalLocally,
 		HostedResponseRepairEnabled: settings.HostedResponseRepairEnabled,
+		SceneMotionEnabled:          settings.SceneMotionEnabled,
 		MotionPlanner:               &settings.MotionPlanner,
 		MotionReviewer:              &settings.MotionReviewer,
 		Provider:                    settings.Provider,
@@ -648,6 +654,7 @@ func DefaultSettings() Settings {
 		},
 		Estim:     DefaultEstimSettings(),
 		Vibration: DefaultVibrationSettings(),
+		VacuGlide: DefaultVacuGlideSettings(),
 		Motion: MotionSettings{
 			SpeedMinPercent:  20,
 			SpeedMaxPercent:  80,
@@ -755,6 +762,8 @@ func (s Settings) Public() PublicSettings {
 		},
 		Estim:        s.Estim.Public(),
 		Vibration:    s.Vibration,
+		Autoblow:     s.Autoblow.Public(),
+		VacuGlide:    s.VacuGlide.Public(),
 		Motion:       s.Motion,
 		Freestyle:    s.Freestyle,
 		Autopilot:    s.Autopilot,
@@ -1192,6 +1201,7 @@ func applyMissingDefaults(settings Settings) Settings {
 	settings.Device = normalizeDeviceParticipation(settings.Device, defaults.Device.Output)
 	settings.Estim = applyMissingEstimDefaults(settings.Estim)
 	settings.Vibration = applyMissingVibrationDefaults(settings.Vibration)
+	settings.VacuGlide = applyMissingVacuGlideDefaults(settings.VacuGlide)
 	if settings.Device.HSPDispatchOwner == "" {
 		settings.Device.HSPDispatchOwner = defaults.Device.HSPDispatchOwner
 	}
@@ -1350,6 +1360,10 @@ func cloneSettings(settings Settings) Settings {
 	if settings.LLM.HostedResponseRepairEnabled != nil {
 		enabled := *settings.LLM.HostedResponseRepairEnabled
 		settings.LLM.HostedResponseRepairEnabled = &enabled
+	}
+	if settings.LLM.SceneMotionEnabled != nil {
+		enabled := *settings.LLM.SceneMotionEnabled
+		settings.LLM.SceneMotionEnabled = &enabled
 	}
 	if settings.Device.ConfiguredDevices != nil {
 		settings.Device.ConfiguredDevices = append([]string{}, settings.Device.ConfiguredDevices...)

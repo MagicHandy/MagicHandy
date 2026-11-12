@@ -1,5 +1,32 @@
 # MagicHandy Go Implementation Plan
 
+Model roles gain **Answer roleplay cues with motion**, on by default, for
+Advanced Chat models in Layered or Creative v2. Turning it off trades alpha.84's
+scene motion for quicker replies. On the same requests no release since
+alpha.77 was measurably slower, but in roleplay the scene guidance makes more
+replies change motion, and those take longer. In the same Terra scenes, off was
+about 0.7 s quicker on average (3.55 s against 4.21 s), and scene coherence
+fell from 4.10 to 2.87 of 5. See [ADR 0068](docs/decisions/0068-quicker-replies-without-scene-motion.md)
+and the [latency review](docs/reply-latency-review-2026-11-10.md).
+
+MagicHandy now drives Autoblow's Autoblow Ultra and VacuGlide through
+Autoblow's cloud, the only path the devices offer. Each has its own device
+token.
+
+- **The Ultra** plays positions: one go-to per stroke leg, timed for the
+  cloud's round trip, with the stroke window applied host-side.
+- **The VacuGlide** plays pace. Its motor follows how fast the motion moves,
+  on Autoblow's own scale. Its stroke length and tightness come from the air
+  in its sleeve, so the person sets them with Stroke steps that open its
+  valves; an experimental follower can step them with the motion's reach.
+- **Stop.** The Ultra's pause button and the VacuGlide's mode button stop
+  everything. Stop crosses Autoblow's cloud, which the owner accepted as
+  intended (R41).
+
+Both are tested in simulation only, and hardware acceptance is open. See
+[ADR 0069](docs/decisions/0069-autoblow-cloud-devices.md) and the
+[review](docs/autoblow-devices-review-2026-11-11.md).
+
 Advanced chat now keeps a roleplay's reply and motion in step. Reactions such
 as an invitation, asking for more, getting close or winding down are motion
 feedback, any change a reply describes is made in the same turn, and finishing
@@ -3206,3 +3233,14 @@ soon as the reply names its request, explains dropped connections in the app's
 words and anchors live failures to their requests. See the
 [ADR 0029 amendment](docs/decisions/0029-session-bound-network-control.md) and
 the [review](docs/stop-network-error-review-2026-10-25.md).
+
+
+### Alpha.85 independent integration review — 2026-11-12
+
+Integrated the scene-motion toggle and experimental Autoblow devices after
+correcting redirect/token handling, valve cleanup and Stop admission, reconnect
+timeline retirement, delayed cleanup generations and repeated health failures.
+Fixed host ChatGPT reconnect via backend socket eligibility and a public-to-local
+sign-in link, including stale account/catalog results. Shared-engine motion
+review retained 36 cases. See `docs/alpha85-release-review-2026-11-12.md` for
+regression, visual, simulator and live local-model evidence and hardware limits.

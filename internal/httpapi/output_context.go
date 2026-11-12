@@ -8,15 +8,12 @@ import (
 func (s *Server) chatOutputContext(model config.LLMSettings) *chat.OutputContext {
 	settings, _ := s.store.Snapshot()
 	vibrator, coyote := settings.Device.Plays(config.DeviceVibrator), settings.Device.Plays(config.DeviceOutputCoyote)
-	if !vibrator && !coyote {
+	paceOnly := settings.Device.Plays(config.DeviceVacuGlide)
+	if !vibrator && !coyote && !paceOnly {
 		return nil
 	}
 	output := &chat.OutputContext{Coyote: coyote}
-	for _, id := range settings.Device.PlaybackSet() {
-		if id == config.DeviceOutputHandy || config.IsHandyConnectionID(id) {
-			output.Strokers++
-		}
-	}
+	output.Strokers, output.PaceOnly = countStrokers(settings.Device.PlaybackSet())
 	if coyote {
 		output.Estim = s.chatEstimContext(settings)
 	}
@@ -48,6 +45,21 @@ func (s *Server) chatOutputContext(model config.LLMSettings) *chat.OutputContext
 		output.Vibrator.Motors = len(state.Motors)
 	}
 	return output
+}
+
+// countStrokers counts the playing strokers, and how many of them follow only
+// pace: a VacuGlide makes its own strokes (ADR 0069).
+func countStrokers(playback []string) (strokers, paceOnly int) {
+	for _, id := range playback {
+		switch {
+		case id == config.DeviceOutputHandy || id == config.DeviceAutoblow || config.IsHandyConnectionID(id):
+			strokers++
+		case id == config.DeviceVacuGlide:
+			strokers++
+			paceOnly++
+		}
+	}
+	return strokers, paceOnly
 }
 
 // chatEstimContext reports the Coyote's facts for the model: never its

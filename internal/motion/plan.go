@@ -486,6 +486,13 @@ func periodForContent(points []CurvePoint, baseDuration int64, speedPercent int,
 	return max(period, minimum)
 }
 
+// ReferenceTravelRate is the semantic travel rate, in percent of the stroke
+// per second, that a speed setting asks for on a Handy model. Owners of
+// devices with their own speed scale read it to match pace (ADR 0069).
+func ReferenceTravelRate(speedPercent int, handyModel string) float64 {
+	return referenceTravelRateForSpeed(speedPercent, handyModel)
+}
+
 // referenceTravelRateForSpeed maps the selectable 1..100 control onto the
 // selected Handy model's published full-travel, normal speed envelope. The
 // result remains semantic percentage-points/second; no physical units or raw

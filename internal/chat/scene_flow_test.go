@@ -49,3 +49,31 @@ func TestHostedChatKeepsSceneReplyAndMotionInStep(t *testing.T) {
 		t.Error("an unavailable vibrator-only session was told to move in a scene")
 	}
 }
+
+// Switching scene motion off for quicker replies (ADR 0068) restores the
+// pre-alpha.84 conversation rules for Advanced chat, in both continuous modes,
+// while keeping the Advanced Stop action and the later-cue guidance.
+func TestAdvancedChatWithoutSceneMotionUsesConversationRules(t *testing.T) {
+	set, _ := BuiltinPromptSetByID(DefaultPromptSetID)
+	for _, mode := range []MotionMode{MotionModeLayered, MotionModeCreativeV2} {
+		score := DefaultLayeredScore(30)
+		if mode == MotionModeCreativeV2 {
+			score = FreshCreativeV2Score(30)
+		}
+		state := MotionContext{Running: true, MotionMode: mode, Layered: &score, SpeedMinPercent: 1, SpeedMaxPercent: 100}
+		caps := Capabilities{Motion: true, MotionMode: mode, AdvancedMotion: true, PreserveConversationText: true,
+			Voice: VoiceIntimate, Style: StyleTeasing, SceneMotionOff: true}
+		prompt := ComposeInteractivePrompt(set, nil, nil, caps, &state, nil).Prompt
+		for _, text := range []string{hostedSceneGuide, "invites you to begin", `Questions and talk that is not about the motion require "edits":`} {
+			if strings.Contains(prompt, text) {
+				t.Errorf("%s with scene motion off carries %q", mode, text)
+			}
+		}
+		for _, text := range []string{"A stopped device starts only for a direct motion request", `Conversation requires "edits":`,
+			advancedStopGuide, hostedLiveIntentGuide} {
+			if !strings.Contains(prompt, text) {
+				t.Errorf("%s with scene motion off lacks %q", mode, text)
+			}
+		}
+	}
+}

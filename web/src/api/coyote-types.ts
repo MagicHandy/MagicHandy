@@ -1,12 +1,13 @@
 // Coyote and device-output payloads (internal/config/estim.go and
 // internal/transport/coyote.go). Split from types.ts to keep it within the
 // source line budget; types.ts re-exports them.
+import type { AutoblowOptionsPatch } from "./autoblow-types";
 
 /** Legacy participation: older backends report only the Handy and a Coyote. */
 export type DeviceOutput = "none" | "handy" | "coyote" | "handy_coyote";
 
-/** The device kinds. The Coyote and the vibrator are saved at most once. */
-export type DeviceKind = "handy" | "coyote" | "vibrator";
+/** The device kinds. Every kind but the Handy is saved at most once. */
+export type DeviceKind = "handy" | "autoblow" | "vacuglide" | "coyote" | "vibrator";
 
 /** An additional Handy's opaque backend ID; the primary Handy stays "handy". */
 export type HandyInstanceId = `handy-${string}`;
@@ -98,7 +99,7 @@ export interface DeviceSettingsUpdate {
 
 /** One device option change from Settings > Devices (PATCH /api/settings/device).
  * Absent fields keep their value; the connection key keeps its own Save. */
-export interface DeviceOptionsPatch {
+export interface DeviceOptionsPatch extends AutoblowOptionsPatch {
   linked_failure_policy?: "stop_all" | "continue_healthy";
   intiface_server_address?: string;
   api_application_id_source?: string;

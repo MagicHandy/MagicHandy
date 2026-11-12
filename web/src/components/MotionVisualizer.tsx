@@ -135,7 +135,7 @@ export function MotionVisualizer({ motion, mini = false, device, kind: kindOverr
     ? `${dynamicSectionLabel || (dynamicAnchors.length ? dynamicAnchors.join(" → ") : `${t("Center")} ${dynamic.center_percent}%`)} · ${!dynamicSectionLabel && dynamicSpanProfile ? `${dynamicSpanProfile} · ` : ""}${dynamic.segment_seconds}s · ${source}`
     : "";
   const model = engine?.settings?.handy_model || device?.model;
-  const kind = kindOverride ?? visualizerKind({ owner: device?.owner, model });
+  const kind = kindOverride ?? visualizerKind({ owner: device?.owner, model, generic: device?.generic });
   const Drawing = DRAWINGS[kind];
   const handy = kind !== "scan" && kind !== "ribbon";
   const travelMillimetres = handyTravelMillimetres(model);

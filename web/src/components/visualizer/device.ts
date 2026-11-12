@@ -15,13 +15,16 @@ export interface VisualizerDevice {
   owner?: string;
   /** The Handy model (engine settings first, then saved settings). */
   model?: string;
+  /** No Handy plays, only another stroker such as an Autoblow device: the
+   * drawing shows percent, not a Handy's millimetres. */
+  generic?: boolean;
 }
 
 /** Designs that ship but are not selected for any device yet. */
 export const DISABLED_VISUALIZER_KINDS: readonly VisualizerKind[] = ["handy-front", "ribbon"];
 
 export function visualizerKind(device: VisualizerDevice | undefined): VisualizerKind {
-  if (device?.owner === "intiface") return "scan";
+  if (device?.owner === "intiface" || device?.generic) return "scan";
   return device?.model === "handy_original" ? "handy-original" : "handy-dots";
 }
 

@@ -85,3 +85,34 @@ func TestCoverageReportsStarvingThenStarved(t *testing.T) {
 		t.Fatal("Reset starts a new grace period")
 	}
 }
+
+func TestTimelineTravelLowestAndPointAfterFollowTheSegments(t *testing.T) {
+	timeline := &Timeline{}
+	// Up 0->100 in 500 ms, down to 20 by 900 ms, hold to 1200 ms.
+	_ = timeline.Append([]Point{{0, 0}, {500, 100}, {900, 20}, {1200, 20}})
+	if travel := timeline.Travel(0, 1200); math.Abs(travel-180) > 1e-9 {
+		t.Fatalf("Travel(0, 1200) = %.2f, want 180", travel)
+	}
+	// Half the rise plus a quarter of the fall: 50 + 20.
+	if travel := timeline.Travel(250, 600); math.Abs(travel-70) > 1e-9 {
+		t.Fatalf("Travel(250, 600) = %.2f, want 70", travel)
+	}
+	if travel := timeline.Travel(900, 1200); travel != 0 {
+		t.Fatalf("a hold travels %.2f, want 0", travel)
+	}
+	if travel := timeline.Travel(1200, 5000); travel != 0 {
+		t.Fatalf("uncovered time travels %.2f, want 0", travel)
+	}
+	if lowest, ok := timeline.Lowest(300, 800); !ok || math.Abs(lowest-40) > 1e-9 {
+		t.Fatalf("Lowest(300, 800) = %.2f, %v; want 40", lowest, ok)
+	}
+	if _, ok := timeline.Lowest(1300, 1400); ok {
+		t.Fatal("Lowest outside the frame must report no coverage")
+	}
+	if next, ok := timeline.PointAfter(500); !ok || next.TimeMillis != 900 {
+		t.Fatalf("PointAfter(500) = %+v, %v; want the point at 900", next, ok)
+	}
+	if _, ok := timeline.PointAfter(1200); ok {
+		t.Fatal("PointAfter the last point must report none")
+	}
+}

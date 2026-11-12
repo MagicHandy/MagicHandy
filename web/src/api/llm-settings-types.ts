@@ -11,6 +11,7 @@ export interface LLMSettings {
 	  conversation_connection_id?: string;
 	  retry_refusal_locally?: boolean;
 	  hosted_response_repair_enabled?: boolean;
+	  scene_motion_enabled?: boolean;
     provider: string;
     llama_cpp_mode: string;
     managed_load_policy?: "startup" | "on_demand" | string;

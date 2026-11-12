@@ -15,6 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/autoblow"
+	"github.com/mapledaemon/MagicHandy/internal/autoblowsim"
 	"github.com/mapledaemon/MagicHandy/internal/buttplugsim"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
@@ -225,6 +227,12 @@ func applicationRuntime(simulateMotion bool) httpapi.Runtime {
 		// process; it advertises a stroker and a vibrator and drives nothing.
 		if sim, err := buttplugsim.Start(); err == nil {
 			runtime.IntifaceSimulatorAddress = sim.Address()
+		}
+		// Autoblow's cloud is imitated the same way, so a simulated build never
+		// sends a device token to Autoblow or moves a real device.
+		if sim, err := autoblowsim.Start(); err == nil {
+			runtime.AutoblowClient = autoblow.Options{LatencyURL: sim.URL(), ClusterURL: sim.ClusterURL}
+			runtime.AutoblowSimulated = true
 		}
 	}
 	return runtime

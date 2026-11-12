@@ -6,7 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { api } from "../api/client";
 import { configuredDevices, isHandyInstance, isKnownDevice, playbackDevices } from "../api/devices";
 import type { HandyConnectionState } from "../api/handy-types";
-import type { CoyoteTransportSnapshot, DeviceId, IntifaceTransportSnapshot } from "../api/types";
+import type { AutoblowTransportSnapshot, CoyoteTransportSnapshot, DeviceId, IntifaceTransportSnapshot } from "../api/types";
 import { BluetoothBridge, type BluetoothBridgeHandle, type BluetoothBridgeState } from "../components/BluetoothBridge";
 import { t, translateKnown } from "../i18n";
 import { useAppState, useToast } from "../state/app-state";
@@ -31,6 +31,8 @@ interface DeviceRuntime {
   run: DeviceContext["run"];
   coyote?: CoyoteTransportSnapshot;
   setCoyote: (snapshot: CoyoteTransportSnapshot) => void;
+  autoblow?: AutoblowTransportSnapshot;
+  setAutoblow: (snapshot: AutoblowTransportSnapshot) => void;
   intiface?: IntifaceTransportSnapshot;
   setIntiface: (snapshot: IntifaceTransportSnapshot) => void;
   handys?: HandyConnectionState[];
@@ -50,6 +52,7 @@ export function DeviceRuntimeProvider({ children }: { children: ReactNode }) {
   const [failed, setFailedMap] = useState<Partial<Record<DeviceRequestKey, boolean>>>({});
   const pending = useRef(new Set<DeviceRequestKey>());
   const [coyote, setCoyote] = useState(state?.coyote_transport);
+  const [autoblow, setAutoblow] = useState(state?.autoblow_transport);
   const [intiface, setIntiface] = useState(state?.intiface_transport);
   const [handys, setHandys] = useState(state?.handy_connections);
   const [bluetooth, setBluetooth] = useState(EMPTY_BLUETOOTH);
@@ -60,12 +63,15 @@ export function DeviceRuntimeProvider({ children }: { children: ReactNode }) {
   const owner = state?.settings?.device?.hsp_dispatch_owner ?? "";
   const watching = watchers > 0;
   const coyoteConnected = configured.includes("coyote") && Boolean(coyote?.status.connected);
+  const autoblowConnected = (configured.includes("autoblow") && Boolean(autoblow?.autoblow.connected))
+    || (configured.includes("vacuglide") && Boolean(autoblow?.vacuglide.connected));
   const vibratorLeased = configured.includes("vibrator") && Boolean(intiface?.status.connected && intiface.leases?.includes("vibrator"));
   const additionalHandys = (state?.settings?.device?.handy_connections ?? []).filter((connection) => configured.includes(connection.id));
   const usesIntiface = configured.includes("vibrator") || (configured.includes("handy") && owner === "intiface")
     || additionalHandys.some((connection) => connection.method === "intiface");
 
   useEffect(() => { if (state?.coyote_transport) setCoyote(state.coyote_transport); }, [state?.coyote_transport]);
+  useEffect(() => { if (state?.autoblow_transport) setAutoblow(state.autoblow_transport); }, [state?.autoblow_transport]);
   useEffect(() => { if (state?.intiface_transport) setIntiface(state.intiface_transport); }, [state?.intiface_transport]);
   useEffect(() => { if (state?.handy_connections) setHandys(state.handy_connections); }, [state?.handy_connections]);
   // A failed attempt belongs to the method it was made with.
@@ -85,6 +91,11 @@ export function DeviceRuntimeProvider({ children }: { children: ReactNode }) {
     const timer = window.setInterval(() => void api.coyoteStatus().then(setCoyote).catch(() => undefined), WATCH_POLL_MS);
     return () => window.clearInterval(timer);
   }, [watching, coyoteConnected]);
+  useEffect(() => {
+    if (!watching || !autoblowConnected) return;
+    const timer = window.setInterval(() => void api.autoblowStatus().then(setAutoblow).catch(() => undefined), WATCH_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [watching, autoblowConnected]);
   useEffect(() => {
     if (!watching || !vibratorLeased) return;
     const timer = window.setInterval(() => void api.intifaceStatus().then(setIntiface).catch(() => undefined), WATCH_POLL_MS);
@@ -135,8 +146,8 @@ export function DeviceRuntimeProvider({ children }: { children: ReactNode }) {
   }), []);
 
   const runtime = useMemo<DeviceRuntime>(() => ({
-    busy, failed, setFailed, run, coyote, setCoyote, intiface, setIntiface, handys, setHandy, bluetooth, browserBluetooth, watch, setBluetoothDetails,
-  }), [busy, failed, setFailed, run, coyote, intiface, handys, setHandy, bluetooth, browserBluetooth, watch]);
+    busy, failed, setFailed, run, coyote, setCoyote, autoblow, setAutoblow, intiface, setIntiface, handys, setHandy, bluetooth, browserBluetooth, watch, setBluetoothDetails,
+  }), [busy, failed, setFailed, run, coyote, autoblow, intiface, handys, setHandy, bluetooth, browserBluetooth, watch]);
 
   return (
     <DeviceRuntimeContext.Provider value={runtime}>
@@ -210,6 +221,7 @@ export function useDeviceContext(): DeviceContext {
     stopSequence: state?.stop_sequence,
     intiface: runtime?.intiface ?? state?.intiface_transport ?? EMPTY_INTIFACE,
     coyote: runtime?.coyote ?? state?.coyote_transport,
+    autoblow: runtime?.autoblow ?? state?.autoblow_transport,
     native: state?.native_bluetooth_transport,
     handys: runtime?.handys ?? state?.handy_connections ?? [],
     bluetooth: runtime?.bluetooth ?? EMPTY_BLUETOOTH,
@@ -219,6 +231,7 @@ export function useDeviceContext(): DeviceContext {
     send,
     setFailed: runtime?.setFailed ?? noop,
     setCoyote: runtime?.setCoyote ?? noop,
+    setAutoblow: runtime?.setAutoblow ?? noop,
     setIntiface: runtime?.setIntiface ?? noop,
     setHandy: runtime?.setHandy ?? noop,
     browserBluetooth: runtime?.browserBluetooth ?? { connect: noop, disconnect: noop },

@@ -253,3 +253,16 @@ func TestChatCapabilitiesMarkUnenforcedSchema(t *testing.T) {
 		}
 	}
 }
+
+// The saved choice for quicker replies reaches live chat; unset keeps scene motion.
+func TestChatCapabilitiesCarrySceneMotionChoice(t *testing.T) {
+	settings := config.DefaultSettings().LLM
+	if chatCapabilities(settings, nil).SceneMotionOff {
+		t.Fatal("unset setting switched scene motion off")
+	}
+	off := false
+	settings.SceneMotionEnabled = &off
+	if !chatCapabilities(settings, nil).SceneMotionOff {
+		t.Fatal("switching scene motion off did not reach chat")
+	}
+}

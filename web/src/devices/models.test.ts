@@ -1,7 +1,8 @@
 import { additionalHandyDevice } from "./additional-handy";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
-import type { CoyoteStatus, CoyoteTransportSnapshot, IntifaceTransportSnapshot, PublicSettings } from "../api/types";
+import type { AutoblowStatus, AutoblowTransportSnapshot, CoyoteStatus, CoyoteTransportSnapshot, IntifaceTransportSnapshot, PublicSettings } from "../api/types";
+import { autoblowDevice, vacuglideDevice } from "./autoblow";
 import { coyoteDevice } from "./coyote";
 import { handyDevice } from "./handy";
 import { EMPTY_INTIFACE } from "./runtime";
@@ -12,6 +13,10 @@ import type { VibrationSettings } from "../api/types";
 
 vi.mock("../api/client", () => ({
   api: {
+    autoblowConnect: vi.fn(),
+    autoblowDisconnect: vi.fn(),
+    autoblowTest: vi.fn(),
+    vacuglideStroke: vi.fn(),
     cloudConnect: vi.fn(),
     cloudDisconnect: vi.fn(),
     coyoteConnect: vi.fn(),
@@ -71,6 +76,7 @@ function makeCtx(patch: Partial<DeviceContext> = {}, settings: Partial<PublicSet
     send: vi.fn((request: () => Promise<unknown>) => { void request(); }),
     setFailed: vi.fn(),
     setCoyote: vi.fn(),
+    setAutoblow: vi.fn(),
     setIntiface: vi.fn(),
     browserBluetooth: { connect: vi.fn(), disconnect: vi.fn() },
     ...patch,
@@ -331,5 +337,77 @@ describe("named Handy state", () => {
     expect(descriptor.model({ ...ctx, engineActive: true }).status).toBe("playing");
     expect(descriptor.model({ ...ctx, engineActive: true, retired: [id] }).status).toBe("lost");
     expect(descriptor.model({ ...ctx, playing: [], engineActive: true })).toMatchObject({ status: "connected", inPlayback: false });
+  });
+});
+
+describe("Autoblow's cloud devices", () => {
+  const status = (patch: Partial<AutoblowStatus> = {}): AutoblowStatus => ({
+    device: "vacuglide", connected: true, connecting: false, simulated: false, token_set: true, playback_state: "idle",
+    round_trip_ms: 84, testing: false, button_events: true, requests_sent: 4, request_failures: 0, rate_limited: 0,
+    stroke_steps: 0, commanded_percent: 42, ...patch,
+  });
+  const snapshot = (vacuglide: Partial<AutoblowStatus> = {}, autoblow: Partial<AutoblowStatus> = {}): AutoblowTransportSnapshot => ({
+    autoblow: status({ device: "autoblow", commanded_percent: 63, ...autoblow }),
+    vacuglide: status(vacuglide),
+  });
+  const devices = { configured_devices: ["autoblow", "vacuglide"], playback_devices: ["vacuglide"] } as const;
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it("needs a device token before it can connect", () => {
+    const ctx = makeCtx({ autoblow: snapshot({ connected: false, commanded_percent: undefined }) }, { vacuglide: { token_set: false, timing_offset_ms: 0, speed_match: "handy_pace", stroke_follow: false } });
+    expect(vacuglideDevice.model(ctx)).toMatchObject({ status: "needs_setup", details: ["device token"], action: { kind: "setup" } });
+  });
+
+  it("shows the cloud, the round trip, the commanded motor speed and the stroke steps", () => {
+    const ctx = makeCtx({ configured: ["vacuglide"], playing: ["vacuglide"], engineActive: true, autoblow: snapshot({ stroke_steps: 2 }) },
+      { vacuglide: { token_set: true, timing_offset_ms: 0, speed_match: "handy_pace", stroke_follow: false } });
+    const model = vacuglideDevice.model(ctx);
+    expect(model).toMatchObject({ name: "VacuGlide", status: "playing", details: ["Autoblow cloud", "84 ms"], readout: "Motor 42%", inPlayback: true });
+    const level = model.levels!.levels[0];
+    expect(level).toMatchObject({ value: 2, canLower: true, canRaise: true, canTest: false });
+    level.lower();
+    expect(api.vacuglideStroke).toHaveBeenCalledWith("shorter", 7);
+    level.raise();
+    expect(api.vacuglideStroke).toHaveBeenCalledWith("longer", 7);
+  });
+
+  it("requires host permission for either stroke valve", () => {
+    const ctx = makeCtx({ canConfigureHost: false, autoblow: snapshot({ stroke_follow: true }) }, { vacuglide: { token_set: true, timing_offset_ms: 0, speed_match: "handy_pace", stroke_follow: true } });
+    const group = vacuglideDevice.model(ctx).levels!;
+    expect(group.levels[0]).toMatchObject({ canLower: false, canRaise: false, canTest: false });
+    expect(group.note).toMatch(/follows the motion's reach/);
+  });
+
+  it("tests while motion is idle and the device is connected", () => {
+    const ctx = makeCtx({ autoblow: snapshot() }, { vacuglide: { token_set: true, timing_offset_ms: 0, speed_match: "handy_pace", stroke_follow: false } });
+    const level = vacuglideDevice.model(ctx).levels!.levels[0];
+    expect(level.canTest).toBe(true);
+    level.test();
+    expect(api.autoblowTest).toHaveBeenCalledWith("vacuglide", 7);
+  });
+
+  it("plays the Ultra like a stroker and reads its commanded position", () => {
+    const ctx = makeCtx({ configured: [...devices.configured_devices], playing: ["autoblow"], engineActive: true, autoblow: snapshot() },
+      { autoblow: { token_set: true, timing_offset_ms: 0 } });
+    expect(autoblowDevice.model(ctx)).toMatchObject({ name: "Autoblow Ultra", status: "playing", readout: "Position 63%", levels: undefined });
+  });
+
+  it("reports a device that left online mode as lost", () => {
+    const ctx = makeCtx({ autoblow: snapshot({ connected: false, playback_state: "stale" }) }, { vacuglide: { token_set: true, timing_offset_ms: 0, speed_match: "handy_pace", stroke_follow: false } });
+    expect(vacuglideDevice.model(ctx)).toMatchObject({ status: "lost", action: { kind: "reconnect" } });
+  });
+
+  it("retires a reachable connection before reconnecting after it left a run", async () => {
+    const ctx = makeCtx({ engineActive: true, retired: ["vacuglide"], autoblow: snapshot() }, { vacuglide: { token_set: true, timing_offset_ms: 0, speed_match: "handy_pace", stroke_follow: false } });
+    vi.mocked(api.autoblowDisconnect).mockResolvedValue(snapshot({ connected: false }));
+    vi.mocked(api.autoblowConnect).mockResolvedValue(snapshot());
+    const action = vacuglideDevice.model(ctx).action;
+    expect(action?.kind).toBe("reconnect");
+    if (!action || action.kind === "setup") throw new Error("expected reconnect");
+    action.run?.();
+    await vi.waitFor(() => expect(api.autoblowConnect).toHaveBeenCalledWith("vacuglide"));
+    expect(api.autoblowDisconnect).toHaveBeenCalledWith("vacuglide");
+    expect(vi.mocked(api.autoblowDisconnect).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(api.autoblowConnect).mock.invocationCallOrder[0]);
   });
 });

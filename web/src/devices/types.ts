@@ -4,6 +4,7 @@
 import type { ComponentType } from "react";
 import type {
   AppState,
+  AutoblowTransportSnapshot,
   CoyoteTransportSnapshot,
   DeviceId,
   DeviceOptionsPatch,
@@ -110,6 +111,8 @@ export interface DeviceContext {
   stopSequence?: number;
   intiface: IntifaceTransportSnapshot;
   coyote?: CoyoteTransportSnapshot;
+  /** The Autoblow Ultra and the VacuGlide (ADR 0069). */
+  autoblow?: AutoblowTransportSnapshot;
   native?: NativeBluetoothSnapshot;
   /** The additional Handys' links, one per instance. */
   handys: HandyConnectionState[];
@@ -123,6 +126,7 @@ export interface DeviceContext {
   send: (request: () => Promise<unknown>) => void;
   setFailed: (device: DeviceId, failed: boolean) => void;
   setCoyote: (snapshot: CoyoteTransportSnapshot) => void;
+  setAutoblow: (snapshot: AutoblowTransportSnapshot) => void;
   setIntiface: (snapshot: IntifaceTransportSnapshot) => void;
   /** Applies one additional Handy's link from a connection reply. */
   setHandy: (snapshot: HandyConnectionState) => void;
