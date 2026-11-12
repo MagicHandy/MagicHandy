@@ -34,7 +34,7 @@ func TestAutoblowPacerCannotReviveStaleConnection(t *testing.T) {
 		now := time.Now()
 		f.options.Tick, f.options.HealthInterval = time.Hour, time.Hour
 		f.options.Clock = func() time.Time { return now }
-		v := connectedVacuGlide(t, f, AutoblowConfig{SpeedScale: 1})
+		v := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 5, TempoMaxPercent: 100})
 		play(t, v, sweep(12, 400))
 		v.mu.Lock()
 		v.stream.origin.StartAt(now.Add(-time.Second))

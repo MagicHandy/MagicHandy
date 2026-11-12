@@ -10,7 +10,8 @@ import type { CoyoteTransportSnapshot, EstimSettings } from "./coyote-types";
 export type { CoyoteStatus, CoyoteTransportSnapshot, DeviceId, DeviceKind, DeviceOptionsPatch, DeviceOutput, EstimSettings, HandyInstanceId } from "./coyote-types";
 export type { IntifaceLinearActuator, IntifaceScalarActuator, IntifaceDevice, IntifaceDispatchStatus, IntifaceTransportSnapshot, IntifaceVibratorMotor, IntifaceVibratorStatus, VibrationSettings } from "./intiface-types";
 export type { FreestyleSettings, FreestyleStatus } from "./freestyle-types";
-export type { AutoblowDevice, AutoblowSettings, AutoblowStatus, AutoblowTransportSnapshot, VacuGlideSettings, VacuGlideSpeedMatch } from "./autoblow-types";
+export type { AutoblowDevice, AutoblowSettings, AutoblowStatus, AutoblowTransportSnapshot, VacuGlideSettings } from "./autoblow-types";
+export type { TempoMode, TempoReadout, TempoRoutine, TempoSection, TempoSpec } from "./tempo-types";
 import type { AccountCapabilities } from "./access-types";
 export type { AccountRole, ManagedSession, ManagedSessionsResponse, UserAccount, ControlIdentity, AuthenticationStatus, AccountCapabilities, ControlGrant, NetworkConfig, NetworkStatus, InternetDiscovery, CertificatePreparation } from "./access-types";
 
@@ -46,25 +47,12 @@ export interface AutopilotSettings {
   motion_change_level: number;
   motion_min_seconds: number;
   motion_max_seconds: number;
-  adaptive_speech_timing: boolean;
-  adaptive_motion_timing: boolean;
   speech_motion_authority: "chat_only" | "style_only" | "full_motion" | string;
-  // A hosted planner chooses how long each stretch plays, within 8 s to 5 min.
-  // The backend ignores it on a local route, and the control is shown only for
-  // a hosted Autopilot route.
-  auto_motion_timing?: boolean;
-  // An external planner's next decision is planned as each stretch begins and
-  // applied at its end. Chat replaces it. Absent means on.
-  prepare_next_decision?: boolean;
   // Extra planning for Intermediate continuous motion. Absent means on.
   intermediate_planning?: boolean;
-  // Inert read-only context: elapsed time, speed history, and backend-measured
-  // phrase sameness. Off omits the facts from the prompt rather than sending
-  // zeros.
-  session_tracking: boolean;
   // The visible progression bar. Separate from tracking because knowing how long
   // a session has run and being encouraged to build through it are different
-  // things. Requires session_tracking.
+  // things.
   session_arc: boolean;
   session_arc_minutes: number;
 }
@@ -96,7 +84,7 @@ export interface MotionPaceSummary {
 }
 
 export interface EngineSnapshot {
-  linked_session?: { status: "ready" | "degraded" | "failed"; continue_healthy: boolean; retired_devices: string[] };
+  linked_session?: { status: "ready" | "degraded" | "failed"; continue_healthy: boolean; retired_devices: string[]; idle_devices?: string[] };
   running: boolean;
   starting?: boolean;
   completing?: boolean;
@@ -107,6 +95,8 @@ export interface EngineSnapshot {
   target?: {
     vibration_only?: boolean;
     vibration?: VibrationEnvelope;
+    tempo_only?: boolean;
+    tempo?: import("./tempo-types").TempoSpec;
     label?: string;
     source?: string;
     speed_percent?: number;
@@ -137,6 +127,7 @@ export interface EngineSnapshot {
   current_sample?: MotionSample;
   last_sample?: MotionSample;
   pace?: MotionPaceSummary;
+  tempo?: import("./tempo-types").TempoReadout;
   settings?: MotionSettings;
   last_error?: string;
   startup_recovery?: { id: string; kind: "arrival_not_reached" | "unsafe_geometry" | "invalid_telemetry" | "moving_after_stop"; resetting: boolean };

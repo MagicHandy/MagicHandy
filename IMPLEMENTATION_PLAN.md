@@ -15,10 +15,14 @@ token.
 
 - **The Ultra** plays positions: one go-to per stroke leg, timed for the
   cloud's round trip, with the stroke window applied host-side.
-- **The VacuGlide** plays pace. Its motor follows how fast the motion moves,
-  on Autoblow's own scale. Its stroke length and tightness come from the air
-  in its sleeve, so the person sets them with Stroke steps that open its
-  valves; an experimental follower can step them with the motion's reach.
+- **The VacuGlide** plays a tempo through the engine's tempo channel
+  ([ADR 0071](docs/decisions/0071-vacuglide-native-tempo.md)).
+  - When it is the only stroker, chat, Autopilot and six routines choose its
+    tempo, across the person's Tempo range.
+  - Beside a Handy or an Ultra, it follows their pace.
+  - Its stroke length and tightness come from the air in its sleeve. The person
+    sets them with Stroke steps; chat and Autopilot may step them only when
+    allowed.
 - **Stop.** The Ultra's pause button and the VacuGlide's mode button stop
   everything. Stop crosses Autoblow's cloud, which the owner accepted as
   intended (R41).
@@ -3244,3 +3248,14 @@ Fixed host ChatGPT reconnect via backend socket eligibility and a public-to-loca
 sign-in link, including stale account/catalog results. Shared-engine motion
 review retained 36 cases. See `docs/alpha85-release-review-2026-11-12.md` for
 regression, visual, simulator and live local-model evidence and hardware limits.
+
+
+### VacuGlide completion and Autopilot review — 2026-11-12
+
+Native tempo and Graphite UI were reviewed against production model responses,
+simulated app playback and shared-engine plots. Session buildup remains the
+optional visible finish target; elapsed-session facts are distinct. Native
+request ages/timing bounds, buildup decision invalidation and participant
+status were corrected. See `docs/vacuglide-completion-review-2026-11-12.md`.
+Physical calibration and independent tempo prompting in position-led mixed
+sessions remain explicitly outstanding.

@@ -1,5 +1,12 @@
 # ADR 0050: External Autopilot planners: own timing and prepared decisions
 
+> Amended by [ADR 0072](0072-autopilot-timing-without-switches.md):
+>
+> - Auto timing and prepared decisions are no longer switches. They follow
+>   the planner's features.
+> - The shortest stretch a planner may ask for follows the person's change
+>   rate.
+
 ## Status
 
 Accepted 2026-10-16. Measured in transport-free simulated sessions only; see the

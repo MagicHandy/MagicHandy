@@ -266,7 +266,6 @@
   color: var(--muted);
   font-size: var(--fs-hint);
 }
-.device-panel-columns,
 .device-panel-section-head h3,
 .device-levels-head {
   color: var(--muted);
@@ -274,11 +273,6 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-}
-.device-panel-columns {
-  display: flex;
-  justify-content: space-between;
-  padding: 10px 16px 6px;
 }
 .device-panel-empty {
   display: flex;

@@ -91,8 +91,10 @@ export function chipSummary(models: DeviceModel[]): { title: string; status: str
   }
   const playing = models.filter((model) => model.inPlayback);
   const title = playing.length ? playingTitle(playing) : t("No device in playback");
-  const problem = models.find((model) => model.status === "lost")
-    ?? models.find((model) => model.status === "needs_setup")
+  // Devices outside the run never raise a warning here; their rows still say
+  // what they need inside the panel.
+  const problem = playing.find((model) => model.status === "lost")
+    ?? playing.find((model) => model.status === "needs_setup")
     ?? playing.find((model) => model.status === "not_connected" || model.status === "connecting");
   if (problem) return { title, status: chipPhrase(problem) };
   return { title, status: playing.some((model) => model.status === "playing") ? t("Playing") : t("Connected") };

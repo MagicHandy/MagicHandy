@@ -47,7 +47,7 @@ func autopilotPatternSchema(patterns []PatternChoice, capabilities Capabilities,
 		delete(fields, "reply")
 		delete(fields, "next")
 		fields["intent"] = map[string]any{"type": "string"}
-		fields[nextCheckField] = nextCheckSchema()
+		fields[nextCheckField] = nextCheckSchema(capabilities.AutoTimingFloor)
 		schema["required"] = []string{"intent", nextCheckField, "variability"}
 	} else if kind == AutopilotKindMotion {
 		delete(fields, "reply")

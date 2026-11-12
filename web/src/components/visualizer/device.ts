@@ -3,6 +3,9 @@
 // devices are generic linear strokers; Handy Cloud and Browser Bluetooth drive
 // a Handy, whose model is the one chosen in the connection panel.
 
+import { isHandy, playbackDevices } from "../../api/devices";
+import type { PublicSettings } from "../../api/types";
+
 export type VisualizerKind =
   | "handy-dots" // Handy 2 Standard and Pro: the device's own dot display.
   | "handy-original" // Original Handy: refined front view.
@@ -31,4 +34,12 @@ export function visualizerKind(device: VisualizerDevice | undefined): Visualizer
 /** Full travel in millimetres, from the Handy model specifications. */
 export function handyTravelMillimetres(model: string | undefined): number {
   return model === "handy_original" ? 110 : 125;
+}
+
+/** The dispatch owner and saved Handy model, which pick the visualizer drawing.
+ * Playback with an Autoblow device and no Handy draws a generic track. */
+export function visualizerDeviceFor(settings: PublicSettings | undefined): VisualizerDevice {
+  const playing = playbackDevices(settings?.device);
+  const generic = !playing.some(isHandy) && playing.some((id) => id === "autoblow" || id === "vacuglide");
+  return { owner: settings?.device?.hsp_dispatch_owner, model: settings?.motion?.handy_model, generic };
 }

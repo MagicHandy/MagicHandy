@@ -189,7 +189,7 @@ func TestEmergencyStopReachesAConnectedVacuGlide(t *testing.T) {
 	}
 }
 
-func TestDeviceButtonsStopAndNudgeTheSpeedLimit(t *testing.T) {
+func TestDeviceButtonsStopAndMoveTheTempoRange(t *testing.T) {
 	server, sim := newAutoblowTestServer(t)
 	addVacuGlide(t, server, false)
 	saveVacuGlideToken(t, server)
@@ -197,10 +197,15 @@ func TestDeviceButtonsStopAndNudgeTheSpeedLimit(t *testing.T) {
 	waitUntil(t, "the button stream", func() bool { return server.autoblow.vacuglide.Status().ButtonEvents })
 	before, _ := server.store.Snapshot()
 	sim.Press("vacuglide", autoblow.ButtonVacuGlideSpeedMinus)
-	waitUntil(t, "the speed limit to drop", func() bool {
+	// The VacuGlide's speed buttons move the top of its own Tempo range, and
+	// leave the shared Speed limit to the position devices (ADR 0071).
+	waitUntil(t, "the Tempo range top to drop", func() bool {
 		settings, _ := server.store.Snapshot()
-		return settings.Motion.SpeedMaxPercent == max(before.Motion.SpeedMinPercent, before.Motion.SpeedMaxPercent-autoblowSpeedStep)
+		return settings.VacuGlide.TempoMaxPercent == before.VacuGlide.TempoMaxPercent-config.VacuGlideTempoButtonStep
 	})
+	if after, _ := server.store.Snapshot(); after.Motion.SpeedMaxPercent != before.Motion.SpeedMaxPercent {
+		t.Fatalf("a VacuGlide button moved the shared Speed limit to %d", after.Motion.SpeedMaxPercent)
+	}
 	sequence := server.stopSequence.Load()
 	sim.Press("vacuglide", autoblow.ButtonVacuGlideMode)
 	waitUntil(t, "the mode button to Stop", func() bool { return server.stopSequence.Load() > sequence })

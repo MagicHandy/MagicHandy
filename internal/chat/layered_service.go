@@ -206,7 +206,7 @@ func (s Service) continuousPrompt(prompt PromptSet, capabilities Capabilities, s
 	var system string
 	schema := continuousEditSchema(limits, capabilities, state)
 	if autoTiming {
-		schema = withNextCheckSchema(schema)
+		schema = withNextCheckSchema(schema, capabilities.AutoTimingFloor)
 	}
 	if !s.TrustedMotionInput {
 		system = ComposeInteractivePrompt(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext, s.PromptBudget).Prompt

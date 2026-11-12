@@ -43,13 +43,10 @@ type SessionArc struct {
 // Callers hold the lock.
 func (m *Manager) arcPercentLocked(now time.Time) int {
 	settings := m.options.AutopilotSettings()
-	if !settings.SessionArc || !settings.SessionTracking {
+	if !settings.SessionArc {
 		return 0
 	}
-	minutes := settings.SessionArcMinutes
-	if minutes < config.AutopilotMinimumArcMinutes {
-		minutes = config.AutopilotDefaultArcMinutes
-	}
+	minutes := arcMinutes(settings)
 	if m.history.arc.startedAt.IsZero() {
 		m.history.arc.startedAt = now
 	}
@@ -69,13 +66,21 @@ func (m *Manager) arcPercentLocked(now time.Time) int {
 // at that same point. Callers hold the lock.
 func (m *Manager) placeArcPercentLocked(now time.Time, percent int) {
 	percent = clampInt(percent, 0, 100)
-	settings := m.options.AutopilotSettings()
-	minutes := settings.SessionArcMinutes
-	if minutes < config.AutopilotMinimumArcMinutes {
-		minutes = config.AutopilotDefaultArcMinutes
-	}
-	offset := time.Duration(percent) * time.Duration(minutes) * time.Minute / 100
+	minutes := arcMinutes(m.options.AutopilotSettings())
+	// Scale in milliseconds, as in arcPercentLocked: percent*duration would
+	// overflow for durations the settings validator explicitly permits.
+	durationUnits := time.Duration(minutes) * time.Minute / time.Millisecond
+	offset := durationUnits * time.Duration(percent) / 100 * time.Millisecond
 	m.history.arc.startedAt = now.Add(-offset)
+}
+
+// arcMinutes is the buildup's configured length, with the first-run default
+// standing in for a value below the minimum.
+func arcMinutes(settings config.AutopilotSettings) int {
+	if settings.SessionArcMinutes < config.AutopilotMinimumArcMinutes {
+		return config.AutopilotDefaultArcMinutes
+	}
+	return settings.SessionArcMinutes
 }
 
 // SessionArcSnapshot reports buildup for the UI.
@@ -84,7 +89,7 @@ func (m *Manager) SessionArcSnapshot() SessionArc {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	arc := SessionArc{
-		Enabled: settings.SessionArc && settings.SessionTracking,
+		Enabled: settings.SessionArc,
 		Minutes: settings.SessionArcMinutes,
 	}
 	if arc.Enabled && m.loop.mode == ModeAutopilot {
@@ -106,7 +111,9 @@ func (m *Manager) ResetSessionArc() bool {
 		m.mu.Unlock()
 		return false
 	}
-	m.history.arc = arcState{startedAt: m.options.Now()}
+	now := m.options.Now()
+	m.history.arc = arcState{startedAt: now}
+	m.buildupChangedLocked(now)
 	m.mu.Unlock()
 	m.trace(ModeAutopilot, "session_arc_reset", nil, "")
 	return true
@@ -123,7 +130,20 @@ func (m *Manager) SetSessionArcPercent(percent int) bool {
 	// Re-anchor the time baseline to the placed value so the bar does not snap
 	// back to wherever elapsed time had already reached.
 	m.placeArcPercentLocked(now, percent)
+	m.buildupChangedLocked(now)
 	m.mu.Unlock()
 	m.trace(ModeAutopilot, "session_arc_set", nil, "")
 	return true
+}
+
+// A prepared decision belongs to the old finish target. Discard it atomically
+// with the visible edit and ask for a fresh decision, without changing current
+// playback or releasing Pause/Stop/chat admission.
+func (m *Manager) buildupChangedLocked(now time.Time) {
+	m.loop.generation++
+	m.cancelOperationLocked()
+	m.motion.pending = nil
+	m.motion.swayPoints = nil
+	m.motion.nextRetry = time.Time{}
+	m.motion.deadline, m.motion.planAt = now, now
 }

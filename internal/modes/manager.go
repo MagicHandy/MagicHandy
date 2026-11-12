@@ -58,10 +58,12 @@ type Options struct {
 	// MotionGenerationMode keeps Autopilot fallback inside the selected model
 	// vocabulary. Dynamic mode never falls through to the pattern planner.
 	MotionGenerationMode func() string
-	Traces               *diagnostics.TraceRing
-	Now                  func() time.Time
-	Tick                 time.Duration
-	Seed                 int64
+	// TempoLeads keeps native tempo failures out of the positional fallback.
+	TempoLeads func() bool
+	Traces     *diagnostics.TraceRing
+	Now        func() time.Time
+	Tick       time.Duration
+	Seed       int64
 	// PrepareNextDecision reports whether Autopilot plans each motion decision
 	// as its stretch begins rather than just before the boundary. The server
 	// enables it only for external planners.
@@ -381,6 +383,10 @@ func (m *Manager) startNextSegment(ctx context.Context, mode string, reason stri
 		m.handleStartFailure(mode, generation, "start_failed", err)
 		return
 	}
+	if err := applyHeldAir(operationCtx, engine, choice.airSteps); err != nil {
+		m.backoff(mode, generation, "air_adjustment_failed", err)
+		return
+	}
 	choice.appliedPerceptual = clonePerceptualSummary(state.Perceptual)
 	m.finishSegmentChoice(operationCtx, mode, reason, choice, state.RecentCommandLatencyMillis, generation)
 }
@@ -390,6 +396,9 @@ func (m *Manager) startNextSegment(ctx context.Context, mode string, reason stri
 func (m *Manager) choiceTarget(mode string, choice segmentChoice) motion.MotionTarget {
 	target := choice.segment.Target(modeLabel(mode), mode)
 	target.Vibration = choice.vibration
+	if choice.tempo != nil {
+		target.Tempo = motion.CloneTempoSpec(choice.tempo)
+	}
 	if choice.pattern != nil {
 		target.Pattern = choice.pattern
 	}
@@ -555,6 +564,7 @@ func (m *Manager) cancelOperationLocked() {
 
 func cloneTarget(target motion.MotionTarget) motion.MotionTarget {
 	target.Flow = motion.CloneFlowSpec(target.Flow)
+	target.Tempo = motion.CloneTempoSpec(target.Tempo)
 	if target.AreaFocus != nil {
 		focus := *target.AreaFocus
 		target.AreaFocus = &focus

@@ -12,12 +12,13 @@ import (
 // EdgeInput describes the mechanical state after an immediate holding override.
 // Only the normal mode loop may schedule its automatic return.
 type EdgeInput struct {
-	PreviousSpeed int `json:"previous_speed_percent"`
-	HoldingSpeed  int `json:"holding_speed_percent"`
-	SpeedMin      int `json:"speed_min_percent"`
-	SpeedMax      int `json:"resume_speed_max_percent"`
-	RangeMin      int `json:"holding_range_min_percent"`
-	RangeMax      int `json:"holding_range_max_percent"`
+	TempoOnly     bool `json:"tempo_only,omitempty"`
+	PreviousSpeed int  `json:"previous_speed_percent"`
+	HoldingSpeed  int  `json:"holding_speed_percent"`
+	SpeedMin      int  `json:"speed_min_percent"`
+	SpeedMax      int  `json:"resume_speed_max_percent"`
+	RangeMin      int  `json:"holding_range_min_percent"`
+	RangeMax      int  `json:"holding_range_max_percent"`
 }
 
 // EdgeDecision chooses a bounded duration and return, never raw device commands.
@@ -105,9 +106,7 @@ func (m *Manager) ActivateEdge(ctx context.Context) (Status, error) {
 	m.speech.deadline, m.speech.waitingID = time.Time{}, ""
 	automatic := m.loop.mode == ModeAutopilot && m.options.DecideEdge != nil
 	e := &edgeState{status: EdgeStatus{Active: true, Phase: "applying", Automatic: automatic}, previous: cloneTarget(before.Target), holding: holding, keepalive: keepalive}
-	e.input = EdgeInput{PreviousSpeed: before.Target.SpeedPercent, HoldingSpeed: holding.SpeedPercent,
-		SpeedMin: m.options.Settings().SpeedMinPercent, SpeedMax: min(before.Target.SpeedPercent, m.options.Settings().SpeedMaxPercent),
-		RangeMin: holding.Flow.MinPercent, RangeMax: holding.Flow.MaxPercent}
+	e.input = edgeInput(before, holding, m.options.Settings().SpeedMinPercent, m.options.Settings().SpeedMaxPercent)
 	m.edge = e
 	m.events.decisionSource = "edge_hold"
 	m.mu.Unlock()
@@ -290,6 +289,16 @@ func (m *Manager) resumeEdge(ctx context.Context, expected *edgeState, generatio
 
 func edgeReturnTarget(e *edgeState, automatic bool) motion.MotionTarget {
 	target := cloneTarget(e.previous)
+	if target.TempoOnly {
+		if automatic && e.decision.ResumeStyle == "gentle" {
+			target = cloneTarget(e.holding)
+			target.Tempo = &motion.TempoSpec{Mode: motion.TempoModeSteady, LevelPercent: e.decision.ResumeSpeed}
+		}
+		if automatic {
+			target.Source, target.Label = ModeAutopilot, "Autopilot"
+		}
+		return target
+	}
 	if automatic {
 		if e.decision.ResumeStyle == "gentle" {
 			target = cloneTarget(e.holding)
@@ -303,6 +312,16 @@ func edgeReturnTarget(e *edgeState, automatic bool) motion.MotionTarget {
 		target.Source, target.Label = ModeAutopilot, "Autopilot"
 	}
 	return target
+}
+
+func edgeInput(before motion.ActiveMotionState, holding motion.MotionTarget, speedMin, speedMax int) EdgeInput {
+	if holding.TempoOnly {
+		previous := max(1, min(100, int(before.Tempo.LevelPercent)))
+		return EdgeInput{TempoOnly: true, PreviousSpeed: previous, HoldingSpeed: holding.Tempo.LevelPercent, SpeedMin: 1, SpeedMax: previous}
+	}
+	return EdgeInput{PreviousSpeed: before.Target.SpeedPercent, HoldingSpeed: holding.SpeedPercent,
+		SpeedMin: speedMin, SpeedMax: min(before.Target.SpeedPercent, speedMax),
+		RangeMin: holding.Flow.MinPercent, RangeMax: holding.Flow.MaxPercent}
 }
 
 func (m *Manager) adoptEdgeReturnLocked(e *edgeState, state motion.ActiveMotionState) {

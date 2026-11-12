@@ -86,10 +86,11 @@ type DecisionInput struct {
 	// it is false the prompt omits them rather than sending zeros, because a model
 	// cannot act on a field it never saw.
 	SessionTracking bool
-	// ArcEnabled and ArcPercent describe the visible session buildup. Absent from the
-	// prompt entirely when disabled.
+	// ArcEnabled, ArcPercent and ArcMinutes describe the visible session buildup.
+	// Absent from the prompt entirely when disabled.
 	ArcEnabled bool
 	ArcPercent int
+	ArcMinutes int
 	// CurrentPerceptual is computed from the shared engine's compiled curve,
 	// after selected-device speed and safety fitting. It lets the model reason
 	// from felt commanded motion rather than treating any changed JSON field as
@@ -130,10 +131,14 @@ type PositionBand struct {
 type Decision struct {
 	SpeechSource SpeechSource
 	Vibration    *motion.VibrationSpec
-	Segment      Segment
-	Pattern      *motion.PatternDefinition
-	Say          string
-	Hold         bool
+	// Tempo and AirSteps are the VacuGlide's own choices when tempo leads
+	// (ADR 0071). They ride a hold: the positions are left as they are.
+	Tempo    *motion.TempoSpec
+	AirSteps int
+	Segment  Segment
+	Pattern  *motion.PatternDefinition
+	Say      string
+	Hold     bool
 	// Abstain holds without starting a replacement when no segment exists.
 	Abstain bool
 	// Requested marks a hold the human asked for in chat, so status can say why
@@ -170,6 +175,8 @@ type segmentChoice struct {
 	failed          bool
 	speechSource    SpeechSource
 	vibration       *motion.VibrationSpec
+	tempo           *motion.TempoSpec
+	airSteps        int
 	segment         Segment
 	pattern         *motion.PatternDefinition
 	scores          []diagnostics.PlannerScore
@@ -231,6 +238,9 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 	}()
 	dynamicMode := m.options.MotionGenerationMode != nil &&
 		(m.options.MotionGenerationMode() == config.LLMMotionModeDynamic || m.options.MotionGenerationMode() == config.LLMMotionModeLayered || m.options.MotionGenerationMode() == config.LLMMotionModeCreativeV2)
+	if m.options.TempoLeads != nil && m.options.TempoLeads() {
+		dynamicMode = true
+	}
 	decideCtx, cancel := context.WithTimeout(ctx, decisionTimeout)
 	started := m.options.Now()
 	decision, err := decide(decideCtx, input)
@@ -271,31 +281,47 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 		return segmentChoice{source: "speech_skipped", timing: timing, decisionLatency: latency}
 	}
 	if decision.Hold {
-		if segment, pattern, ok := m.heldSegment(); ok {
-			return segmentChoice{
-				segment: segment, pattern: pattern, source: "hold", requested: decision.Requested,
-				vibration: decision.Vibration, say: decision.Say, timing: timing, variability: variability,
-				nextCheck: decision.NextCheck, decisionLatency: latency,
-			}
-		}
-		if !fallback || dynamicMode || decision.Abstain {
-			return segmentChoice{
-				source: "hold", requested: decision.Requested, vibration: decision.Vibration, say: decision.Say, timing: timing,
-				variability: variability, nextCheck: decision.NextCheck, decisionLatency: latency,
-			}
-		}
-		segment, scores := m.nextPlannedSegment()
-		segment.DriftToSpeedPercent = 0
-		return segmentChoice{
-			segment: segment, scores: scores, source: "fallback",
-			note: "hold_without_segment", vibration: decision.Vibration, say: decision.Say, timing: timing,
-			variability: variability, decisionLatency: latency,
-		}
+		return m.heldDecision(decision, fallback, dynamicMode, latency)
 	}
 	return segmentChoice{
 		segment: NormalizeSegment(decision.Segment), pattern: decision.Pattern,
 		source: "model", vibration: decision.Vibration, say: decision.Say, timing: timing,
 		variability: variability, nextCheck: decision.NextCheck, decisionLatency: latency,
+	}
+}
+
+// heldDecision keeps the current positional phrase while scalar outputs may
+// change. A native tempo also supplies the whole phrase when starting idle.
+func (m *Manager) heldDecision(decision Decision, fallback, dynamicMode bool, latency time.Duration) segmentChoice {
+	timing, variability := normalizeTiming(decision.Next), normalizeVariability(decision.Variability)
+	if segment, pattern, ok := m.heldSegment(); ok {
+		if segment.Tempo != nil && decision.Tempo != nil {
+			segment.Tempo = motion.CloneTempoSpec(decision.Tempo)
+		}
+		return segmentChoice{
+			segment: segment, pattern: pattern, source: "hold", requested: decision.Requested,
+			vibration: decision.Vibration, tempo: decision.Tempo, airSteps: decision.AirSteps, say: decision.Say, timing: timing, variability: variability,
+			nextCheck: decision.NextCheck, decisionLatency: latency,
+		}
+	}
+	if decision.Tempo != nil {
+		return segmentChoice{source: "hold", segment: NormalizeSegment(Segment{Tempo: decision.Tempo}),
+			tempo: motion.CloneTempoSpec(decision.Tempo), airSteps: decision.AirSteps,
+			say: decision.Say, timing: timing, variability: VariabilitySettled,
+			nextCheck: decision.NextCheck, decisionLatency: latency}
+	}
+	if !fallback || dynamicMode || decision.Abstain {
+		return segmentChoice{
+			source: "hold", requested: decision.Requested, vibration: decision.Vibration, tempo: decision.Tempo, airSteps: decision.AirSteps, say: decision.Say, timing: timing,
+			variability: variability, nextCheck: decision.NextCheck, decisionLatency: latency,
+		}
+	}
+	segment, scores := m.nextPlannedSegment()
+	segment.DriftToSpeedPercent = 0
+	return segmentChoice{
+		segment: segment, scores: scores, source: "fallback",
+		note: "hold_without_segment", vibration: decision.Vibration, say: decision.Say, timing: timing,
+		variability: variability, decisionLatency: latency,
 	}
 }
 
@@ -402,10 +428,10 @@ func (m *Manager) decisionInput(motionPlanning bool) DecisionInput {
 		SpeedMinPercent:     settings.SpeedMinPercent,
 		SpeedMaxPercent:     settings.SpeedMaxPercent,
 		LastSay:             m.speech.lastSay,
-		SessionTracking:     autopilot.SessionTracking,
+		SessionTracking:     true,
 		Lookahead:           lookahead,
 	}
-	if autopilot.SessionTracking {
+	{
 		input.SessionSeconds = sessionSeconds
 		input.SpeedTrend = m.speedTrendLocked()
 		if !m.history.speedChangedAt.IsZero() {
@@ -423,6 +449,7 @@ func (m *Manager) decisionInput(motionPlanning bool) DecisionInput {
 		if autopilot.SessionArc {
 			input.ArcEnabled = true
 			input.ArcPercent = m.arcPercentLocked(now)
+			input.ArcMinutes = arcMinutes(autopilot)
 		}
 	}
 	if motionPlanning {
@@ -482,6 +509,9 @@ func (m *Manager) preparedLookaheadLocked(now time.Time, motionPlanning bool) ti
 // compilation detail; it can refresh micro-motion without representing a new
 // model-authored phrase.
 func sameMotionPhrase(left, right Segment) bool {
+	if left.Tempo != nil || right.Tempo != nil {
+		return left.Tempo != nil && right.Tempo != nil && left.Tempo.Equal(*right.Tempo)
+	}
 	if left.Flow != nil || right.Flow != nil {
 		return sameFlowPhrase(left.Flow, right.Flow)
 	}
@@ -539,6 +569,9 @@ func (m *Manager) heldSegment() (Segment, *motion.PatternDefinition, bool) {
 }
 
 func segmentFromMotionTarget(target motion.MotionTarget, durationMillis int64) (Segment, *motion.PatternDefinition, bool) {
+	if target.TempoOnly && target.Tempo != nil {
+		return NormalizeSegment(Segment{Tempo: target.Tempo, DurationMillis: durationMillis}), nil, true
+	}
 	if (target.PatternID == "" && target.Dynamic == nil && target.Flow == nil) || target.SpeedPercent <= 0 {
 		return Segment{}, nil, false
 	}

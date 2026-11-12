@@ -51,6 +51,10 @@ type Engine struct {
 	vibration          *vibrationPlan
 	vibrationRevision  uint64
 	vibrationTail      int64
+	tempo              *tempoPlan
+	tempoRevision      uint64
+	tempoTail          int64
+	tempoOutput        bool
 	linearStartPending bool
 	mu                 sync.Mutex
 	commandMu          sync.Mutex
@@ -72,6 +76,8 @@ type Engine struct {
 	pausedPhase                    float64
 	frozenPhase                    float64
 	pausedTarget                   MotionTarget
+	pausedTempo                    *tempoPlan
+	pausedTempoMillis              int64
 	runMillisAccum                 int64
 	generation                     uint64
 	runEpoch                       uint64
@@ -133,6 +139,8 @@ type ActiveMotionState struct {
 	// Pace is the compact backend-authoritative Creative output readout. It is
 	// safe for the motion SSE because it contains no curve points or payloads.
 	Pace *PaceSummary `json:"pace,omitempty"`
+	// Tempo is the tempo channel's compact readout (ADR 0071).
+	Tempo *TempoReadout `json:"tempo,omitempty"`
 	// Perceptual is backend planning context. It stays out of the 8 Hz motion
 	// SSE snapshot; Autopilot records the compact values in decision traces.
 	Perceptual PerceptualSummary `json:"-"`
@@ -248,7 +256,7 @@ func (e *Engine) startAtGeneration(ctx context.Context, target MotionTarget, set
 		e.abortStartup(startupCtx, runEpoch, startupAbortReason("start", "start_prebuffer_failed", err), err)
 		return e.Snapshot(), err
 	}
-	if err := e.play(startupCtx, runEpoch); err != nil {
+	if err := e.play(startupCtx, runEpoch, false); err != nil {
 		e.abortStartup(startupCtx, runEpoch, startupAbortReason("start", "start_play_failed", err), err)
 		return e.Snapshot(), err
 	}
@@ -290,7 +298,7 @@ func (e *Engine) applyTarget(ctx context.Context, target MotionTarget, reason st
 		return e.Snapshot(), err
 	}
 	e.mu.Lock()
-	promote := e.plan.Target.VibrationOnly && !target.VibrationOnly
+	promote := (e.plan.Target.VibrationOnly || e.plan.Target.TempoOnly) && !target.VibrationOnly && !target.TempoOnly
 	settings, admission, envelope := e.settings, e.stopGeneration, e.plan.Target.Vibration
 	if promote {
 		e.linearStartPending = true
@@ -397,6 +405,7 @@ func (e *Engine) Pause(ctx context.Context, reason string) (ActiveMotionState, e
 	e.pausedPhase = e.plan.PhaseAt(played)
 	e.frozenPhase = e.pausedPhase
 	e.pausedTarget = e.plan.Target
+	e.pausedTempo, e.pausedTempoMillis = e.tempo, played
 	e.runMillisAccum += played
 	pauseAdmission := e.stopGeneration
 	e.stopBarriers++
@@ -467,7 +476,7 @@ func (e *Engine) Resume(ctx context.Context, reason string) (ActiveMotionState, 
 		e.restorePaused(runEpoch, resumeAdmission)
 		return e.Snapshot(), err
 	}
-	if err := e.play(startupCtx, runEpoch); err != nil {
+	if err := e.play(startupCtx, runEpoch, true); err != nil {
 		e.abortStartup(startupCtx, runEpoch, startupAbortReason("resume", "resume_play_failed", err), err)
 		e.restorePaused(runEpoch, resumeAdmission)
 		return e.Snapshot(), err
@@ -530,6 +539,19 @@ func (e *Engine) beginResume(loopCtx context.Context, reason string, cancel cont
 	e.vibrationTail = 0
 	if plan.Target.Vibration != nil {
 		e.setVibrationLocked(*plan.Target.Vibration, 0)
+	}
+	if err := e.installTempoLocked(&e.plan.Target); err != nil {
+		e.runCtx = nil
+		e.cancel = nil
+		e.done = nil
+		e.lastError = err.Error()
+		return 0, 0, err
+	}
+	if e.pausedTempo != nil && !e.pausedTempo.follow() {
+		continued := *e.pausedTempo
+		continued.fromMillis -= e.pausedTempoMillis
+		continued.revision, continued.resumeFade = e.tempoRevision, true
+		e.tempo = &continued
 	}
 	e.captureCurrentSampleLocked(0)
 	e.paused = false
@@ -626,6 +648,9 @@ func (e *Engine) begin(ctx context.Context, loopCtx context.Context, target Moti
 			return 0, err
 		}
 	}
+	if err := validateTargetTempo(target, takesTempo(e.transport)); err != nil {
+		return 0, err
+	}
 	settings = normalizeMotionSettings(settings)
 	e.runEpoch++
 	e.generation++
@@ -643,6 +668,7 @@ func (e *Engine) begin(ctx context.Context, loopCtx context.Context, target Moti
 	e.paused = false
 	e.completing = false
 	e.starting = true
+	e.pausedTempo = nil
 	e.frozenPhase = 0
 	e.runMillisAccum = 0
 	// The loop cancel is live before running is published, so any concurrent
@@ -667,6 +693,8 @@ func (e *Engine) begin(ctx context.Context, loopCtx context.Context, target Moti
 	if target.Vibration != nil {
 		e.setVibrationLocked(*target.Vibration, 0)
 	}
+	// Validated above, so installing cannot fail here.
+	_ = e.installTempoLocked(&e.plan.Target)
 	if e.traces != nil {
 		e.traceStartSequence = e.traces.LatestSequence() + 1
 	}
@@ -701,6 +729,15 @@ func (e *Engine) retarget(runEpoch uint64, target MotionTarget, reason string) e
 		}
 	}
 	target.VibrationOnly = previous.Target.VibrationOnly
+	if target.Tempo == nil {
+		target.Tempo = previous.Target.Tempo
+	}
+	target.TempoOnly = previous.Target.TempoOnly
+	if target.Tempo != nil && e.tempoOutput {
+		if err := validateRunTempo(*target.Tempo, target.TempoOnly); err != nil {
+			return err
+		}
+	}
 	previousSettings := e.settings
 	previousTransition := pruneTransitionHistory(e.transition, estimatedMillis)
 	e.transition = previousTransition
@@ -730,6 +767,9 @@ func (e *Engine) retarget(runEpoch uint64, target MotionTarget, reason string) e
 	e.plan = next
 	if target.Vibration != nil && (e.vibration == nil || e.vibration.spec != *target.Vibration) {
 		e.setVibrationLocked(*target.Vibration, estimatedMillis)
+	}
+	if e.tempoOutput && target.Tempo != nil && (e.tempo == nil || !e.tempo.spec.Equal(*target.Tempo)) {
+		e.setTempoLocked(*target.Tempo, estimatedMillis, e.tempoLevelLocked(estimatedMillis))
 	}
 	e.traceRetargetLocked(reason, previous, previousSettings, next, e.settings, current, handoff, leadMillis, recentLatency, bridgeInserted, "")
 	return nil
@@ -817,6 +857,9 @@ func (e *Engine) runLoop(ctx context.Context, runEpoch uint64) {
 				e.rememberError(err)
 			}
 			if err := e.dispatchVibrationIfNeeded(ctx, runEpoch); err != nil {
+				e.rememberError(err)
+			}
+			if err := e.dispatchTempoIfNeeded(ctx, runEpoch); err != nil {
 				e.rememberError(err)
 			}
 		}

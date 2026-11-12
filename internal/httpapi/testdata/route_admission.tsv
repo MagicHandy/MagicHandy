@@ -90,6 +90,7 @@ shared	GET /api/memory
 shared	GET /api/modes
 shared	GET /api/motion/events
 shared	GET /api/motion/state
+shared	GET /api/motion/tempo/routines
 host	GET /api/network
 host	GET /api/network/certificate
 host	GET /api/network/local-trust
@@ -199,6 +200,7 @@ control	POST /api/motion/quick
 control	POST /api/motion/resume
 control	POST /api/motion/reset-position
 control	POST /api/motion/start
+control	POST /api/motion/tempo
 public	POST /api/motion/stop
 control	POST /api/motion/target
 control	POST /api/motion/vibration/follow

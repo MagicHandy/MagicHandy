@@ -12,6 +12,14 @@ import (
 // rounded reversals: extra softness flattened turns into near-rests and then
 // persisted as an invisible high-speed restriction in later Layered edits.
 func HoldingTarget(state ActiveMotionState, settings config.MotionSettings) (MotionTarget, error) {
+	if state.Target.TempoOnly {
+		if state.Tempo == nil || state.Tempo.LevelPercent < 1 {
+			return MotionTarget{}, errors.New("start the motor before using Edge")
+		}
+		level := max(1, min(20, int(math.Round(state.Tempo.LevelPercent*0.4))))
+		return MotionTarget{Source: "edge", Label: "Gentle hold", TempoOnly: true,
+			Tempo: &TempoSpec{Mode: TempoModeSteady, LevelPercent: level}}, nil
+	}
 	lo, hi := 0, 100
 	if state.Perceptual.PositionMaxPercent > state.Perceptual.PositionMinPercent || state.Perceptual.Pace.RequestedPercent > 0 {
 		lo = max(0, int(math.Floor(state.Perceptual.PositionMinPercent)))

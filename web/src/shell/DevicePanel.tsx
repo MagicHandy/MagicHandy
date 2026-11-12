@@ -3,7 +3,8 @@
 // the Speed and Stroke limits. Setup and configuration live in Settings >
 // Devices, which Device settings opens (docs/ui-design-guidelines.md).
 import { useEffect, useId, useRef } from "react";
-import { playsPositions } from "../api/devices";
+import { playsPositions, tempoLeads } from "../api/devices";
+import { VacuGlideTempoSection } from "../devices/AutoblowPage";
 import { QuickSettings } from "../components/QuickSettings";
 import { StartupRecoveryNotice } from "../components/StartupRecoveryNotice";
 import { DeviceRow } from "../devices/DeviceRow";
@@ -96,16 +97,24 @@ export function DevicePanel({ open, onOpenChange, restoreFocusOnClose = true }: 
           </div>
         ) : (
           <>
-            <div className="device-panel-columns" aria-hidden="true"><span>{t("Device")}</span><span>{t("In playback")}</span></div>
-            {devices.map(({ descriptor, model }) => (
-              <DeviceRow key={descriptor.id} descriptor={descriptor} model={model} ctx={ctx} onNavigate={navigate} />
-            ))}
+            {[true, false].map((inRun) => {
+              const group = devices.filter(({ model }) => model.inPlayback === inRun);
+              if (!group.length) return null;
+              return (
+                <div key={String(inRun)} className="device-panel-group" role="group" aria-label={inRun ? t("In this run") : t("Not in this run")}>
+                  <h3 className="device-panel-group-title">{inRun ? t("In this run") : t("Not in this run")}</h3>
+                  {group.map(({ descriptor, model }) => (
+                    <DeviceRow key={descriptor.id} descriptor={descriptor} model={model} ctx={ctx} onNavigate={navigate} />
+                  ))}
+                </div>
+              );
+            })}
             <div className="device-panel-limits" role="group" aria-labelledby={limitsId}>
               <div className="device-panel-section-head">
                 <h3 id={limitsId}>{t("Limits")}</h3>
                 {!ctx.readOnly && <span>{t("Apply immediately")}</span>}
               </div>
-              {ctx.readOnly ? <LimitsReadout ctx={ctx} /> : <QuickSettings section="limits" />}
+              {tempoLeads(ctx.settings) ? <VacuGlideTempoSection ctx={ctx} compact /> : ctx.readOnly ? <LimitsReadout ctx={ctx} /> : <QuickSettings section="limits" />}
             </div>
             <div className="device-panel-foot">
               <a className="btn btn-secondary device-panel-settings" href="#/settings/devices" onClick={navigate}>

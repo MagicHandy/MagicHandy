@@ -1,5 +1,13 @@
 # ADR 0069: Autoblow cloud devices: the Autoblow Ultra and the VacuGlide
 
+> Amended by [ADR 0071](0071-vacuglide-native-tempo.md):
+>
+> - The VacuGlide plays the engine's tempo channel across its own Tempo range.
+> - Speed match and the reach follower are retired.
+> - The VacuGlide's speed buttons move its Tempo range.
+> - With only a VacuGlide playing, chat and Autopilot choose its tempo and,
+>   when allowed, its air.
+
 ## Status
 
 Accepted 2026-11-11. Implemented and tested in simulation only: no Ultra or

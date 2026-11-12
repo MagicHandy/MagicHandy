@@ -6,6 +6,18 @@ import (
 	"time"
 )
 
+// ErrTempoUnavailable means no active device in this run plays tempo.
+var ErrTempoUnavailable = errors.New("no device in this run plays tempo; include the VacuGlide in playback")
+
+// ErrAirRejected is a refused semantic air request, without a transport failure.
+var ErrAirRejected = errors.New("air adjustment was not admitted")
+
+// TempoOutput is implemented by owners that play the engine's tempo channel:
+// strokers that make their own strokes (ADR 0071).
+type TempoOutput interface {
+	TakesTempo() bool
+}
+
 // ErrVibrationUnavailable means no active scalar recipient remains in this run.
 // It is not a failure of the healthy linear participants.
 var ErrVibrationUnavailable = errors.New("no active vibrator remains in this run")
@@ -165,6 +177,14 @@ type AppendPointsCommand struct {
 	// output ignore it. An empty linear frame updates only this output.
 	Vibration     *VibrationFrame `json:"vibration,omitempty"`
 	VibrationOnly bool            `json:"vibration_only,omitempty"`
+	// Tempo carries engine-sampled tempo for owners that make their own
+	// strokes (ADR 0071); other owners ignore it. A frame without points
+	// updates only the tempo owners.
+	Tempo     *TempoFrame `json:"tempo,omitempty"`
+	TempoOnly bool        `json:"tempo_only,omitempty"`
+	// Air is a one-time relative adjustment on the same admitted stream.
+	// It is never inferred from positions or replayed with an envelope refill.
+	Air *AirAdjustment `json:"air,omitempty"`
 	// SpeedPercent is the plan's commanded pace, 1..100, when it has one. A
 	// vibrator reads it as The Handy's intensity until a model chooses its
 	// level (ADR 0061); other owners ignore it.
@@ -183,6 +203,20 @@ type VibrationFrame struct {
 	Points           []TimedLevel `json:"points,omitempty"`
 }
 
+// TempoFrame is engine-sampled tempo in percent of the person's Tempo range:
+// 0 stops the motor and 1..100 span the range. It replaces what the owner
+// holds from its first point onward.
+type TempoFrame struct {
+	Revision uint64       `json:"revision"`
+	Points   []TimedLevel `json:"points"`
+}
+
+// AirAdjustment is an engine-admitted relative step, fenced against replay.
+type AirAdjustment struct {
+	Revision uint64 `json:"revision"`
+	Steps    int    `json:"steps"`
+}
+
 // TimedLevel is engine-sampled vibration drive in percent of Max, 0..100.
 type TimedLevel struct {
 	TimeMillis   int64   `json:"time_ms"`
@@ -191,8 +225,12 @@ type TimedLevel struct {
 
 // PlayCommand starts or resumes playback of a timed-point stream.
 type PlayCommand struct {
+	// Resume continues the same logical session on a fresh stream. Relative
+	// actuator limits survive Pause/Resume; a new Play starts a new budget.
+	Resume           bool   `json:"resume,omitempty"`
 	StreamID         string `json:"stream_id"`
 	VibrationOnly    bool   `json:"vibration_only,omitempty"`
+	TempoOnly        bool   `json:"tempo_only,omitempty"`
 	StartTimeMillis  int64  `json:"start_time_ms"`
 	ServerTimeMillis int64  `json:"server_time_ms,omitempty"`
 }

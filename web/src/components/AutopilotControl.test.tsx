@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import { AutopilotControl } from "./AutopilotControl";
@@ -63,10 +63,7 @@ const autopilotPreferences = {
   motion_change_level: 4,
   motion_min_seconds: 20,
   motion_max_seconds: 60,
-  adaptive_speech_timing: true,
-  adaptive_motion_timing: true,
   speech_motion_authority: "chat_only",
-  session_tracking: true,
   session_arc: false,
   session_arc_minutes: 30,
 };
@@ -192,7 +189,7 @@ describe("AutopilotControl", () => {
 
     expect(screen.getByText("Motion 31 s · Speech 1m 31s")).toBeInTheDocument();
     await act(async () => {
-      fireEvent.change(screen.getByLabelText("Motion change rate"), { target: { value: "5" } });
+      fireEvent.change(screen.getByLabelText("How often it changes"), { target: { value: "5" } });
     });
 
     expect(saveAutopilotPreferences).toHaveBeenCalledWith({
@@ -295,7 +292,7 @@ describe("AutopilotControl", () => {
       .mockImplementation(async (next) => ({ autopilot: next }));
     render(<AutopilotControl />);
 
-    const slider = screen.getByRole("slider", { name: "Motion change rate" });
+    const slider = screen.getByRole("slider", { name: "How often it changes" });
     fireEvent.change(slider, { target: { value: "4" } });
     fireEvent.change(slider, { target: { value: "7" } });
     expect(saveAutopilotPreferences).toHaveBeenCalledTimes(1);
@@ -363,13 +360,13 @@ describe("AutopilotControl", () => {
     expect(resetAutopilotArc).toHaveBeenCalledOnce();
   });
 
-  it("enables required session tracking with session buildup", async () => {
+  it("saves session buildup on its own", async () => {
     saveAutopilotPreferences.mockResolvedValue({
-      autopilot: { ...autopilotPreferences, session_tracking: true, session_arc: true },
+      autopilot: { ...autopilotPreferences, session_arc: true },
     });
     app.state = {
       modes: { mode: "autopilot" },
-      settings: { autopilot: { ...autopilotPreferences, session_tracking: false } },
+      settings: { autopilot: autopilotPreferences },
     };
     render(<AutopilotControl />);
     fireEvent.click(screen.getByRole("checkbox", { name: "Session buildup" }));
@@ -377,40 +374,44 @@ describe("AutopilotControl", () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(saveAutopilotPreferences).toHaveBeenCalledWith(expect.objectContaining({
-      session_tracking: true,
-      session_arc: true,
-    }));
+    expect(saveAutopilotPreferences).toHaveBeenCalledWith(expect.objectContaining({ session_arc: true }));
+    expect(saveAutopilotPreferences.mock.calls[0][0]).not.toHaveProperty("session_tracking");
   });
 
-  it("shows custom speech timing beside its selector without opening Advanced", () => {
+  it("offers four check-in choices and keeps an older custom choice visible", async () => {
+    saveAutopilotPreferences.mockImplementation(async (next) => ({ autopilot: next }));
     app.state = {
       modes: { mode: "autopilot" },
-      settings: {
-        autopilot: {
-          ...autopilotPreferences,
-          speech_cadence: "custom",
-        },
-      },
+      settings: { autopilot: autopilotPreferences },
     };
-    render(<AutopilotControl />);
+    const result = render(<AutopilotControl />);
+    const group = screen.getByRole("radiogroup", { name: "Spoken check-ins" });
+    for (const name of ["Off", "Quiet", "Natural", "Talkative"]) expect(within(group).getByRole("radio", { name })).toBeInTheDocument();
+    expect(within(group).queryByRole("radio", { name: "Custom" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("spinbutton", { name: "Speech minimum seconds" })).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("radio", { name: "Quiet" }));
+      await Promise.resolve();
+    });
+    expect(saveAutopilotPreferences).toHaveBeenCalledWith(expect.objectContaining({ speech_cadence: "quiet" }));
 
-    const advanced = screen.getByText("Advanced").closest("details");
-    const speechSelector = screen.getByRole("combobox", { name: "Spoken check-ins" });
-    const speechMinimum = screen.getByRole("spinbutton", { name: "Speech minimum seconds" });
-    expect(advanced).not.toContainElement(speechMinimum);
-    expect(speechSelector.parentElement?.nextElementSibling).toContainElement(speechMinimum);
-    expect(screen.getByText("Speech range")).toBeVisible();
+    app.state = {
+      modes: { mode: "autopilot" },
+      settings: { autopilot: { ...autopilotPreferences, speech_cadence: "custom" } },
+    };
+    result.rerender(<AutopilotControl />);
+    expect(screen.getByRole("radio", { name: "Custom" })).toBeChecked();
   });
 
-  it("renders Motion change rate as an explicit numbered 1-8 scale", () => {
+  it("renders How often it changes as an explicit numbered 1-8 scale", () => {
     app.state = {
       modes: { mode: "autopilot" },
       settings: { autopilot: autopilotPreferences },
     };
     render(<AutopilotControl />);
+    expect(screen.getByText("Guides how long Autopilot stays with a pattern and when it changes.")).toHaveClass("autopilot-timing-hint");
 
-    const slider = screen.getByRole("slider", { name: "Motion change rate" });
+    const slider = screen.getByRole("slider", { name: "How often it changes" });
     expect(slider).toHaveAttribute("aria-valuetext", "4");
     expect(screen.queryByText("1 = fewer · 7 = more")).not.toBeInTheDocument();
     expect(Array.from(
@@ -467,86 +468,19 @@ describe("AutopilotControl", () => {
     }));
   });
 
-  it("offers Auto timing for hosted routes in older snapshots", async () => {
-    const route = (kind: string) => ({
-      chat: { kind, provider: "compatible", model: "m", context_policy: "conversation", state: "configured" },
-      autopilot: { kind, provider: "compatible", model: "m", context_policy: "conversation", state: "configured" },
-    });
+  it("never offers the retired timing switches", () => {
     app.state = {
       modes: { mode: "autopilot" },
-      settings: { autopilot: autopilotPreferences, model_routing: route("local") },
+      settings: {
+        autopilot: autopilotPreferences,
+        model_routing: { autopilot: { kind: "hosted", features: { auto_timing: true, prepare_decisions: true } } },
+      },
     };
-    const result = render(<AutopilotControl />);
-    expect(screen.queryByRole("checkbox", { name: "Auto timing" })).not.toBeInTheDocument();
-
-    saveAutopilotPreferences.mockImplementation(async (next) => ({ autopilot: next }));
-    app.state = {
-      modes: { mode: "autopilot" },
-      settings: { autopilot: autopilotPreferences, model_routing: route("hosted") },
-    };
-    result.rerender(<AutopilotControl />);
-    const toggle = screen.getByRole("checkbox", { name: "Auto timing" });
-    expect(toggle).not.toBeChecked();
-    expect(screen.getByText("The model decides when motion changes, from 8 seconds to 5 minutes. This can use more requests.")).toHaveClass("autopilot-timing-hint");
-    expect(screen.getByText("Advanced").closest("details")).not.toContainElement(toggle);
-
-    await act(async () => {
-      fireEvent.click(toggle);
-      await Promise.resolve();
-    });
-    expect(saveAutopilotPreferences).toHaveBeenCalledWith(expect.objectContaining({
-      auto_motion_timing: true,
-      motion_change_level: 4,
-    }));
-  });
-
-  it("follows saved planner features for Advanced local models and hides them after downgrade", () => {
-    const update = (advanced: boolean) => {
-      app.state = { modes: { mode: "autopilot" }, settings: {
-        autopilot: { ...autopilotPreferences, auto_motion_timing: true, prepare_next_decision: true },
-        model_routing: {
-          chat: { kind: "hosted", features: { auto_timing: true, prepare_decisions: true } },
-          autopilot: { kind: "local", provider: "ollama", features: { auto_timing: advanced, prepare_decisions: advanced } },
-        },
-      } };
-    };
-    update(true);
-    const view = render(<AutopilotControl />);
-    expect(screen.getByRole("checkbox", { name: "Auto timing" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Prepare decisions early" })).toBeChecked();
-    update(false);
-    view.rerender(<AutopilotControl />);
-    expect(screen.queryByRole("checkbox", { name: "Auto timing" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("checkbox", { name: "Prepare decisions early" })).not.toBeInTheDocument();
-  });
-
-  it("offers prepared decisions for any external planner and saves the choice", async () => {
-    const route = (kind: string) => ({
-      chat: { kind: "local", provider: "llama_cpp", model: "m", context_policy: "conversation", state: "configured" },
-      autopilot: { kind, provider: "openai", model: "m", context_policy: "technical", state: "configured" },
-    });
-    app.state = {
-      modes: { mode: "autopilot" },
-      settings: { autopilot: autopilotPreferences, model_routing: route("local") },
-    };
-    const result = render(<AutopilotControl />);
-    expect(screen.queryByRole("checkbox", { name: "Prepare decisions early" })).not.toBeInTheDocument();
-
-    app.state = {
-      modes: { mode: "autopilot" },
-      settings: { autopilot: autopilotPreferences, model_routing: route("decisions") },
-    };
-    result.rerender(<AutopilotControl />);
-    expect(screen.queryByRole("checkbox", { name: "Auto timing" })).not.toBeInTheDocument();
-    const toggle = screen.getByRole("checkbox", { name: "Prepare decisions early" });
-    expect(toggle).toBeChecked();
-
-    saveAutopilotPreferences.mockImplementation(async (next) => ({ autopilot: next }));
-    await act(async () => {
-      fireEvent.click(toggle);
-      await Promise.resolve();
-    });
-    expect(saveAutopilotPreferences).toHaveBeenCalledWith(expect.objectContaining({ prepare_next_decision: false }));
+    render(<AutopilotControl />);
+    fireEvent.click(screen.getByText("Advanced"));
+    for (const name of ["Auto timing", "Prepare decisions early", "Adaptive motion timing", "Adaptive speech timing", "Session tracking"]) {
+      expect(screen.queryByRole("checkbox", { name })).not.toBeInTheDocument();
+    }
   });
 
   it("keeps counting down while a prepared decision waits for its boundary", () => {
@@ -609,24 +543,6 @@ describe("AutopilotControl", () => {
     expect(app.show).toHaveBeenCalledWith("Save failed", "error");
   });
 
-  it("clears the arc when session tracking is switched off", async () => {
-    saveAutopilotPreferences.mockResolvedValue({ autopilot: autopilotPreferences });
-    app.state = {
-      modes: { mode: "autopilot" },
-      settings: { autopilot: { ...autopilotPreferences, session_arc: true } },
-    };
-    render(<AutopilotControl />);
-    fireEvent.click(screen.getByText("Advanced"));
-    expect(screen.getByText("Shares timing and pace; limits stay unchanged.")).toHaveClass("autopilot-session-hint");
-    fireEvent.click(screen.getByRole("checkbox", { name: /Session tracking/ }));
-
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(saveAutopilotPreferences).toHaveBeenCalledWith(
-      expect.objectContaining({ session_tracking: false, session_arc: false }),
-    );
-  });
 });
 
 

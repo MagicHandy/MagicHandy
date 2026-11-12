@@ -58,12 +58,23 @@ also write a required private `basis` string before `edits`. The parser removes
 it before validation. It is never reply text, speech, memory or a motion
 command, and it grants no authority.
 
-The Autoblow Ultra counts as a linear stroker. A VacuGlide counts as a
-pace-only stroker ([ADR 0069](decisions/0069-autoblow-cloud-devices.md)): it
-follows the motion's pace and makes its own strokes. When it is the only
-stroker, every level is told to describe pace and rhythm, not depth or stroke
-length. The model has no control of its valves; only the person and the
-optional follower step them. The Handy-only prompt keeps its bytes.
+The Autoblow Ultra counts as a linear stroker.
+
+A VacuGlide counts as a pace-only stroker
+([ADR 0069](decisions/0069-autoblow-cloud-devices.md)): it makes its own
+strokes. Beside a Handy or an Ultra it follows their pace. When it is the only
+stroker, chat and Autopilot use the tempo contract
+([ADR 0071](decisions/0071-vacuglide-native-tempo.md)):
+
+- **Shapes.**
+  - Simple: steady, pause and routines.
+  - Intermediate: adds ramp, wave and pulse.
+  - Advanced: adds sequences.
+- **Air.** Air steps (−2..2) are offered only when the person allowed them,
+  within three per session.
+- **Stop.** A reply can still stop the session.
+
+The Handy-only prompt keeps its bytes.
 
 Replies and motion descriptions still assume a linear stroker, which is
 untrue when only the Coyote or a vibrator plays. The

@@ -9,10 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mapledaemon/MagicHandy/internal/companion"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
-	"github.com/mapledaemon/MagicHandy/internal/vacuglide"
 )
 
 // An inert review of the production sampler with each new owner's actual
@@ -53,13 +51,12 @@ func TestAutoblowMotionReview(t *testing.T) {
 				})
 				entry.ID = fmt.Sprintf("%s-%s-%03d", owner, name, speed)
 				entry.Name, entry.Group = entry.ID, owner
-				entry.Description = "Shared-engine points entering the cloud owner; not physical telemetry. Ultra sends leg targets; VacuGlide derives motor pace."
+				entry.Description = "Shared-engine points entering the cloud owner; not physical telemetry. Ultra sends leg targets; VacuGlide plays the engine's follow tempo (ADR 0071)."
 				entries = append(entries, entry)
 				if entry.Error != "" {
 					t.Errorf("%s: %s", entry.ID, entry.Error)
 					continue
 				}
-				var timeline companion.Timeline
 				for i, point := range entry.Wire {
 					if math.IsNaN(point.PositionPercent) || point.PositionPercent < 0 || point.PositionPercent > 100 {
 						t.Errorf("%s: invalid point %+v", entry.ID, point)
@@ -67,22 +64,21 @@ func TestAutoblowMotionReview(t *testing.T) {
 					if i > 0 && point.TimeMillis <= entry.Wire[i-1].TimeMillis {
 						t.Errorf("%s: time not increasing", entry.ID)
 					}
-					if err := timeline.Append([]companion.Point{{TimeMillis: point.TimeMillis, Position: point.PositionPercent}}); err != nil {
-						t.Fatal(err)
-					}
 				}
-				if owner == "vacuglide" {
-					renderer := vacuglide.NewRenderer(vacuglide.Profile{Scale: 1})
-					end, _ := timeline.End()
-					for at := int64(0); at <= min(end, 12000); at += 25 {
-						motor, covered := renderer.Speed(&timeline, float64(at))
-						if !covered || math.IsNaN(motor) || motor < 0 || motor > 100 {
-							t.Errorf("%s: motor=%v covered=%v", entry.ID, motor, covered)
+				if owner == "vacuglide" && len(entry.Wire) > 0 {
+					// The engine derives follow tempo from its plan; the owner
+					// maps it onto the default full Tempo range.
+					follower := &Engine{plan: NewMotionPlan("visual-review", target, settings, 0, 0, time.Unix(0, 0)), settings: settings}
+					end := min(entry.Wire[len(entry.Wire)-1].TimeMillis, 12000)
+					for _, level := range follower.followTempoLevelsLocked(0, end, tempoFollowSampleMillis) {
+						motor := 0.0
+						if level.LevelPercent >= 0.5 {
+							motor = 5 + 95*(math.Max(1, level.LevelPercent)-1)/99
 						}
-						motors[entry.ID] = append(motors[entry.ID], [2]float64{float64(at) / 1000, motor})
-					}
-					if motor, covered := renderer.Speed(&timeline, float64(end)+float64(time.Second.Milliseconds())); motor != 0 || covered {
-						t.Errorf("%s: output after coverage", entry.ID)
+						if math.IsNaN(motor) || motor < 0 || motor > 100 {
+							t.Errorf("%s: motor=%v", entry.ID, motor)
+						}
+						motors[entry.ID] = append(motors[entry.ID], [2]float64{float64(level.TimeMillis) / 1000, motor})
 					}
 				}
 			}

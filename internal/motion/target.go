@@ -149,16 +149,20 @@ type SoftAnchor struct {
 //
 //revive:disable-next-line:exported -- Phase 6 explicitly names this contract.
 type MotionTarget struct {
-	Vibration              *VibrationSpec `json:"vibration,omitempty"`
-	VibrationOnly          bool           `json:"vibration_only,omitempty"`
-	Label                  string         `json:"label,omitempty"`
-	Source                 string         `json:"source,omitempty"`
-	PatternID              PatternID      `json:"pattern_id,omitempty"`
-	PatternName            string         `json:"pattern_name,omitempty"`
-	ProgramID              string         `json:"program_id,omitempty"`
-	MediaID                string         `json:"media_id,omitempty"`
-	SpeedPercent           int            `json:"speed_percent"`
-	MediaSpeedLimitEnabled bool           `json:"media_speed_limit_enabled,omitempty"`
+	Vibration     *VibrationSpec `json:"vibration,omitempty"`
+	VibrationOnly bool           `json:"vibration_only,omitempty"`
+	// Tempo is the tempo channel (ADR 0071); nil follows the positions.
+	// TempoOnly runs drive only the devices that play tempo.
+	Tempo                  *TempoSpec `json:"tempo,omitempty"`
+	TempoOnly              bool       `json:"tempo_only,omitempty"`
+	Label                  string     `json:"label,omitempty"`
+	Source                 string     `json:"source,omitempty"`
+	PatternID              PatternID  `json:"pattern_id,omitempty"`
+	PatternName            string     `json:"pattern_name,omitempty"`
+	ProgramID              string     `json:"program_id,omitempty"`
+	MediaID                string     `json:"media_id,omitempty"`
+	SpeedPercent           int        `json:"speed_percent"`
+	MediaSpeedLimitEnabled bool       `json:"media_speed_limit_enabled,omitempty"`
 	// Derived compact geometry survives snapshots without copying media points.
 	MediaRoundingEffect MediaRoundingEffect `json:"-"`
 	AreaFocus           *AreaFocus          `json:"area_focus,omitempty"`
@@ -181,6 +185,12 @@ func NormalizeTarget(target MotionTarget, settings config.MotionSettings) Motion
 	target.PatternName = strings.TrimSpace(target.PatternName)
 	if target.Source == "" {
 		target.Source = "motion"
+	}
+	if target.TempoOnly {
+		// A native tempo run has no position recipe or Handy speed. Keep its
+		// identity and semantic channels without manufacturing slider motion.
+		return MotionTarget{Label: target.Label, Source: target.Source, TempoOnly: true,
+			Tempo: CloneTempoSpec(target.Tempo), Vibration: target.Vibration}
 	}
 	target.ProgramID = strings.TrimSpace(target.ProgramID)
 	target.MediaID = strings.TrimSpace(target.MediaID)

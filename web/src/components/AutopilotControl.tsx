@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { api } from "../api/client";
+import { tempoLeads } from "../api/devices";
 import type { AutopilotSettings, SessionArc } from "../api/types";
 import { t, translateKnown, type MessageKey } from "../i18n";
 import { PauseIcon, PlayIcon, RefreshIcon } from "../shell/icons";
@@ -247,9 +248,7 @@ export function AutopilotControl() {
   // Saved backend capabilities follow the planning role, independently of
   // provider. Kind fallback supports snapshots from earlier app versions.
   const plannerRoute = state?.settings?.model_routing?.autopilot;
-  const autoTimingAvailable = plannerRoute?.features?.auto_timing ?? plannerRoute?.kind === "hosted";
-  const prepareAvailable = plannerRoute?.features?.prepare_decisions ?? (plannerRoute?.kind === "hosted" || plannerRoute?.kind === "decisions");
-  const intermediatePlanningAvailable = plannerRoute?.features?.intermediate_planning === true;
+  const intermediatePlanningAvailable = plannerRoute?.features?.intermediate_planning === true && !tempoLeads(state?.settings);
   const resetBuildup = async () => {
     try {
       await api.resetAutopilotArc();
@@ -318,9 +317,8 @@ export function AutopilotControl() {
       {preferences && (
         <AutopilotPreferences
           value={preferences}
-          autoTimingAvailable={autoTimingAvailable}
-          prepareAvailable={prepareAvailable}
           intermediatePlanningAvailable={intermediatePlanningAvailable}
+          nativeTempo={tempoLeads(state?.settings)}
           disabled={locked}
           onSaved={() => refresh()}
           onError={(error) => show(errorMessage(error), "error")}
@@ -332,24 +330,21 @@ export function AutopilotControl() {
 
 function AutopilotPreferences({
   value,
-  autoTimingAvailable,
-  prepareAvailable,
   intermediatePlanningAvailable,
+  nativeTempo,
   disabled,
   onSaved,
   onError,
 }: {
   value: AutopilotSettings;
-  autoTimingAvailable: boolean;
-  prepareAvailable: boolean;
   intermediatePlanningAvailable: boolean;
+  nativeTempo: boolean;
   disabled: boolean;
   onSaved: () => void;
   onError: (error: unknown) => void;
 }) {
   const [draft, setDraft] = useState(value);
   const [saving, setSaving] = useState(false);
-  const speechLabelId = useId();
   const planningHintId = useId();
   const draftRef = useRef(value);
   const editingRef = useRef(false);
@@ -412,23 +407,6 @@ function AutopilotPreferences({
     void save({ ...draftRef.current, session_arc_minutes: minutes });
   }
 
-  function saveNumber(
-    key: "speech_min_seconds" | "speech_max_seconds",
-    raw: string,
-  ) {
-    const parsed = Number.parseInt(raw, 10);
-    const number = Number.isFinite(parsed) ? Math.min(600, Math.max(8, parsed)) : 8;
-    const next = { ...draftRef.current, [key]: number };
-    if (key.endsWith("min_seconds")) {
-      const maxKey = "speech_max_seconds";
-      next[maxKey] = Math.max(next[maxKey], number);
-    } else {
-      const minKey = "speech_min_seconds";
-      next[minKey] = Math.min(next[minKey], number);
-    }
-    void save(next);
-  }
-
   const controlsDisabled = disabled;
   return (
     <fieldset className="autopilot-preferences" disabled={controlsDisabled} aria-busy={saving || undefined}>
@@ -436,7 +414,7 @@ function AutopilotPreferences({
       <div className="control-row control-row-stack">
       <SetpointSlider
         className="autopilot-setpoints"
-        label={t("Motion change rate")}
+        label={t("How often it changes")}
         value={String(Math.min(8, Math.max(1, draft.motion_change_level || 4)))}
         options={motionChangeOptions}
         disabled={controlsDisabled}
@@ -446,6 +424,7 @@ function AutopilotPreferences({
           motion_change_level: Number(level),
         })}
       />
+      <p className="autopilot-timing-hint">{t("Guides how long Autopilot stays with a pattern and when it changes.")}</p>
       </div>
       {intermediatePlanningAvailable && (
         <div className="control-row control-row-stack autopilot-auto-timing">
@@ -463,78 +442,18 @@ function AutopilotPreferences({
           </p>
         </div>
       )}
-      {autoTimingAvailable && (
-        <div className="control-row control-row-stack autopilot-auto-timing">
-          <label className="toggle-line">
-            <span className="toggle">
-              <input
-                type="checkbox"
-                checked={draft.auto_motion_timing === true}
-                onChange={(event) => void save({ ...draftRef.current, auto_motion_timing: event.target.checked })}
-              />
-              <span className="track" aria-hidden="true" />
-            </span>
-            <span>{t("Auto timing")}</span>
-          </label>
-          <p className="autopilot-timing-hint">
-            {t("The model decides when motion changes, from 8 seconds to 5 minutes. This can use more requests.")}
-          </p>
-        </div>
-      )}
-      {prepareAvailable && (
-        <div className="control-row control-row-stack autopilot-auto-timing">
-          <label className="toggle-line">
-            <span className="toggle">
-              <input
-                type="checkbox"
-                checked={draft.prepare_next_decision !== false}
-                onChange={(event) => void save({ ...draftRef.current, prepare_next_decision: event.target.checked })}
-              />
-              <span className="track" aria-hidden="true" />
-            </span>
-            <span>{t("Prepare decisions early")}</span>
-          </label>
-          <p className="autopilot-timing-hint">
-            {t("Prepares the next decision while the current stretch plays, so changes land on time. Anything you say replaces it.")}
-          </p>
-        </div>
-      )}
-      <div className="control-row">
-        <span className="control-row-label" id={speechLabelId}>{t("Spoken check-ins")}</span>
-        <select
-          aria-labelledby={speechLabelId}
+      <div className="control-row control-row-stack">
+        <SegmentedChoice
+          className="autopilot-speech"
+          label={t("Spoken check-ins")}
           value={draft.speech_cadence}
+          options={speechOptions
+            .filter(([option]) => option !== "custom" || draft.speech_cadence === "custom")
+            .map(([option, label]) => ({ value: option, label: translateKnown(label) }))}
           disabled={controlsDisabled}
-          onChange={(event) => void save({ ...draftRef.current, speech_cadence: event.target.value as AutopilotSettings["speech_cadence"] })}
-        >
-          {speechOptions.map(([option, label]) => <option key={option} value={option}>{translateKnown(label)}</option>)}
-        </select>
+          onChange={(speech_cadence) => void save({ ...draftRef.current, speech_cadence })}
+        />
       </div>
-      {draft.speech_cadence === "custom" && (
-        <div className="control-row autopilot-window autopilot-window-range">
-          <span>{t("Speech range")}</span>
-          <input
-            type="number"
-            min={8}
-            max={600}
-            value={draft.speech_min_seconds}
-            aria-label={t("Speech minimum seconds")}
-            onChange={(event) => edit({ ...draftRef.current, speech_min_seconds: Number(event.target.value) })}
-            onBlur={(event) => saveNumber("speech_min_seconds", event.target.value)}
-          />
-          <span aria-hidden="true">-</span>
-          <input
-            type="number"
-            min={8}
-            max={600}
-            value={draft.speech_max_seconds}
-            aria-label={t("Speech maximum seconds")}
-            onChange={(event) => edit({ ...draftRef.current, speech_max_seconds: Number(event.target.value) })}
-            onBlur={(event) => saveNumber("speech_max_seconds", event.target.value)}
-          />
-          <span>{t("seconds")}</span>
-        </div>
-      )}
       <div className="control-row control-row-stack autopilot-buildup-setting">
         <label className="toggle-line">
           <span className="toggle">
@@ -543,17 +462,14 @@ function AutopilotPreferences({
               checked={draft.session_arc}
               onChange={(event) => {
                 const enabled = event.target.checked;
-                void save({
-                  ...draft,
-                  session_arc: enabled,
-                  session_tracking: enabled || draft.session_tracking,
-                });
+                void save({ ...draft, session_arc: enabled });
               }}
             />
             <span className="track" aria-hidden="true" />
           </span>
           <span>{t("Session buildup")}</span>
         </label>
+        <p className="autopilot-session-hint">{t("A visible finish target for Autopilot, not an automatic stop.")}</p>
         {draft.session_arc && (
           <div className="autopilot-window">
             <span>{t("Buildup duration")}</span>
@@ -574,56 +490,12 @@ function AutopilotPreferences({
         <SegmentedChoice
           className="autopilot-authority"
           label={t("Speech motion")}
-          value={draft.speech_motion_authority}
-          options={authorityOptions.map(([option, label]) => ({ value: option, label: translateKnown(label) }))}
+          value={nativeTempo && draft.speech_motion_authority === "style_only" ? "chat_only" : draft.speech_motion_authority}
+          options={authorityOptions.filter(([option]) => !nativeTempo || option !== "style_only").map(([option, label]) => ({ value: option, label: translateKnown(label) }))}
           disabled={controlsDisabled}
           onChange={(speech_motion_authority) => void save({ ...draftRef.current, speech_motion_authority })}
         />
-        <label className="toggle-line">
-          <span className="toggle">
-            <input
-              type="checkbox"
-              checked={draft.adaptive_motion_timing}
-              onChange={(event) => void save({ ...draft, adaptive_motion_timing: event.target.checked })}
-            />
-            <span className="track" aria-hidden="true" />
-          </span>
-          <span>{t("Adaptive motion timing")}</span>
-        </label>
-        <label className="toggle-line">
-          <span className="toggle">
-            <input
-              type="checkbox"
-              checked={draft.adaptive_speech_timing}
-              disabled={draft.speech_cadence === "off"}
-              onChange={(event) => void save({ ...draft, adaptive_speech_timing: event.target.checked })}
-            />
-            <span className="track" aria-hidden="true" />
-          </span>
-          <span>{t("Adaptive speech timing")}</span>
-        </label>
-        <label className="toggle-line">
-          <span className="toggle">
-            <input
-              type="checkbox"
-              checked={draft.session_tracking}
-              onChange={(event) => {
-                const enabled = event.target.checked;
-                // The arc is a reading of session progress, so it cannot outlive
-                // the tracking that produces it. Clearing both together keeps the
-                // UI from offering a combination the backend rejects.
-                void save({
-                  ...draft,
-                  session_tracking: enabled,
-                  session_arc: enabled ? draft.session_arc : false,
-                });
-              }}
-            />
-            <span className="track" aria-hidden="true" />
-          </span>
-          <span>{t("Session tracking")}</span>
-        </label>
-        <p className="autopilot-session-hint">{t("Shares timing and pace; limits stay unchanged.")}</p>
+        <p className="autopilot-session-hint">{t("Whether spoken check-ins may change the motion, or only talk about it.")}</p>
       </details>
     </fieldset>
   );

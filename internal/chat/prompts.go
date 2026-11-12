@@ -271,6 +271,9 @@ type Capabilities struct {
 	// reconsideration horizon. Only hosted planning routes set it: small local
 	// models settle on one value, so their cadence stays backend-sampled.
 	AutoTiming bool
+	// AutoTimingFloor is the shortest stretch such a planner may ask for, in
+	// seconds, from the person's change rate; zero uses the scheduler minimum.
+	AutoTimingFloor int
 }
 
 // MotionHolder names what owns the device during a chat-only turn.

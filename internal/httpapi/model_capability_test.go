@@ -24,7 +24,6 @@ func TestAdvancedLocalAutopilotUsesTimingAndRejectsStalePreparation(t *testing.T
 		settings.LLM.Provider, settings.LLM.LocalCapabilityLevel = config.LLMProviderOllama, config.ModelCapabilityAdvanced
 		settings.LLM.LlamaCPPContextSize, settings.LLM.MaxOutputTokens = 65536, 1024
 		settings.LLM.MotionGenerationMode = config.LLMMotionModeCreativeV2
-		settings.Autopilot.AutoMotionTiming = true
 		return settings
 	})
 	flow := chat.FreshCreativeV2Score(30)
@@ -84,7 +83,6 @@ func TestLocalTierReachesChatAndPlanningCapabilities(t *testing.T) {
 			settings.LLM.LocalCapabilityLevel = level
 			settings.LLM.LlamaCPPContextSize = config.MinimumLocalContext(level)
 			settings.LLM.MaxOutputTokens = config.MinimumLocalOutput(level)
-			settings.Autopilot.AutoMotionTiming, settings.Autopilot.PrepareNextDecision = true, true
 			caps := chatCapabilities(settings.LLM, nil)
 			// Advanced (no reasoning) is the Advanced contract plus its planning note.
 			advanced := level == config.ModelCapabilityAdvanced || level == config.ModelCapabilityAdvancedNoReasoning

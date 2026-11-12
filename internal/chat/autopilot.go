@@ -27,6 +27,8 @@ type AutopilotContext struct {
 	// conversation, persona or memory. It replaces guidance that depends on the
 	// person's words with what the motion history alone can say.
 	Technical bool
+	// TempoOnly selects the native vocabulary instead of the saved position mode.
+	TempoOnly bool
 	// LastHumanSecondsAgo, when known, is how long ago the person last spoke.
 	// Continuous planning uses it to judge how long a slow stretch has lasted.
 	LastHumanSecondsAgo *int
@@ -72,7 +74,10 @@ type AutopilotContext struct {
 	// AutoTiming asks a hosted planner for next_check_seconds in place of the
 	// soon/normal/later category. RecentCheckSeconds lists its recent choices,
 	// oldest first, as observations.
-	AutoTiming         bool
+	AutoTiming bool
+	// AutoTimingFloor is the shortest stretch the planner may choose, from
+	// the person's change rate.
+	AutoTimingFloor    int
 	RecentCheckSeconds []int
 	// SessionTracking gates the session facts below. When false they are
 	// omitted from the prompt entirely rather than rendered as zeros, so the model
@@ -88,6 +93,9 @@ type AutopilotContext struct {
 	// never described, so the model cannot act on progress the user was not shown.
 	ArcEnabled bool
 	ArcPercent int
+	// ArcMinutes is the buildup's configured length. With the percent it gives
+	// the time left to the finish the person set.
+	ArcMinutes int
 }
 
 // writeSessionProgress renders the backend-owned session facts. They are stated
@@ -123,22 +131,50 @@ func writeSessionProgress(builder *strings.Builder, context AutopilotContext) {
 		builder.WriteString("\n")
 	}
 	if context.ArcEnabled {
-		fmt.Fprintf(builder,
-			"Session buildup: %d%% of the configured active-session duration, and the user can see this progress. Let it inform pacing within the allowed speed range. The clock and allowed range never move because of your response.\n",
-			context.ArcPercent)
+		writeSessionBuildup(builder, context.ArcPercent, context.ArcMinutes)
 	}
+}
+
+// writeSessionBuildup states the buildup as the finish the person set: how far
+// along it is, how long is left, and that the strongest stretch belongs at the
+// end. It positions intent inside the allowed range and never widens it.
+func writeSessionBuildup(builder *strings.Builder, percent, minutes int) {
+	percent = min(100, max(0, percent))
+	fmt.Fprintf(builder, "Session buildup: %d%%", percent)
+	if minutes > 0 {
+		fmt.Fprintf(builder, " of the %d-minute session the user set", minutes)
+		if left := (100 - percent) * minutes * 60 / 100; left > 0 {
+			fmt.Fprintf(builder, ", about %s left", formatSessionSpan(left))
+		}
+	}
+	builder.WriteString(", and the user can see this progress. ")
+	if percent >= 100 {
+		builder.WriteString("The finish the user set has arrived: keep the strongest stretch going within the allowed speed range until they change it.")
+	} else {
+		builder.WriteString("It is the user's finish target: build with it so the strongest stretch arrives as it fills, within the allowed speed range.")
+	}
+	builder.WriteString(" The clock and allowed range never move because of your response.\n")
 }
 
 func formatSessionSpan(seconds int) string {
 	if seconds < 90 {
 		return fmt.Sprintf("%d seconds", seconds)
 	}
-	return fmt.Sprintf("%d minutes", (seconds+30)/60)
+	if seconds%60 == 0 {
+		return fmt.Sprintf("%d minutes", seconds/60)
+	}
+	if seconds < 120 {
+		return fmt.Sprintf("1 minute %d seconds", seconds%60)
+	}
+	return fmt.Sprintf("%d minutes %d seconds", seconds/60, seconds%60)
 }
 
 // AutopilotMotionMessage renders one motion-planning turn. Its strict model
 // contract has no reply field; the independent speech clock owns spoken lines.
 func AutopilotMotionMessage(context AutopilotContext) string {
+	if context.TempoOnly {
+		return tempoAutopilotMessage(context)
+	}
 	if context.MotionMode == MotionModeLayered {
 		context.Intermediate = false // match the autonomous Layered grammar
 	}

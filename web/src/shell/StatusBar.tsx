@@ -2,15 +2,12 @@ import { useState } from "react";
 import { t, translateKnown } from "../i18n";
 // Compact status readouts, run timer, mini visualizer, and the shell-level
 // disclosures. Motion controls remain in their routed workspaces.
-import { LiveVibrationReadout, showsVibration } from "../components/VibrationReadout";
-import { MotionVisualizer } from "../components/MotionVisualizer";
-import { visualizerDeviceFor } from "../components/LiveMotionVisualizer";
+import { NowPlayingPill } from "../components/NowPlaying";
 import { useAppState, useMotionState } from "../state/app-state";
-import { formatClock } from "../util/format";
 import { DevicePanel } from "./DevicePanel";
 import { NotificationCenter } from "./NotificationCenter";
 import { useTakeControl } from "./useTakeControl";
-import { ClockIcon, TakeControlIcon } from "./icons";
+import { TakeControlIcon } from "./icons";
 import type { AuthenticationStatus } from "../api/types";
 import { ControlIdentitySelector } from "./ControlIdentitySelector";
 
@@ -65,7 +62,6 @@ export function StatusBar({
   }
   let phaseState = "idle";
   let phaseLabel = motion?.available === false ? "unavailable" : "idle";
-  let phaseLabelIsUserAuthored = false;
   if (awaitingState) {
     phaseState = "pending";
     phaseLabel = "state pending";
@@ -80,12 +76,7 @@ export function StatusBar({
     phaseLabel = "motion starting";
   } else if (engine?.running) {
     phaseState = "running";
-    if (engine.target?.label) {
-      phaseLabel = engine.target.label;
-      phaseLabelIsUserAuthored = true;
-    } else {
-      phaseLabel = "running";
-    }
+    phaseLabel = "running";
   }
   const coreState = awaitingState && backendOnline ? "pending" : backendOnline ? "ok" : "error";
   const coreLabel = awaitingState && backendOnline ? "core starting" : backendOnline ? "core ok" : "core offline";
@@ -93,10 +84,12 @@ export function StatusBar({
   return (
     <div className="status-bar" role="region" aria-label={t("Status")}>
       <div className="status-readouts">
-        <span className="status-readout">
-          <span className="status-dot" data-state={phaseState} />
-          <span className="status-text">{phaseLabelIsUserAuthored ? phaseLabel : translateKnown(phaseLabel)}</span>
-        </span>
+        {awaitingState ? (
+          <span className="status-readout">
+            <span className="status-dot" data-state={phaseState} />
+            <span className="status-text">{translateKnown(phaseLabel)}</span>
+          </span>
+        ) : <NowPlayingPill />}
         <span className="status-divider" aria-hidden="true" />
         {state?.motion_simulated && (
           <span className="status-readout" title={t("Simulation is active. Motion commands go to the simulator; connected devices will not move.")}>
@@ -114,11 +107,6 @@ export function StatusBar({
             <span className="status-text">{voiceCrashed ? t("voice crashed") : t("voice not ready")}</span>
           </span>
         )}
-        <span className="status-divider" aria-hidden="true" />
-        <span className="status-timer">
-          <ClockIcon />
-          <span className="value">{formatClock(engine?.running_ms)}</span>
-        </span>
       </div>
       {state && (state.capabilities?.control === false ? (
         <span className="status-readout status-readout-observer" title={t("Ask the administrator for a control permission.")}><span className="status-dot" data-state="idle" /><span className="status-text">{t("Observer")}</span></span>
@@ -149,7 +137,6 @@ export function StatusBar({
           <span className="status-text status-controller-short" aria-hidden="true">{t("You")}</span>
         </span>
       ))}
-      {showsVibration(state?.settings, motion) ? <LiveVibrationReadout mini /> : <MotionVisualizer motion={motion} mini device={visualizerDeviceFor(state?.settings)} />}
       {authenticationStatus?.authenticated && authenticationStatus.control_identities?.length && onLogout && onSelectControlIdentity ? (
         <ControlIdentitySelector
           identities={authenticationStatus.control_identities}

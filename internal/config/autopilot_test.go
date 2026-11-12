@@ -14,7 +14,7 @@ func TestDefaultAutopilotSettingsUseIndependentNaturalCadences(t *testing.T) {
 		settings.SpeechMotionAuthority != AutopilotSpeechMotionChatOnly {
 		t.Fatalf("defaults = %+v", settings)
 	}
-	if !settings.AdaptiveSpeechTiming || !settings.AdaptiveMotionTiming {
+	if settings.SessionArc {
 		t.Fatalf("adaptive timing defaults = %+v, want both enabled", settings)
 	}
 	speechMin, speechMax, enabled := settings.SpeechWindow()
@@ -110,19 +110,13 @@ func TestValidateAutopilotSettingsRejectsUnsafeWindows(t *testing.T) {
 	}
 }
 
-// Two switches, and the arc cannot exist without the tracking that produces it.
-// Rejecting the combination keeps the settings document from expressing a state
-// the runtime would have to silently ignore.
-func TestSessionArcRequiresSessionTracking(t *testing.T) {
+// The buildup no longer needs a tracking switch: session facts always reach
+// the planner, so the arc stands on its own.
+func TestSessionArcStandsOnItsOwn(t *testing.T) {
 	settings := DefaultAutopilotSettings()
 	settings.SessionArc = true
-	settings.SessionTracking = false
-	if err := validateAutopilotSettings(settings); err == nil {
-		t.Fatal("arc without tracking should be rejected")
-	}
-	settings.SessionTracking = true
 	if err := validateAutopilotSettings(settings); err != nil {
-		t.Fatalf("arc with tracking should be accepted: %v", err)
+		t.Fatalf("the buildup alone was rejected: %v", err)
 	}
 }
 
@@ -143,10 +137,9 @@ func TestSessionBuildupAcceptsAnyPositivePracticalDuration(t *testing.T) {
 	}
 }
 
-// A bool cannot tell "absent" from "explicitly false", so a document written
-// before this field group existed would have run with tracking off while the
-// documented default is on. The arc length doubles as the presence marker.
-func TestPreArcDocumentAdoptsTheTrackingDefault(t *testing.T) {
+// A document written before the buildup existed adopts its length, and the
+// buildup itself stays the person's choice.
+func TestPreArcDocumentAdoptsTheBuildupDefaults(t *testing.T) {
 	stored := AutopilotSettings{
 		SpeechCadence:         AutopilotSpeechNatural,
 		MotionCadence:         AutopilotMotionNatural,
@@ -157,9 +150,6 @@ func TestPreArcDocumentAdoptsTheTrackingDefault(t *testing.T) {
 		MotionMaxSeconds:      60,
 	}
 	resolved := applyMissingAutopilotDefaults(stored, DefaultAutopilotSettings())
-	if !resolved.SessionTracking {
-		t.Fatal("a pre-arc document should adopt the tracking default")
-	}
 	if resolved.SessionArcMinutes != AutopilotDefaultArcMinutes {
 		t.Fatalf("arc minutes = %d, want the default", resolved.SessionArcMinutes)
 	}
@@ -168,58 +158,38 @@ func TestPreArcDocumentAdoptsTheTrackingDefault(t *testing.T) {
 	}
 }
 
-// Once the group has been saved once, an explicit false must survive.
-func TestExplicitTrackingOffIsPreserved(t *testing.T) {
-	stored := DefaultAutopilotSettings()
-	stored.SessionTracking = false
-	stored.SessionArc = false
-	resolved := applyMissingAutopilotDefaults(stored, DefaultAutopilotSettings())
-	if resolved.SessionTracking {
-		t.Fatal("an explicit tracking-off choice was overwritten by the default")
-	}
-}
-
-// Auto timing hands the horizon to a hosted planner, so it stays an explicit
-// choice: off by default, kept when saved, and never dropped by backfill.
-func TestAutoMotionTimingIsOptInAndSurvivesNormalization(t *testing.T) {
-	if DefaultAutopilotSettings().AutoMotionTiming {
-		t.Fatal("auto timing must default off")
-	}
-	stored := DefaultAutopilotSettings()
-	stored.AutoMotionTiming = true
-	if resolved := applyMissingAutopilotDefaults(stored, DefaultAutopilotSettings()); !resolved.AutoMotionTiming {
-		t.Fatal("backfill dropped an explicit auto timing choice")
-	}
-	if err := validateAutopilotSettings(stored); err != nil {
-		t.Fatalf("auto timing settings rejected: %v", err)
-	}
-	encoded, err := json.Marshal(stored)
-	if err != nil || !strings.Contains(string(encoded), `"auto_motion_timing":true`) {
-		t.Fatalf("encoded settings = %s, %v", encoded, err)
-	}
-	if AutopilotAutoTimingMinSeconds != AutopilotMinimumIntervalSeconds ||
-		AutopilotAutoTimingMaxSeconds != AutopilotMaximumMotionSeconds {
-		t.Fatalf("auto timing bounds = %d..%d", AutopilotAutoTimingMinSeconds, AutopilotAutoTimingMaxSeconds)
-	}
-}
-
-// Preparing changes only when an external planner is asked, so it is on by
-// default, including for documents saved before the field existed.
-func TestPrepareNextDecisionDefaultsOnForOldDocuments(t *testing.T) {
-	if !DefaultAutopilotSettings().PrepareNextDecision {
-		t.Fatal("prepared decisions must default on")
-	}
-	legacy := []byte(`{"version":2,"autopilot":{"speech_cadence":"natural","motion_cadence":"scaled","motion_change_level":5,"speech_motion_authority":"chat_only","session_arc_minutes":30}}`)
-	settings, _, err := loadSettingsFromBytes(legacy)
+// The retired timing switches load from older documents without effect: the
+// model's timing answer, prepared decisions and session facts are always on.
+func TestRetiredTimingSwitchesAreIgnored(t *testing.T) {
+	stored := []byte(`{"version":2,"autopilot":{"speech_cadence":"natural","motion_cadence":"scaled","motion_change_level":5,"speech_motion_authority":"chat_only","session_arc_minutes":30,"adaptive_motion_timing":false,"adaptive_speech_timing":false,"auto_motion_timing":false,"prepare_next_decision":false,"session_tracking":false}}`)
+	settings, _, err := loadSettingsFromBytes(stored)
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if !settings.Autopilot.PrepareNextDecision || settings.Autopilot.MotionChangeLevel != 5 {
-		t.Fatalf("legacy autopilot settings = %+v", settings.Autopilot)
+	if settings.Autopilot.MotionChangeLevel != 5 {
+		t.Fatalf("autopilot settings = %+v", settings.Autopilot)
 	}
-	explicit := []byte(`{"version":2,"autopilot":{"speech_cadence":"natural","motion_cadence":"scaled","motion_change_level":5,"speech_motion_authority":"chat_only","session_arc_minutes":30,"prepare_next_decision":false}}`)
-	if settings, _, err := loadSettingsFromBytes(explicit); err != nil || settings.Autopilot.PrepareNextDecision {
-		t.Fatalf("explicit off was not kept: %+v, %v", settings.Autopilot, err)
+	encoded, _ := json.Marshal(settings.Autopilot)
+	for _, retired := range []string{"adaptive_motion_timing", "adaptive_speech_timing", "auto_motion_timing", "prepare_next_decision", "session_tracking"} {
+		if strings.Contains(string(encoded), retired) {
+			t.Fatalf("%s is still saved: %s", retired, encoded)
+		}
+	}
+}
+
+// A planner that chooses its own timing may not ask again sooner than half the
+// shortest ordinary stretch at the person's change rate.
+func TestAutoTimingFloorFollowsTheChangeRate(t *testing.T) {
+	settings := DefaultAutopilotSettings()
+	for level, want := range map[int]int{1: 45, 4: 10, 8: AutopilotAutoTimingMinSeconds} {
+		settings.MotionChangeLevel = level
+		minimum, _ := settings.MotionWindow()
+		if got := settings.AutoTimingFloorSeconds(); got != max(want, minimum/2, AutopilotAutoTimingMinSeconds) || got < AutopilotAutoTimingMinSeconds {
+			t.Fatalf("level %d floor = %d (window minimum %d)", level, got, minimum)
+		}
+	}
+	if AutopilotAutoTimingMaxSeconds != AutopilotMaximumMotionSeconds {
+		t.Fatalf("auto timing ceiling = %d", AutopilotAutoTimingMaxSeconds)
 	}
 }
 

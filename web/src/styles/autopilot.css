@@ -68,6 +68,11 @@
   padding: 0;
   border: 0;
 }
+
+/* Four speech choices stay balanced in the compact chat control column. */
+.autopilot-speech .segmented-choice {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 .autopilot-setpoints {
   padding-block: 2px;
 }

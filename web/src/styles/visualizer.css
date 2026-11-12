@@ -226,15 +226,49 @@
   }
 }
 
-/* Scalar outputs show backend commands, never a fictitious slider position. */
-.vibration-readout { display: grid; gap: 8px; min-width: 0; }
-.vibration-readout > small { color: var(--muted); }
-.vibration-motors { display: grid; gap: 6px; }
-.vibration-motor { display: flex; align-items: center; gap: 8px; }
-.vibration-motor meter { width: 100%; min-width: 48px; height: 14px; accent-color: var(--accent); }
-.vibration-motor output { min-width: 3ch; font-variant-numeric: tabular-nums; color: var(--muted); }
-.vibration-readout.mini { display: flex; align-items: center; gap: 8px; font-size: 11px; }
-.vibration-readout.mini .vibration-motors { gap: 0; }
-.vibration-readout.mini meter { width: 48px; }
-.vibration-motor meter::-webkit-meter-bar { background: var(--panel); border: 1px solid var(--border); border-radius: 2px; }
-.vibration-motor meter::-webkit-meter-optimum-value { background: var(--accent); }
+/* The VacuGlide's Play card (ADR 0071). */
+.tempo-controls { display: grid; gap: 10px; }
+.tempo-routines .btn[aria-pressed="true"] { border-color: var(--accent); }
+
+/* Now playing (ADR 0071): one status shape for every device mix. Commanded
+   values only; the state dot uses the safety colours' meanings. */
+.now-playing { display: grid; gap: 8px; min-width: 0; }
+.now-line { display: flex; align-items: center; gap: 8px; font-size: var(--fs-hint); color: var(--muted); }
+.now-state { display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
+.now-source::before { content: "·"; margin-inline-end: 8px; color: var(--faint); }
+.now-elapsed { margin-inline-start: auto; font-family: var(--font-mono); }
+.now-dot { inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+.now-dot[data-state="playing"] { background: var(--ok); }
+.now-dot[data-state="paused"], .now-dot[data-state="starting"], .now-dot[data-state="stopping"] { background: var(--warn); }
+.now-dot[data-state="unavailable"] { background: var(--danger); }
+.now-title { display: grid; gap: 2px; min-width: 0; }
+.now-title strong { font-size: var(--fs-title); font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
+.now-title small { font-size: var(--fs-hint); color: var(--muted); }
+.now-bar-row { display: flex; justify-content: space-between; align-items: baseline; font-size: var(--fs-label); }
+.now-bar-row output { font-family: var(--font-mono); color: var(--text); }
+.now-bar { inline-size: 100%; block-size: 10px; accent-color: var(--accent); }
+.now-bar::-webkit-meter-bar { background: var(--bg-inset); border: 1px solid var(--line); border-radius: 5px; }
+.now-bar::-webkit-meter-optimum-value { background: var(--accent); border-radius: 4px; }
+.now-ahead { display: flex; align-items: flex-end; gap: 3px; block-size: 28px; }
+.now-ahead span { flex: 1; min-block-size: 2px; background: var(--accent); opacity: 0.55; border-radius: 1px; }
+.now-devices { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.now-devices li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; border-radius: 8px; background: var(--bg-inset); border: 1px solid var(--line); font-size: var(--fs-label); }
+.now-devices small { color: var(--muted); }
+.now-devices output { font-family: var(--font-mono); color: var(--muted); }
+.now-honest { margin: 0; font-size: var(--fs-hint); color: var(--muted); }
+.now-details { font-size: var(--fs-hint); color: var(--muted); }
+.now-details summary { cursor: pointer; }
+.now-details p { margin: 6px 0 0; }
+.now-pill { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--fs-hint); color: var(--muted); }
+.now-pill-title { color: var(--text); max-inline-size: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now-pill-bar { inline-size: 72px; block-size: 6px; border-radius: 3px; background: var(--bg-inset); border: 1px solid var(--line); overflow: hidden; }
+.now-pill-bar span { display: block; block-size: 100%; background: var(--accent); }
+.now-pill output, .now-pill-time { font-family: var(--font-mono); }
+.tempo-play { display: grid; gap: 10px; }
+.tempo-play-hint { margin: 0; font-size: var(--fs-hint); color: var(--muted); }
+.tempo-routines { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.tempo-stepper { display: inline-flex; align-items: center; gap: 8px; }
+.tempo-stepper .btn { inline-size: 36px; padding: 0; justify-content: center; }
+.tempo-stepper output { min-inline-size: 2.5ch; text-align: center; font-family: var(--font-mono); }
+.device-panel-group { display: grid; }
+.device-panel-group-title { margin: 0; padding: 10px 16px 6px; font-size: var(--fs-micro); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }

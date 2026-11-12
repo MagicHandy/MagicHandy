@@ -41,8 +41,11 @@ func (e *Engine) dispatchThrough(
 	}
 	e.mu.Lock()
 	appendCommand.VibrationOnly = e.plan.Target.VibrationOnly
+	appendCommand.TempoOnly = e.plan.Target.TempoOnly
 	appendCommand.SpeedPercent = e.plan.Target.SpeedPercent
-	appendCommand.Vibration = e.vibrationFrameLocked(e.estimatedPlaybackMillisLocked(e.now()))
+	playback := e.estimatedPlaybackMillisLocked(e.now())
+	appendCommand.Vibration = e.vibrationFrameLocked(playback)
+	appendCommand.Tempo = e.tempoFrameLocked(playback, points)
 	e.mu.Unlock()
 	result, err := e.transport.AppendPoints(commandCtx, appendCommand)
 	cleanup()
@@ -175,7 +178,7 @@ func (e *Engine) setStrokeWindowCommand(
 	return e.finishRecovery(ctx, "recovery_"+reason, message, recovery)
 }
 
-func (e *Engine) play(ctx context.Context, runEpoch uint64) error {
+func (e *Engine) play(ctx context.Context, runEpoch uint64, resume bool) error {
 	e.commandMu.Lock()
 	defer e.commandMu.Unlock()
 	streamID, err := e.currentStreamID(runEpoch)
@@ -188,9 +191,9 @@ func (e *Engine) play(ctx context.Context, runEpoch uint64) error {
 	}
 	defer cleanup()
 	e.mu.Lock()
-	only := e.plan.Target.VibrationOnly
+	only, tempoOnly := e.plan.Target.VibrationOnly, e.plan.Target.TempoOnly
 	e.mu.Unlock()
-	playCommand := transport.PlayCommand{StreamID: streamID, VibrationOnly: only}
+	playCommand := transport.PlayCommand{StreamID: streamID, VibrationOnly: only, TempoOnly: tempoOnly, Resume: resume}
 	result, err := e.transport.Play(commandCtx, playCommand)
 	e.recordTransportResult("play", nil, transport.Command{
 		Kind:       transport.CommandKindPointsPlay,

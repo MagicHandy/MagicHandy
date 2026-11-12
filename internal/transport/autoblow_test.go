@@ -3,7 +3,6 @@ package transport
 import (
 	"context"
 	"errors"
-	"math"
 	"sync"
 	"testing"
 	"time"
@@ -104,15 +103,38 @@ func sweep(legs int, leg int64) []TimedPoint {
 	return points
 }
 
+// playTempoLevel is the tempo play sends beside positions: 34 plays the
+// VacuGlide at 37% across its full range.
+const playTempoLevel = 34
+
 func play(t *testing.T, owner Transport, points []TimedPoint) {
 	t.Helper()
+	tempo := steadyTempo(playTempoLevel, points[0].TimeMillis, points[len(points)-1].TimeMillis)
+	playFrames(t, owner, points, tempo)
+}
+
+func playFrames(t *testing.T, owner Transport, points []TimedPoint, tempo *TempoFrame) {
+	t.Helper()
 	ctx := context.Background()
-	if _, err := owner.AppendPoints(ctx, AppendPointsCommand{StreamID: "s1", Points: points}); err != nil {
+	if _, err := owner.AppendPoints(ctx, AppendPointsCommand{StreamID: "s1", Points: points, Tempo: tempo}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := owner.Play(ctx, PlayCommand{StreamID: "s1"}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// steadyTempo is one engine tempo frame holding level over [from, to].
+func steadyTempo(level float64, from, to int64) *TempoFrame {
+	return tempoSteps(from, to, func(int64) float64 { return level })
+}
+
+func tempoSteps(from, to int64, level func(at int64) float64) *TempoFrame {
+	frame := &TempoFrame{Revision: 1}
+	for at := from; at <= to; at += 100 {
+		frame.Points = append(frame.Points, TimedLevel{TimeMillis: at, LevelPercent: level(at)})
+	}
+	return frame
 }
 
 func TestUltraSendsOneGotoPerLegAndNothingAfterStop(t *testing.T) {
@@ -179,14 +201,14 @@ func TestUltraReportsStarvationWhenTheFrameRunsOut(t *testing.T) {
 	waitFor(t, "starvation", func() bool { return session.Diagnostics().PlaybackState == "starved" })
 }
 
-func TestVacuGlideFollowsPaceAndStopsTheMotor(t *testing.T) {
+func TestVacuGlidePlaysTempoAcrossItsRangeAndStops(t *testing.T) {
 	f := newAutoblowFixture(t)
-	device := connectedVacuGlide(t, f, AutoblowConfig{SpeedScale: 1})
+	device := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 5, TempoMaxPercent: 100})
 	session, _ := device.MotionTransport()
-	// 80 units every 400 ms is 200 per second: a third of full motor speed.
+	// Tempo 34 is a third of the way up the full range: 5 + 95 * 33/99 = 36.7.
 	play(t, session, sweep(30, 400))
-	waitFor(t, "the motor to settle near a third", func() bool { return math.Abs(f.sim.VacuGlideSpeed()-33) <= 3 })
-	if status := device.Status(); status.CommandedPercent == nil || math.Abs(*status.CommandedPercent-33) > 3 {
+	waitFor(t, "the motor to reach 37 percent", func() bool { return f.sim.VacuGlideSpeed() == 37 })
+	if status := device.Status(); status.CommandedPercent == nil || *status.CommandedPercent != 37 {
 		t.Fatalf("commanded = %+v", status.CommandedPercent)
 	}
 	if _, err := session.Stop(context.Background(), StopCommand{Reason: "test"}); err != nil {
@@ -197,19 +219,130 @@ func TestVacuGlideFollowsPaceAndStopsTheMotor(t *testing.T) {
 	}
 }
 
-func TestVacuGlideStopsWhenTheFrameHolds(t *testing.T) {
+func TestVacuGlideTempoRangeBoundsTheMotor(t *testing.T) {
+	for _, test := range []struct {
+		level, want float64
+	}{{100, 60}, {1, 20}, {0.2, 0}} {
+		f := newAutoblowFixture(t)
+		device := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 20, TempoMaxPercent: 60})
+		session, _ := device.MotionTransport()
+		playFrames(t, session, sweep(30, 400), steadyTempo(test.level, 0, 12000))
+		if test.want == 0 {
+			time.Sleep(300 * time.Millisecond)
+			if speed := f.sim.VacuGlideSpeed(); speed != 0 {
+				t.Fatalf("tempo %.1f ran the motor at %.0f", test.level, speed)
+			}
+			continue
+		}
+		waitFor(t, "the bounded speed", func() bool { return f.sim.VacuGlideSpeed() == test.want })
+	}
+}
+
+func TestVacuGlideStopsForATempoPause(t *testing.T) {
 	f := newAutoblowFixture(t)
-	device := connectedVacuGlide(t, f, AutoblowConfig{SpeedScale: 1})
+	device := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 5, TempoMaxPercent: 100})
 	session, _ := device.MotionTransport()
-	points := append(sweep(4, 300), TimedPoint{TimeMillis: 4000, PositionPercent: 10}, TimedPoint{TimeMillis: 9000, PositionPercent: 10})
-	play(t, session, points)
+	tempo := tempoSteps(0, 9000, func(at int64) float64 {
+		if at < 1500 {
+			return 40
+		}
+		return 0
+	})
+	playFrames(t, session, sweep(20, 400), tempo)
 	waitFor(t, "the motor to start", func() bool { return f.sim.VacuGlideSpeed() > 0 })
-	waitFor(t, "the motor to stop for the hold", func() bool { return f.sim.VacuGlideSpeed() == 0 })
+	waitFor(t, "the motor to stop for the pause", func() bool { return f.sim.VacuGlideSpeed() == 0 })
+	if !device.Status().Connected {
+		t.Fatal("a pause must not end the connection")
+	}
+}
+
+func TestVacuGlideKeepsTheNewestTempoRevision(t *testing.T) {
+	f := newAutoblowFixture(t)
+	device := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 5, TempoMaxPercent: 100})
+	session, _ := device.MotionTransport()
+	playFrames(t, session, sweep(30, 400), steadyTempo(34, 0, 12000))
+	waitFor(t, "the first tempo", func() bool { return f.sim.VacuGlideSpeed() == 37 })
+	// A newer envelope replaces the tail; an older revision is ignored.
+	newer := steadyTempo(100, 0, 12000)
+	newer.Revision = 3
+	if _, err := session.AppendPoints(context.Background(), AppendPointsCommand{StreamID: "s1", Tempo: newer}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the newer tempo", func() bool { return f.sim.VacuGlideSpeed() == 100 })
+	older := steadyTempo(1, 0, 12000)
+	older.Revision = 2
+	if _, err := session.AppendPoints(context.Background(), AppendPointsCommand{StreamID: "s1", Tempo: older}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(400 * time.Millisecond)
+	if speed := f.sim.VacuGlideSpeed(); speed != 100 {
+		t.Fatalf("an older revision changed the motor to %.0f", speed)
+	}
+	bad := &TempoFrame{Revision: 4, Points: []TimedLevel{{TimeMillis: 10, LevelPercent: 120}}}
+	if _, err := session.AppendPoints(context.Background(), AppendPointsCommand{StreamID: "s1", Tempo: bad}); err == nil {
+		t.Fatal("a tempo above 100 was accepted")
+	}
+}
+
+func TestVacuGlideMotionAirNeedsPermissionAndStaysBounded(t *testing.T) {
+	f := newAutoblowFixture(t)
+	device := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 5, TempoMaxPercent: 100})
+	var revision uint64
+	air := func(steps int) error {
+		revision++
+		device.mu.Lock()
+		id := device.stream.id
+		device.mu.Unlock()
+		_, err := device.AppendPoints(t.Context(), AppendPointsCommand{StreamID: id, Air: &AirAdjustment{Revision: revision, Steps: steps}})
+		return err
+	}
+	if err := air(1); !errors.Is(err, errVacuGlideAirOff) {
+		t.Fatalf("air without permission = %v", err)
+	}
+	allowed := device.config
+	allowed.MotionAir = true
+	device.Configure(allowed)
+	if err := air(1); !errors.Is(err, errVacuGlideNotPlaying) {
+		t.Fatalf("air while idle = %v", err)
+	}
+	session, _ := device.MotionTransport()
+	play(t, session, sweep(30, 400))
+	if err := air(2); err != nil {
+		t.Fatal(err)
+	}
+	if err := air(2); !errors.Is(err, errVacuGlideAirLimit) {
+		t.Fatalf("a fourth tightening step = %v", err)
+	}
+	if _, _, net := f.sim.VacuGlideValves(); net != 2 {
+		t.Fatalf("rejected adjustment partially applied: net=%d", net)
+	}
+	if err := air(1); err != nil {
+		t.Fatal(err)
+	}
+	if status := device.Status(); status.MotionAirSteps != 3 || status.StrokeSteps != 3 || status.ValveOpen != "" {
+		t.Fatalf("status = %+v, want three motion steps and closed valves", status)
+	}
+	if _, _, net := f.sim.VacuGlideValves(); net != 3 {
+		t.Fatalf("simulated net steps = %d", net)
+	}
+	// Manual steps stay the person's, past motion's bound.
+	if err := device.StrokeStepAt(device.ControlGeneration(), true); err != nil {
+		t.Fatal(err)
+	}
+	// A new session starts motion's count again from the person's air.
+	_ = device.BeginEmergencyStop()()
+	play(t, session, sweep(30, 400))
+	if err := air(-1); err != nil {
+		t.Fatal(err)
+	}
+	if status := device.Status(); status.MotionAirSteps != -1 {
+		t.Fatalf("motion steps after a new session = %d", status.MotionAirSteps)
+	}
 }
 
 func TestVacuGlideStrokeStepsPulseOneValveAndCount(t *testing.T) {
 	f := newAutoblowFixture(t)
-	device := connectedVacuGlide(t, f, AutoblowConfig{SpeedScale: 1})
+	device := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 5, TempoMaxPercent: 100})
 	if err := device.StrokeStepAt(device.ControlGeneration(), true); err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +366,7 @@ func TestVacuGlideStrokeStepsPulseOneValveAndCount(t *testing.T) {
 
 func TestAutoblowSessionsEndWithTheirConnection(t *testing.T) {
 	f := newAutoblowFixture(t)
-	device := connectedVacuGlide(t, f, AutoblowConfig{SpeedScale: 1})
+	device := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 5, TempoMaxPercent: 100})
 	old, _ := device.MotionTransport()
 	if _, err := device.Disconnect(); err != nil {
 		t.Fatal(err)
@@ -254,7 +387,7 @@ func TestAutoblowSessionsEndWithTheirConnection(t *testing.T) {
 
 func TestAutoblowDeviceLeavingOnlineModeIsLost(t *testing.T) {
 	f := newAutoblowFixture(t)
-	device := connectedVacuGlide(t, f, AutoblowConfig{SpeedScale: 1})
+	device := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 5, TempoMaxPercent: 100})
 	session, _ := device.MotionTransport()
 	play(t, session, sweep(30, 400))
 	waitFor(t, "the motor to start", func() bool { return f.sim.VacuGlideSpeed() > 0 })
@@ -281,7 +414,7 @@ func TestAutoblowButtonsReachTheCallback(t *testing.T) {
 
 func TestAutoblowTestRunsBrieflyAndStopsItself(t *testing.T) {
 	f := newAutoblowFixture(t)
-	device := connectedVacuGlide(t, f, AutoblowConfig{SpeedScale: 1})
+	device := connectedVacuGlide(t, f, AutoblowConfig{TempoMinPercent: 5, TempoMaxPercent: 100})
 	if err := device.TestAt(device.ControlGeneration()); err != nil {
 		t.Fatal(err)
 	}

@@ -23,6 +23,7 @@ type Fake struct {
 	results       []CommandResult
 	playbackState string
 	lastError     string
+	tempo         bool
 }
 
 // NewFake returns a fake transport with deterministic command recording.
@@ -46,6 +47,14 @@ func WithClock(clock func() time.Time) FakeOption {
 		}
 	}
 }
+
+// WithTempo makes the fake a tempo owner, like the VacuGlide (ADR 0071).
+func WithTempo() FakeOption {
+	return func(fake *Fake) { fake.tempo = true }
+}
+
+// TakesTempo reports whether the fake plays the tempo channel.
+func (f *Fake) TakesTempo() bool { return f.tempo }
 
 // WithLatency sets the fake transport latency reported in command results.
 func WithLatency(latency time.Duration) FakeOption {
@@ -196,6 +205,15 @@ func (f *Fake) currentPlaybackState() string {
 
 func cloneAppendPoints(command AppendPointsCommand) *AppendPointsCommand {
 	clone := command
+	if command.Air != nil {
+		air := *command.Air
+		clone.Air = &air
+	}
+	if command.Tempo != nil {
+		frame := *command.Tempo
+		frame.Points = append([]TimedLevel(nil), frame.Points...)
+		clone.Tempo = &frame
+	}
 	if command.Vibration != nil {
 		frame := *command.Vibration
 		frame.Points = append([]TimedLevel(nil), frame.Points...)

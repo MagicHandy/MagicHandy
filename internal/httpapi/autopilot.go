@@ -40,7 +40,11 @@ func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput)
 	// Decisions, and technical planning in the other modes, select or refine
 	// prepared candidates instead.
 	planner := settings.LLM.MotionPlanner
-	if (planner.Provider == config.MotionPlannerDecisions || (planner.ContextPolicy == config.ContextTechnical && !continuousChatMode(settings.LLM.MotionGenerationMode))) && settings.LLM.MotionGenerationMode != config.LLMMotionModeOff {
+	nativeTempo := tempoLeads(settings.Device)
+	if nativeTempo && planner.Provider == config.MotionPlannerDecisions {
+		return modes.Decision{}, errors.New("the Decisions planner uses position patterns; choose a chat model for VacuGlide tempo")
+	}
+	if !nativeTempo && (planner.Provider == config.MotionPlannerDecisions || (planner.ContextPolicy == config.ContextTechnical && !continuousChatMode(settings.LLM.MotionGenerationMode))) && settings.LLM.MotionGenerationMode != config.LLMMotionModeOff {
 		return s.cloudAutopilotDecide(ctx, input, settings)
 	}
 	decision, err := s.localAutopilotDecide(ctx, input)
@@ -165,8 +169,14 @@ func (s *Server) autopilotModelTurn(
 	capabilities := promptContext.Capabilities
 	if kind == chat.AutopilotKindSpeech {
 		capabilities = autopilotSpeechCapabilities(capabilities, settings.Autopilot.SpeechMotionAuthority)
+		if tempoLeads(settings.Device) && settings.Autopilot.SpeechMotionAuthority != config.AutopilotSpeechMotionFull {
+			// Native tempo has no positional style-only edit. Speech needs
+			// full motion authority to change a tempo or the air.
+			capabilities.Motion = false
+		}
 	}
 	capabilities.AutoTiming = autoMotionTiming(kind, settings)
+	capabilities.AutoTimingFloor = settings.Autopilot.AutoTimingFloorSeconds()
 	patternChoices, err := s.chatPatternChoicesFor(capabilities)
 	if err != nil {
 		return chat.AutopilotResponse{}, fmt.Errorf("resolve pattern catalog: %w", err)
@@ -208,6 +218,7 @@ func (s *Server) autopilotModelTurn(
 		DisableIntermediatePlanning: !settings.Autopilot.IntermediatePlanning,
 	}
 	modelContext := autopilotPromptContext(input, capabilities)
+	modelContext.TempoOnly = tempoLeads(settings.Device)
 	if technical {
 		modelContext.Technical, modelContext.LastSay = true, ""
 	}
@@ -223,7 +234,7 @@ func (s *Server) autopilotModelTurn(
 		return chat.AutopilotResponse{}, err
 	}
 	defer releaseLLM()
-	history := autopilotHistory(kind, settings, promptContext, asOf)
+	history := autopilotHistory(kind, settings, promptContext, asOf, modelContext.TempoOnly)
 	response, err := service.Complete(providerCtx, kind, chat.Request{
 		Message:                message,
 		History:                history,
@@ -293,11 +304,11 @@ func (s *Server) autopilotRoleSettings(ctx context.Context, kind chat.AutopilotK
 // autopilotHistory is the conversation an Autopilot turn sees. Continuous
 // planning marks when each human line was said, as of the moment the decision
 // applies, so an old line is not read as a reaction to the pace chosen since.
-func autopilotHistory(kind chat.AutopilotKind, settings config.Settings, promptContext interactiveChatPromptContext, asOf time.Time) []llm.Message {
+func autopilotHistory(kind chat.AutopilotKind, settings config.Settings, promptContext interactiveChatPromptContext, asOf time.Time, tempoOnly bool) []llm.Message {
 	if settings.LLM.AdvancedMotion() {
 		return promptContext.History
 	}
-	if kind == chat.AutopilotKindMotion && continuousChatMode(settings.LLM.MotionGenerationMode) {
+	if kind == chat.AutopilotKindMotion && (tempoOnly || continuousChatMode(settings.LLM.MotionGenerationMode)) {
 		return chat.PlanningHistory(promptContext.History, promptContext.HistoryAt, asOf)
 	}
 	return promptContext.History
@@ -341,6 +352,7 @@ func autopilotPromptContext(input modes.DecisionInput, capabilities chat.Capabil
 		MotionMaxSeconds:  input.MotionMaxSeconds,
 		MotionChangeLevel: input.MotionChangeLevel,
 		AutoTiming:        capabilities.AutoTiming,
+		AutoTimingFloor:   capabilities.AutoTimingFloor,
 		// The manager already applied the tracking and arc switches when it built
 		// the input, so a disabled switch arrives as false here and the prompt
 		// omits the section entirely.
@@ -353,6 +365,7 @@ func autopilotPromptContext(input modes.DecisionInput, capabilities chat.Capabil
 		SpeedTrend:               input.SpeedTrend,
 		ArcEnabled:               input.ArcEnabled,
 		ArcPercent:               input.ArcPercent,
+		ArcMinutes:               input.ArcMinutes,
 		MotionFeedback:           input.MotionFeedback,
 	}
 	if input.CurrentPerceptual != nil {
@@ -399,10 +412,10 @@ func autopilotPromptContext(input modes.DecisionInput, capabilities chat.Capabil
 }
 
 // prepareAutopilotDecisions reports whether Autopilot plans each motion
-// decision as its stretch begins. Advanced local models may opt in too; their
+// decision as its stretch begins. Capable local models participate too; their
 // speculative work stays on the existing autonomous lane and yields to chat.
 func prepareAutopilotDecisions(settings config.Settings) bool {
-	if !settings.Autopilot.PrepareNextDecision || settings.LLM.MotionGenerationMode == config.LLMMotionModeOff {
+	if settings.LLM.MotionGenerationMode == config.LLMMotionModeOff {
 		return false
 	}
 	if settings.LLM.MotionPlanner.Provider == config.MotionPlannerDecisions {
@@ -413,11 +426,11 @@ func prepareAutopilotDecisions(settings config.Settings) bool {
 }
 
 // autoMotionTiming reports whether a motion turn chooses its own horizon: the
-// person enabled Auto timing and the planning route, already resolved into
+// planning route, already resolved into
 // settings.LLM, has advanced capabilities. Simple/intermediate models keep the
 // sampled window; enabling a larger context alone does not enable this feature.
 func autoMotionTiming(kind chat.AutopilotKind, settings config.Settings) bool {
-	return kind == chat.AutopilotKindMotion && settings.Autopilot.AutoMotionTiming && settings.LLM.ModelFeatures().AutoTiming
+	return kind == chat.AutopilotKindMotion && settings.LLM.ModelFeatures().AutoTiming
 }
 
 func autopilotSpeechCapabilities(capabilities chat.Capabilities, authority string) chat.Capabilities {
@@ -466,6 +479,9 @@ func (s *Server) mapAutopilotResponseForModel(response chat.AutopilotResponse, i
 		// that lost authority while generation was in flight.
 		vibration, say = nil, ""
 		s.logger.Info("autopilot vibration unavailable; preserving linear decision")
+	}
+	if command != nil && (command.Tempo != nil || command.AirSteps != nil) {
+		return s.mapAutopilotTempo(command, vibration, say, next, variability), nil
 	}
 	if command == nil || command.Action == chat.MotionActionNone ||
 		command.Action == chat.MotionActionStop || command.Action == chat.MotionActionStart {

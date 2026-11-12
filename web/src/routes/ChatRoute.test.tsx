@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   appState: { modes: {} } as {
     modes: { mode?: string };
-    settings?: { llm?: { motion_generation_mode?: string; original_creative_mode?: boolean; motion_capabilities?: { motion?: boolean; area_focus?: boolean; experimental_patterns?: boolean } } };
+    settings?: { device?: { playback_devices: string[] }; llm?: { motion_generation_mode?: string; original_creative_mode?: boolean; motion_capabilities?: { motion?: boolean; area_focus?: boolean; experimental_patterns?: boolean } } };
     chat?: { active_session_id?: string; latest_seq?: number; current_mood?: string };
     uptime_seconds?: number;
   },
@@ -66,6 +66,14 @@ vi.mock("../state/app-state", () => ({
 }));
 
 describe("ChatRoute", () => {
+  it("offers native tempo and Off without position-only choices", async () => {
+    mocks.appState.settings = { device: { playback_devices: ["vacuglide"] }, llm: { motion_generation_mode: "layered" } };
+    render(<ChatRoute />);
+    const selector = screen.getByRole("combobox", { name: "LLM motion" });
+    expect(within(selector).getAllByRole("option").map((option) => option.textContent)).toEqual(["Tempo", "Off"]);
+    expect(screen.queryByText("Quick settings")).not.toBeInTheDocument();
+    expect(await screen.findByText("Conversation content")).toBeInTheDocument();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.appState = { modes: {} };

@@ -29,9 +29,11 @@ function paceLimiterLabel(limiter: string): string {
   return limiter.replaceAll("_", " ");
 }
 
-export function MotionVisualizer({ motion, mini = false, device, kind: kindOverride }: {
+export function MotionVisualizer({ motion, mini = false, graphicOnly = false, device, kind: kindOverride }: {
   motion: MotionInfo | null;
   mini?: boolean;
+  /** Draws the device only: Now playing shows the state, title and pace. */
+  graphicOnly?: boolean;
   /** The dispatch owner and Handy model; selects the drawing. */
   device?: VisualizerDevice;
   /** Forces a drawing, including a disabled one (design review and tests). */
@@ -164,7 +166,12 @@ export function MotionVisualizer({ motion, mini = false, device, kind: kindOverr
           "data-range-max": Math.round(max),
         } as DrawingProps["svgProps"]}
       />
-      {!mini && (
+      {!mini && graphicOnly && (
+        <div className="viz-telemetry viz-telemetry-compact">
+          <span className="viz-commanded" title={handy ? t("{n}%", { n: roundedPosition }) : undefined}><strong>{handy ? t("{n} mm", { n: millimetres }) : t("{n}%", { n: roundedPosition })}</strong><small>{t("commanded")}</small></span>
+        </div>
+      )}
+      {!mini && !graphicOnly && (
         <>
           <div className="viz-telemetry">
             <div className="viz-summary">

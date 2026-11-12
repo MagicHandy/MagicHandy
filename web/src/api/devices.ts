@@ -3,6 +3,13 @@
 // snapshot, migrating the legacy output an older backend reports. Additional
 // Handys keep their instance IDs: nothing here drops one the backend reports.
 import type { DeviceId, DeviceKind, DeviceOutput, HandyInstanceId } from "./coyote-types";
+import type { PublicSettings } from "./types";
+
+/** A native tempo session has a VacuGlide and no position-capable stroker. */
+export function tempoLeads(settings: PublicSettings | undefined): boolean {
+  const playing = playbackDevices(settings?.device);
+  return playing.includes("vacuglide") && !playing.some(playsPositions);
+}
 
 /** The device kinds in run-clock order: the first playing device is the clock. */
 export const DEVICE_ORDER: DeviceKind[] = ["handy", "autoblow", "vacuglide", "coyote", "vibrator"];

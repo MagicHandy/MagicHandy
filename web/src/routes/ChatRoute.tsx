@@ -8,8 +8,10 @@ import { MotionReviewNotice } from "../components/MotionReviewNotice";
 import { ChatPanel } from "../components/ChatPanel";
 import { ChatSessionDialog } from "../components/ChatSessionDialog";
 import { ChatTabs } from "../components/ChatTabs";
-import { LiveMotionVisualizer } from "../components/LiveMotionVisualizer";
+import { NowPlayingCard } from "../components/NowPlaying";
+import { TempoPlayCard } from "../components/TempoReadout";
 import { llmMotionModeHelp } from "../components/LLMMotionModeHelp";
+import { tempoLeads } from "../api/devices";
 import { QuickSettings } from "../components/QuickSettings";
 import { VoiceQuickControls } from "../components/VoiceQuickControls";
 import { useAppState, useToast } from "../state/app-state";
@@ -72,7 +74,11 @@ export function ChatRoute() {
   // The original Creative mode is retired; Settings > Chat can offer it again
   // (ADR 0062). Creative v2 is shown as Simple.
   const offerOriginalCreative = state?.settings?.llm?.original_creative_mode === true || motionMode === "dynamic";
-  const motionModeOptions: ReadonlyArray<{ value: MotionMode; label: string }> = [
+  const nativeTempo = tempoLeads(state?.settings);
+  const motionModeOptions: ReadonlyArray<{ value: MotionMode; label: string }> = nativeTempo ? [
+    { value: motionMode === "off" ? "layered" : motionMode, label: t("Tempo") },
+    { value: "off", label: t("Off") },
+  ] : [
     { value: "layered", label: t("Layered") },
     { value: "creative_v2", label: t("Simple") },
     ...(offerOriginalCreative ? [{ value: "dynamic" as const, label: t("Creative") }] : []),
@@ -206,9 +212,13 @@ export function ChatRoute() {
         <aside className="chat-sidebar" aria-label={t("Motion controls")}>
           {/* Cards are headed groups inside the one sidebar landmark. */}
           <div className="control-card chat-motion-status">
-            <h2 className="control-card-title">{t("Motion status")}</h2>
-            <LiveMotionVisualizer />
+            <h2 className="control-card-title">{t("Now playing")}</h2>
+            <NowPlayingCard />
           </div>
+          {nativeTempo && <div className="control-card chat-play-card">
+            <h2 className="control-card-title">{t("Play")}</h2>
+            <TempoPlayCard />
+          </div>}
           <div className="control-card chat-autopilot-card">
             <AutopilotControl />
             {state?.settings?.llm.motion_reviewer?.enabled && <MotionReviewNotice status={state.motion_review} />}
@@ -218,7 +228,7 @@ export function ChatRoute() {
             <div className="control-row chat-motion-mode">
               <span className="control-row-label">
                 <span id={motionModeLabelId}>{t("LLM motion")}</span>
-                <small id={motionModeHelpId}>{llmMotionModeHelp(motionMode)}</small>
+                <small id={motionModeHelpId}>{nativeTempo && motionMode !== "off" ? t("Chat and Autopilot choose tempo and rhythm; the VacuGlide makes its own strokes.") : llmMotionModeHelp(motionMode)}</small>
               </span>
               <select
                 aria-labelledby={motionModeLabelId}
@@ -231,15 +241,15 @@ export function ChatRoute() {
               </select>
             </div>
             {/* The Pattern library's options live with the mode that reads them. */}
-            {motionMode === "pattern" && <>
+            {!nativeTempo && motionMode === "pattern" && <>
               <PatternOption label={t("Area focus")} hint={t("Tip, shaft, base and full-range targets.")} checked={motionCapabilities?.area_focus ?? true}
                 disabled={!backendOnline || readOnly || changingMotionMode} onChange={(checked) => void changeMotionMode("pattern", { area_focus: checked })} />
               <PatternOption label={t("Experimental patterns")} hint={t("Library patterns tagged experimental.")} checked={motionCapabilities?.experimental_patterns ?? false}
                 disabled={!backendOnline || readOnly || changingMotionMode} onChange={(checked) => void changeMotionMode("pattern", { experimental_patterns: checked })} />
             </>}
-            <div className="control-row control-row-stack">
+            {!nativeTempo && <div className="control-row control-row-stack">
               <QuickSettings section="style" />
-            </div>
+            </div>}
             <VoiceQuickControls />
           </div>
         </aside>

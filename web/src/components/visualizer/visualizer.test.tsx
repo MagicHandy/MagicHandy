@@ -1,9 +1,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { MotionInfo, PublicSettings } from "../../api/types";
-import { visualizerDeviceFor } from "../LiveMotionVisualizer";
 import { MotionVisualizer } from "../MotionVisualizer";
-import { DISABLED_VISUALIZER_KINDS, handyTravelMillimetres, visualizerKind, type VisualizerKind } from "./device";
+import { DISABLED_VISUALIZER_KINDS, handyTravelMillimetres, visualizerDeviceFor, visualizerKind, type VisualizerKind } from "./device";
 import { dotText, dotTextSpan } from "./dotFont";
 
 afterEach(cleanup);

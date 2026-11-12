@@ -3,6 +3,7 @@ package httpapi
 import (
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/motion"
 )
 
 func (s *Server) chatOutputContext(model config.LLMSettings) *chat.OutputContext {
@@ -16,6 +17,9 @@ func (s *Server) chatOutputContext(model config.LLMSettings) *chat.OutputContext
 	output.Strokers, output.PaceOnly = countStrokers(settings.Device.PlaybackSet())
 	if coyote {
 		output.Estim = s.chatEstimContext(settings)
+	}
+	if paceOnly {
+		output.Tempo = s.chatTempoContext(settings)
 	}
 	if !vibrator {
 		return output
@@ -79,6 +83,10 @@ func (s *Server) chatEstimContext(settings config.Settings) *chat.EstimContext {
 }
 
 func (s *Server) vibratorRetired() bool {
+	return s.playbackDeviceRetired(config.DeviceVibrator)
+}
+
+func (s *Server) playbackDeviceRetired(deviceID string) bool {
 	engine := s.currentMotionEngine()
 	if engine == nil {
 		return false
@@ -88,9 +96,34 @@ func (s *Server) vibratorRetired() bool {
 		return false
 	}
 	for _, id := range state.LinkedSession.RetiredDevices {
-		if id == config.DeviceVibrator {
+		if id == deviceID {
 			return true
 		}
 	}
 	return false
+}
+
+// chatTempoContext reports the VacuGlide's tempo for the model: what plays,
+// and whether the person lets motion change the air (ADR 0071).
+func (s *Server) chatTempoContext(settings config.Settings) *chat.TempoContext {
+	tempo := &chat.TempoContext{Leads: tempoLeads(settings.Device), AirAllowed: settings.VacuGlide.MotionAir}
+	if owner := s.autoblow.vacuglide; owner != nil {
+		status := owner.Status()
+		tempo.Ready = status.Connected && status.PlaybackState != "stale" && !s.playbackDeviceRetired(config.DeviceVacuGlide)
+		tempo.AirSteps = status.MotionAirSteps
+	}
+	if engine := s.currentMotionEngine(); engine != nil {
+		state := engine.Snapshot()
+		if (state.Running || state.Paused) && state.Target.Tempo != nil {
+			current := state.Target.Tempo.Clone()
+			tempo.Current = &current
+		} else if state.Target.Tempo != nil {
+			tempo.Previous = motion.CloneTempoSpec(state.Target.Tempo)
+		}
+		tempo.Running = state.Running && !state.Paused
+		if state.Tempo != nil {
+			tempo.Level = state.Tempo.LevelPercent
+		}
+	}
+	return tempo
 }

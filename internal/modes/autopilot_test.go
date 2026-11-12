@@ -605,11 +605,9 @@ func TestAutopilotSpeechClockIsIndependentAndPlaybackAware(t *testing.T) {
 			settings.MotionCadence = config.AutopilotMotionCustom
 			settings.MotionMinSeconds = 60
 			settings.MotionMaxSeconds = 60
-			settings.AdaptiveMotionTiming = false
 			settings.SpeechCadence = config.AutopilotSpeechCustom
 			settings.SpeechMinSeconds = 8
 			settings.SpeechMaxSeconds = 8
-			settings.AdaptiveSpeechTiming = false
 			return settings
 		},
 		Now:    clock.Now,
@@ -675,7 +673,6 @@ func TestAutopilotSpeechMotionPreservesSpeechTimingChoice(t *testing.T) {
 			settings.MotionCadence = config.AutopilotMotionCustom
 			settings.MotionMinSeconds = 60
 			settings.MotionMaxSeconds = 60
-			settings.AdaptiveMotionTiming = false
 			settings.SpeechCadence = config.AutopilotSpeechCustom
 			settings.SpeechMinSeconds = 8
 			settings.SpeechMaxSeconds = 24
@@ -739,11 +736,9 @@ func TestAutopilotSpeechPublicationFailureDoesNotApplyMotion(t *testing.T) {
 			settings.MotionCadence = config.AutopilotMotionCustom
 			settings.MotionMinSeconds = 60
 			settings.MotionMaxSeconds = 60
-			settings.AdaptiveMotionTiming = false
 			settings.SpeechCadence = config.AutopilotSpeechCustom
 			settings.SpeechMinSeconds = 8
 			settings.SpeechMaxSeconds = 8
-			settings.AdaptiveSpeechTiming = false
 			return settings
 		},
 		Now:    clock.Now,
