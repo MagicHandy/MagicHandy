@@ -36,15 +36,21 @@
   flex: 0 0 26px;
   height: 26px;
   border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden;
   border: 1px solid var(--line-strong);
-  background: var(--surface-2);
-  color: var(--accent);
-  font-size: var(--fs-label);
-  font-weight: 700;
-  line-height: 1;
+  background: var(--brand-ground);
+}
+/* The mark is one drawing in three roles; each palette colours the roles. */
+.brand-mark {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.brand-mark-hand {
+  fill: var(--brand-hand);
+}
+.brand-mark-accent {
+  fill: var(--brand-accent);
 }
 .nav-brand-copy {
   min-width: 0;
@@ -541,15 +547,12 @@
   text-align: center;
 }
 .startup-mark {
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
+  width: 56px;
+  height: 56px;
+  overflow: hidden;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--accent);
-  font-weight: 700;
+  border-radius: var(--radius);
+  background: var(--brand-ground);
 }
 .startup-screen h1,
 .fatal-screen h1 {

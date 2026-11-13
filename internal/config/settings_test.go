@@ -104,8 +104,16 @@ func TestUIThemeDefaultsPublishesAndValidatesBundledThemes(t *testing.T) {
 	}
 
 	want := SupportedUIThemes()
-	if len(want) != 22 {
-		t.Fatalf("supported themes = %d, want default plus 21 surviving mockups", len(want))
+	if len(want) != 8 {
+		t.Fatalf("supported themes = %d, want the default plus 7 brand palettes", len(want))
+	}
+	if !IsSupportedUITheme(ThemeWarmTitanium) {
+		t.Fatal("Warm Titanium must survive the catalog reset")
+	}
+	for _, retired := range []string{"carbon-emerald", "deep-violet", "paperwhite-crt", "zenith-monochrome"} {
+		if IsSupportedUITheme(retired) {
+			t.Errorf("retired theme %q is still selectable", retired)
+		}
 	}
 	if want[0] != ThemeSteelAzure {
 		t.Fatalf("first theme = %q, want default %q", want[0], ThemeSteelAzure)
@@ -227,7 +235,7 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	settings, _ := store.Snapshot()
 	settings.Server.Port = 49720
 	settings.UI.Locale = LocaleJapanese
-	settings.UI.Theme = ThemeObsidianViolet
+	settings.UI.Theme = ThemeMidnightGold
 	settings.Device.HSPDispatchOwner = DispatchOwnerIntiface
 	settings.Device.IntifaceServerAddress = "wss://intiface.example.test/socket"
 	settings.Device.APIApplicationIDSource = ApplicationIDSourceDeveloperOverride
@@ -258,8 +266,8 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	if got.UI.Locale != LocaleJapanese {
 		t.Fatalf("UI locale = %q, want %q", got.UI.Locale, LocaleJapanese)
 	}
-	if got.UI.Theme != ThemeObsidianViolet {
-		t.Fatalf("UI theme = %q, want %q", got.UI.Theme, ThemeObsidianViolet)
+	if got.UI.Theme != ThemeMidnightGold {
+		t.Fatalf("UI theme = %q, want %q", got.UI.Theme, ThemeMidnightGold)
 	}
 	if got.Device.HandyConnectionKey != "secret" {
 		t.Fatal("connection key did not persist")
@@ -479,7 +487,7 @@ func TestMissingFieldsAreDefaulted(t *testing.T) {
 
 func TestOlderSettingsUpdatePreservesNewTuningAndParakeetSource(t *testing.T) {
 	current := DefaultSettings()
-	current.UI.Theme = ThemeMoonlight
+	current.UI.Theme = ThemeForestBrass
 	current.LLM.MaxOutputTokens = 1024
 	current.LLM.LlamaCPPContextSize = 65536
 	current.LLM.ReasoningMode = LLMReasoningOff
@@ -544,7 +552,7 @@ func TestOlderSettingsUpdatePreservesNewTuningAndParakeetSource(t *testing.T) {
 	if next.Chat != current.Chat {
 		t.Fatalf("older update reset chat settings: %+v", next.Chat)
 	}
-	if next.UI.Theme != ThemeMoonlight {
+	if next.UI.Theme != ThemeForestBrass {
 		t.Fatalf("older UI update reset theme to %q", next.UI.Theme)
 	}
 }

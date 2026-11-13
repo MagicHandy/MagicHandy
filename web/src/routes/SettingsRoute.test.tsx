@@ -181,7 +181,7 @@ function settings(verbosity: string): PublicSettings {
       tts_tone_presets: ["natural", "warm", "playful", "tender", "commanding", "excited", "custom"],
       chat_startup_behaviors: ["previous", "new"],
       locales: ["en", "es", "pt-BR", "zh-Hans", "ja"],
-      themes: ["steel-azure", "deep-violet", "paperwhite-crt"],
+      themes: ["steel-azure", "midnight-gold", "harbor"],
     },
   } as unknown as PublicSettings;
 }
@@ -348,15 +348,15 @@ describe("SettingsRoute", () => {
     const steel = await screen.findByRole("radio", { name: /Steel Azure/ });
     expect(steel).toBeChecked();
     expect(screen.getAllByRole("radio")).toHaveLength(3);
-    expect(screen.queryByRole("radio", { name: "Carbon Stealth" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Forest Brass" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("radio", { name: "Deep Violet" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Midnight Gold" }));
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
     expect(saveSettings.mock.calls[0][0].ui).toEqual({
       locale: "en",
-      theme: "deep-violet",
+      theme: "midnight-gold",
       show_remote_navigation: true,
       setup_completed: true,
       update_check_mode: "automatic",

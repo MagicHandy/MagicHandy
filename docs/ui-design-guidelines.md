@@ -82,6 +82,7 @@ Steel Azure is the default palette. The values below live in
 | `--stop-fill` / `--stop-fill-hover` | `#c43c36` / `#b03731` | Emergency Stop fill; white label at 5.19:1 |
 | `--focus` | `#82b4e2` | Focus ring |
 | `--user-bubble` / `--user-bubble-line` | `#1b2634` / `#2c3e52` | Your chat bubble (steel tint, distinct from the neutral reply bubble) |
+| `--brand-ground` / `--brand-hand` / `--brand-accent` | `--surface-2` / `--text` / `--accent` | The brand mark's tile, hand, and star and streak |
 
 Rule: a new surface picks an existing role. `--accent` = "you can act on this",
 `--go`/`--ok` = "start / it is running", `--warn` = "caution", `--danger` =
@@ -95,15 +96,21 @@ document, published in settings option hints, and applied to the document only
 from the backend state snapshot. Steel Azure remains first and is the default
 for fresh, missing, invalid, or retired values.
 
-The 21 opt-in palettes correspond to the retained design mockups:
+The seven opt-in palettes were designed with the brand mark
+([ADR 0073](decisions/0073-brand-mark-and-palettes.md)):
 
-- Readability and neutral: High Contrast, Carbon Stealth, Platinum, Zenith
-  Monochrome, Sage.
-- Cool: Polar Frost, Iceberg Slate, Nordic Dusk, Cyber Midnight, Midnight
-  Graphite, Ocean Trench, Obsidian Teal, Carbon Emerald.
-- Violet: Moonlight Lavender, Deep Violet, Obsidian Violet.
-- Warm and terminal: Warm Titanium, Solaris Amber, Amber Phosphor, Green
-  Phosphor, Paperwhite CRT.
+| Palette | Ground | Accent | Note |
+| --- | --- | --- | --- |
+| Warm Titanium | `#151312` | `#e69d45` | Unchanged from the earlier catalog |
+| Ember | `#100f0e` | `#f0906c` | Mark uses coral `#ff6a55` for the star and streak |
+| Midnight Gold | `#0a101c` | `#d7a545` | Navy ground, ivory text |
+| Forest Brass | `#0a1512` | `#c9a04a` | Green is the ground only, never the accent |
+| Harbor | `#0b131c` | `#8fc3ee` | Mark sits on a steel-blue tile in white |
+| Carbon | `#0d0d0e` | `#e3e1dc` | Neutral; mark is one color |
+| High Contrast | `#000000` | `#6cc4ff` | White text on black |
+
+No palette uses a violet, green or red accent: violet is outside the visual
+system, and green and red belong to the safety colors.
 
 Palette selectors live in `web/src/styles/themes.css` and override the neutral
 and interactive tokens only; `--rail`, `--text-soft` and `--faint` derive from
@@ -118,6 +125,9 @@ invariants apply to every palette:
   box shadow or glow**. Enabled Stop and Start labels keep at least 4.5:1.
 - Small text and accent-ink pairs meet WCAG AA (4.5:1); focus and graphical
   accent pairs meet 3:1.
+- `--brand-ground`, `--brand-hand` and `--brand-accent` color the mark. They
+  default to `--surface-2`, `--text` and `--accent`; a palette that overrides
+  them keeps both mark colors at 3:1 or better against the tile.
 - Adding a palette requires the core catalog ID, one `themes.css` token
   selector, frontend label/swatches, contrast evidence, and catalog tests.
   Deleting any one of those pieces must fail review rather than leave a

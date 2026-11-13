@@ -14,6 +14,7 @@ import { RemoteEdgeButton } from "./RemoteEdgeButton";
 import { useRemoteKeepalive } from "./useRemoteKeepalive";
 import { useRemoteState } from "./useRemoteState";
 import "../styles/remote.css";
+import { BrandMark } from "../brand/BrandMark";
 
 // One canonical frontend, with a different, backend-selected application shell.
 // It never mounts the controller connection, device UI or full-app data poll.
@@ -48,7 +49,7 @@ export function RemoteApplication() {
   return <div className="remote-application">
     <header className="remote-header">
       <div className="nav-brand remote-brand">
-        <span className="nav-brand-mark" aria-hidden="true">M</span>
+        <span className="nav-brand-mark"><BrandMark /></span>
         <h1 className="nav-brand-copy" aria-label={t("MagicHandy Remote")}>
           <span className="nav-brand-name">{t("MagicHandy")}</span>
           <span className="nav-brand-context">{t("Remote")}</span>
