@@ -50,7 +50,7 @@ const baseState = {
       parakeet_sources: ["app_managed", "custom_local"],
       tts_devices: ["auto", "cuda", "cpu"],
       chat_startup_behaviors: ["previous", "new"],
-      themes: ["steel-azure", "deep-violet"],
+      themes: ["steel-azure", "midnight-gold"],
     },
   },
   controller: { active: true, read_only: false },
@@ -324,14 +324,17 @@ describe("app shell safety invariants", () => {
         ...baseState,
         settings: {
           ...baseState.settings,
-          ui: { locale: "en", theme: "deep-violet", setup_completed: true, update_check_mode: "automatic" },
+          ui: { locale: "en", theme: "midnight-gold", setup_completed: true, update_check_mode: "automatic" },
         },
       },
     });
     renderApp();
 
     await screen.findByRole("button", { name: /emergency stop/i });
-    await waitFor(() => expect(document.documentElement).toHaveAttribute("data-theme", "deep-violet"));
+    await waitFor(() => expect(document.documentElement).toHaveAttribute("data-theme", "midnight-gold"));
+    // The tab icon is repainted with the palette, and the rail shows the mark.
+    expect(document.querySelector('link[rel="icon"]')?.getAttribute("href")).toMatch(/^data:image\/svg\+xml,/);
+    expect(document.querySelector(".nav-brand-mark svg.brand-mark")).toBeInTheDocument();
   });
 
   it("asks before terminating an exact-path duplicate managed model process", async () => {

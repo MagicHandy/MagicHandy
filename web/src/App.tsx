@@ -20,6 +20,8 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { WorkspaceHead } from "./components/WorkspaceHead";
 import { RemoteIcon } from "./shell/icons";
 import { normalizeTheme } from "./theme";
+import { BrandMark } from "./brand/BrandMark";
+import { applyBrandFavicon } from "./brand/favicon";
 import { useAuth } from "./state/auth";
 import {LAB_BASE,LabsRoute,legacyLabRoute} from "@labs";
 
@@ -62,6 +64,7 @@ export function App() {
   useEffect(() => {
     const root = document.documentElement;
     root.dataset.theme = theme;
+    applyBrandFavicon();
     return () => {
       if (root.dataset.theme === theme) {
         delete root.dataset.theme;
@@ -175,7 +178,7 @@ export function App() {
     >
       {!auth.status ? (
         <section className="startup-screen" aria-live="polite" aria-busy={auth.loading}>
-          <div className="startup-mark" aria-hidden="true">MH</div>
+          <div className="startup-mark"><BrandMark /></div>
           <h1>{t("MagicHandy")}</h1>
           <p>{translateKnown(auth.error || "Checking access…")}</p>
           {auth.error && <button type="button" className="btn btn-secondary" onClick={() => void auth.refresh()}>{t("Retry core connection")}</button>}
@@ -185,7 +188,7 @@ export function App() {
         <LoginRoute />
       ) : !state ? (
         <section className="startup-screen" aria-live="polite" aria-busy={!startupError}>
-          <div className="startup-mark" aria-hidden="true">MH</div>
+          <div className="startup-mark"><BrandMark /></div>
           <h1>{t("MagicHandy")}</h1>
           <p>{translateKnown(startupError || "Starting the core and restoring your workspace…")}</p>
           {!startupError ? <span className="startup-progress" aria-hidden="true" /> : (

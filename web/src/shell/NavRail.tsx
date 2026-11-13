@@ -6,6 +6,7 @@ import { ChatIcon, LibraryIcon, ModesIcon, PersonaIcon, RemoteIcon, SettingsIcon
 import { StopButton } from "./StopButton";
 import { EdgeButton } from "./EdgeButton";
 import {LAB_BASE,LabsNavLink} from "@labs";
+import { BrandMark } from "../brand/BrandMark";
 
 // Personas sits second, directly under Chat: a persona is chat furniture, closer
 // to the conversation than the content libraries are (docs/persona-page.md §5.1).
@@ -32,7 +33,7 @@ export function NavRail({ authenticationLocked = false, remoteURL }: { authentic
   return (
     <nav className="nav-rail" aria-label={t("Primary navigation")}>
       <div className="nav-brand">
-        <span className="nav-brand-mark" aria-hidden="true">M</span>
+        <span className="nav-brand-mark"><BrandMark /></span>
         <span className="nav-brand-copy">
           <span className="nav-brand-name">{t("MagicHandy")}</span>
           <span className="nav-brand-context">{authenticationLocked ? t("sign-in required") : t("local")}</span>

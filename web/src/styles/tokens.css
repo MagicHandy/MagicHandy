@@ -25,6 +25,12 @@
   --user-bubble: #1b2634;
   --user-bubble-line: #2c3e52;
 
+  /* The brand mark follows the palette: its tile, the hand, and the star and
+     streak. A palette overrides these only when its mark should differ. */
+  --brand-ground: var(--surface-2);
+  --brand-hand: var(--text);
+  --brand-accent: var(--accent);
+
   /* Derived from the themed tokens, so every theme keeps them coherent. */
   --rail: color-mix(in srgb, var(--bg) 62%, var(--surface));
   --text-soft: color-mix(in srgb, var(--text) 88%, var(--bg));

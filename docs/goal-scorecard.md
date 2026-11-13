@@ -1,5 +1,23 @@
 # Goal Scorecard
 
+## 2026-11-13 — Brand mark and palette catalog
+
+- No new dependency. The mark's geometry is bundled in the main script and the
+  19 retired palettes leave the stylesheet
+  ([ADR 0073](decisions/0073-brand-mark-and-palettes.md)).
+- Main JS **1,354,048 -> 1,358,102 B** (+4,054 B), gzip **364,155 -> 366,522 B**
+  (+2,367 B). CSS **212,901 -> 207,527 B** (-5,374 B), gzip **37,116 ->
+  35,619 B** (-1,497 B). `index.html` **2,491 -> 2,874 B** (+383 B) for the
+  static tab icon. Gzip uses Python `gzip`, level 9, `mtime=0`.
+- Same-toolchain Windows amd64 core (`CGO_ENABLED=0`, `-trimpath`, `-w`,
+  symbols retained): **26,792,448 -> 26,790,912 B** (-1,536 B). No motion,
+  transport or model code changed. Runtime checks and limits are recorded in
+  [the release review](alpha87-release-review-2026-11-13.md).
+- Isolated review app after real local generation and theme saves: **32.64 MiB**
+  working set, one idle sample. This is not a soak or browser-memory benchmark;
+  no new dependency or startup request was introduced.
+- Process start to the server-start announcement: **95.77 ms**, one
+  sample. This excludes model readiness and browser first paint.
 
 ## 2026-11-12 — Native tempo / Graphite review follow-up
 
