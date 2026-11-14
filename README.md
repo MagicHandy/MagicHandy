@@ -8,7 +8,7 @@
 </div>
 
 > [!IMPORTANT]
-> **Early alpha · v0.1.0-alpha.74 · Windows x64 · unsigned.** Expect rough
+> **Early alpha · v0.1.0-alpha.88 · Windows x64 · unsigned.** Expect rough
 > edges. Read the [release notes](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.88)
 > for tested behavior and known limitations.
 
