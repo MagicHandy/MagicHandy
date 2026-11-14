@@ -10,9 +10,9 @@ The setup EXE is a thin Inno Setup shell with a native x64 loader and non-solid
 ultra-LZMA stream used by the withdrawn alpha.6 package. Microsoft completed its
 review of that exact alpha.6 file as `Not malware` and removed the detection.
 ADR 0014 therefore permits alpha.8 through alpha.11 and alpha.13 through
-alpha.64 and alpha.66 through alpha.87 setup publication through a dedicated
+alpha.64 and alpha.66 through alpha.88 setup publication through a dedicated
 policy bound to those versions and case. Alpha.9 through alpha.11, alpha.13
-through alpha.64, and alpha.66 through alpha.87 also add a Defender scan of the
+through alpha.64, and alpha.66 through alpha.88 also add a Defender scan of the
 exact public artifact directory. Alpha.12's portable-only
 GitHub Release was withdrawn; its source tag remains immutable. A later unsigned
 setup fails closed until another explicit review decision. The exception does
@@ -97,6 +97,12 @@ The staged `MagicHandy` directory contains:
 - `release-manifest.json` with version, exact commit, source URL, file sizes,
   and per-file SHA-256 hashes.
 
+`magichandy.exe` carries the brand icon, linked from
+`cmd/magichandy/resource_windows_amd64.syso`. The setup executable takes its
+icon and wizard images from `assets/brand/`
+([ADR 0074](decisions/0074-windows-icon-and-installer-artwork.md)). The
+worker executables have no icon.
+
 The manifest is generated after all payload files except the manifest itself
 are staged. Setup-bearing CI and reviewed public packages cover the portable ZIP
 and setup EXE in the outer checksum. A portable-only package covers only the ZIP.
@@ -147,7 +153,7 @@ $commit = (git rev-parse HEAD).Trim()
 ```
 
 `ReviewedUnsignedPublic` accepts only alpha.8 through alpha.11 and alpha.13
-through alpha.64 and alpha.66 through alpha.87 with the recorded Microsoft case
+through alpha.64 and alpha.66 through alpha.88 with the recorded Microsoft case
 ID and checks the x64 unsigned setup, five x64 payload executables, manifests,
 and both outer hashes.
 `SignedPublic` is the fail-closed long-term policy. It requires valid,

@@ -50,6 +50,10 @@ PrivilegesRequiredOverridesAllowed=dialog
 UsePreviousPrivileges=yes
 UsePreviousTasks=yes
 WizardStyle=modern
+; Brand artwork lives in one place, assets\brand, shared with the executable's icon.
+SetupIconFile={#SourcePath}..\assets\brand\magichandy.ico
+WizardImageFile={#SourcePath}..\assets\brand\installer-side.png,{#SourcePath}..\assets\brand\installer-side-2x.png
+WizardSmallImageFile={#SourcePath}..\assets\brand\installer-corner.png,{#SourcePath}..\assets\brand\installer-corner-2x.png
 SetupLogging=yes
 CloseApplications=yes
 CloseApplicationsFilter=magichandy.exe

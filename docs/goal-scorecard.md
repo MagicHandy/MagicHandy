@@ -1,5 +1,26 @@
 # Goal Scorecard
 
+## 2026-11-14 — Windows branding integration review
+
+- Independently reproduced the preceding icon measurement with Go 1.26.11 and
+  the same flags: **26,790,912 -> 26,966,528 B** (+175,616 B). No browser or
+  dependency change. All seven artwork files preserve Claude's bytes.
+- The local test-only `0.0.0-pr88` setup is 23,709,454 B. Windows loaded all
+  ten icon sizes from both the core and setup; the unbranded baseline has no
+  icon group. See the [integration review](windows-branding-integration-review-2026-11-14.md).
+- No new idle-memory or cold-start benchmark is claimed by this measurement.
+
+## 2026-11-13 — Windows icon and installer artwork
+
+- No new dependency. The icon resource is written by a standard-library
+  generator and committed beside the core command
+  ([ADR 0074](decisions/0074-windows-icon-and-installer-artwork.md)).
+- Same-toolchain Windows amd64 core (`CGO_ENABLED=0`, `-trimpath`, `-w`,
+  symbols retained): **26,790,912 -> 26,966,528 B** (+175,616 B), all of it
+  the ten-size icon. The browser payload is unchanged.
+- Local unsigned setup built with the release script: 23,707,528 B. Idle
+  memory and cold start were not re-measured: no code that runs changed.
+
 ## 2026-11-13 — Brand mark and palette catalog
 
 - No new dependency. The mark's geometry is bundled in the main script and the
