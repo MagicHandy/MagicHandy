@@ -9,7 +9,7 @@
 
 > [!IMPORTANT]
 > **Early alpha · v0.1.0-alpha.74 · Windows x64 · unsigned.** Expect rough
-> edges. Read the [release notes](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.74)
+> edges. Read the [release notes](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.88)
 > for tested behavior and known limitations.
 
 App data stays on your machine. Cloud models, device services, and remote
