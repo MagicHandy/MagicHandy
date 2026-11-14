@@ -3,7 +3,7 @@
 <h1>MagicHandy</h1>
 <p><strong>Your devices. Your models. Your control.</strong></p>
 <p>A free, open-source, local-first app for AI chat, hands-free motion, patterns, and video funscript playback with <a href="https://www.thehandy.com/">The Handy</a> and other supported devices.</p>
-<p><a href="https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.74"><strong>Download for Windows</strong></a> &nbsp;·&nbsp; <a href="docs/getting-started.md">Getting started</a> &nbsp;·&nbsp; <a href="#documentation">Documentation</a> &nbsp;·&nbsp; <a href="#support-development">Support development</a></p>
+<p><a href="https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.88"><strong>Download for Windows</strong></a> &nbsp;·&nbsp; <a href="docs/getting-started.md">Getting started</a> &nbsp;·&nbsp; <a href="#documentation">Documentation</a> &nbsp;·&nbsp; <a href="#support-development">Support development</a></p>
 
 </div>
 
