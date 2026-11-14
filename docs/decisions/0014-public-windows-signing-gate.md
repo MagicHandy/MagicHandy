@@ -2,16 +2,34 @@
 
 ## Status
 
-Accepted; amended 2026-11-13 after Microsoft completed the false-positive
+Accepted; amended 2026-11-14 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.64 and alpha.66 through alpha.87
+reviewed alpha.14 through alpha.64 and alpha.66 through alpha.88
 package-preserving releases.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.88 amendment
+
+The maintainer requested independent review of Claude's Windows branding
+integration and publication through Updates. The [integration review](../windows-branding-integration-review-2026-11-14.md)
+records the unchanged artwork, deterministic standard-library resource
+emitter, native Windows icon loading at all ten sizes, actual Inno compilation,
+normal tests, packaging verification and the remaining preview/CI checks.
+[ADR 0074](0074-windows-icon-and-installer-artwork.md) records the link-input
+exception. No new runtime dependency or browser payload is introduced.
+
+Only `0.1.0-alpha.88` joins ReviewedUnsignedPublic. Alpha.89 and later need
+another review; alpha.65 stays excluded. Go 1.26.11, exact-executable scans
+with symbols retained, native x64 setup, non-solid ZIP, the three explicit
+assets, Defender scan, clean-runner installer lifecycle, manifests/checksums
+and immutable current-main tag requirements remain mandatory. The earlier
+Microsoft adjudication does not approve these new hashes or establish
+publisher identity; trusted signing remains the target.
 
 ### Alpha.87 amendment
 
@@ -1177,11 +1195,11 @@ Negative:
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
   alpha.8 through alpha.11, alpha.13 through alpha.64, or alpha.66 through
-  alpha.87 version, the recorded Microsoft case ID, the
+  alpha.88 version, the recorded Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
 - Alpha.9 through alpha.11, alpha.13 through alpha.64, and alpha.66 through
-  alpha.87 reviewed setup workflows run Microsoft Defender against the exact public artifact directory
+  alpha.88 reviewed setup workflows run Microsoft Defender against the exact public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,
   timestamped Authenticode from the explicitly pinned signer on the setup

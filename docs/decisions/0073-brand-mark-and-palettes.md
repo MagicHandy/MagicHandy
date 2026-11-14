@@ -58,8 +58,9 @@ sits close to the safety colors. None of them was designed with a mark in mind.
 
 ## Not covered
 
-- The Windows executable icon, the installer artwork and the README header
-  still have no mark.
+- The Windows executable icon and the installer artwork are covered by
+  [ADR 0074](0074-windows-icon-and-installer-artwork.md). The README header
+  still has no mark.
 - There is no light palette. The safety colors and several components assume
   a dark ground, so a light palette needs its own review.
 - The startup animation is not built.

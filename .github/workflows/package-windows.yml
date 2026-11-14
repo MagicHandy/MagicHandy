@@ -7,6 +7,7 @@ on:
       - ".github/workflows/package-windows.yml"
       - ".github/workflows/release-windows.yml"
       - "installer/**"
+      - "assets/brand/**"
       - "scripts/release/**"
       - "scripts/test-installer.ps1"
       - "install.ps1"
