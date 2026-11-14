@@ -28,7 +28,7 @@ access are optional choices you enable explicitly.
 
 ## Install on Windows
 
-Download [**v0.1.0-alpha.74**](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.74)
+Download [**v0.1.0-alpha.88**](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.88)
 and choose the package that suits you:
 
 | Package | Best for | Updating |
