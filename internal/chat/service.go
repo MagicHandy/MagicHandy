@@ -205,7 +205,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	messages := capabilityMessages(systemPrompt, request.History, userMessage, capabilities)
 	input := llm.ChatRequest{
 		Messages:               messages,
-		HistoryMessagesDropped: request.HistoryMessagesDropped + hostedHistoryDropped(request.History, messages, capabilities),
+		HistoryMessagesDropped: request.HistoryMessagesDropped + composedHistoryDropped(request.History, messages),
 		Model:                  s.Model,
 		Temperature:            chatTemperature,
 		TopP:                   chatTopP,

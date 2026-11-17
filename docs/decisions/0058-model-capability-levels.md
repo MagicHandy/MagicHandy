@@ -119,3 +119,18 @@ connection, reviewer eligibility and the motion card's Pattern library options.
 A Simple compatible connection to Ollama's OpenAI endpoint completed the
 readiness probe and a text-only chat in one provider call (9,956 of 11,633
 prompt bytes), without repair, fallback or motion.
+
+## Local conversation history follow-up (2026-11-17)
+
+Interactive chat resolves the message and byte limits once for both storage
+and final prompt composition. Advanced local models given a larger window can
+therefore receive earlier corrections. Compact reads count omitted committed
+messages in the same snapshot as the visible dialogue. The current request and
+system guidance are excluded from the count of prior dialogue.
+
+For English interactive Layered motion, a local Simple model receives the
+current band and pace when earlier dialogue is missing. A running local
+Advanced model receiving more than 64 prior messages gets examples of reading
+back a definition and applying it. The examples must fit alongside all the
+selected dialogue. The matched local and hosted results explain the scope.
+[Multi-turn request evaluation](../motion-request-quality-2026-11-17.md)

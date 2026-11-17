@@ -223,6 +223,9 @@ type Capabilities struct {
 	// AdvancedMotion selects the rich planning contract independently of the
 	// provider. It changes representation, never motion authority.
 	AdvancedMotion bool
+	// LocalInference identifies the app's local-model route for optional
+	// conversation guidance. Model capability and motion authority are separate.
+	LocalInference bool `json:"-"`
 	// IntermediateMotion enables the fuller local contract after explicit opt-in.
 	IntermediateMotion bool
 	// ChatPlanNote adds a private planning note before Advanced chat edits in

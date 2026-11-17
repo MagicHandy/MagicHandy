@@ -1,5 +1,25 @@
 # Goal Scorecard
 
+## 2026-11-17 — Multi-turn motion and conversation history
+
+The comparison uses the architecture branch at `d8188233` plus the evaluation
+fixture at `16397a58`. The Windows amd64 core used Go 1.26.11,
+`CGO_ENABLED=0`, `-trimpath` and `-ldflags "-s -w"`.
+
+| Measurement | Baseline | Final |
+| --- | ---: | ---: |
+| Stripped core | 25,393,152 B | 25,401,344 B (+8,192 B) |
+| Granite 3B median model-backed turn, local Ollama | 400 ms | 421 ms |
+| ChatGPT Terra Low median model-backed turn | 3,793 ms | 3,786 ms |
+| Granite 3B input on the 230-message read-back | 7,196 tokens | 14,612 tokens |
+| ChatGPT input on the same read-back | 18,422 tokens | 18,444 tokens |
+
+The latency samples include retries and exclude deterministic Stop. Each
+provider and build ran 110 matched turns against a simulated transport. The
+selected local Advanced long window was 131,072 tokens. The implementation
+adds no dependencies or embedded browser assets.
+[Request-level results and conditions](motion-request-quality-2026-11-17.md)
+
 ## 2026-11-17 — Architecture review
 
 The comparison uses the fresh release base `bafc7ec4`, Windows amd64, Go 1.26.11 and a Ryzen 9 9950X3D. Sizes are bytes. Memory is decimal MB for the Go process alone. [Implementation and regression coverage for all 19 items](architecture-review-implementation-2026-11-17.md)

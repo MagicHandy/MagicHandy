@@ -169,10 +169,11 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 		messages = withChatPlanMessages(messages, capabilities.MotionMode)
 	}
 	input := llm.ChatRequest{Messages: messages,
-		HistoryMessagesDropped: request.HistoryMessagesDropped + hostedHistoryDropped(request.History, messages, capabilities),
+		HistoryMessagesDropped: request.HistoryMessagesDropped + composedHistoryDropped(request.History, messages),
 		Model:                  s.Model, Temperature: temperature, TopP: chatTopP, RepeatPenalty: chatRepeatPenalty, RepeatLastN: chatRepeatLastN,
 		MaxTokens: maxTokens, ReasoningMode: s.ReasoningMode,
 		ReasoningBudgetTokens: s.ReasoningBudgetTokens, JSONSchema: schema}
+	input = s.withMotionHistoryGuide(input, state, capabilities, prompt.ID)
 	raw, err := s.Provider.StreamChat(ctx, input, func(delta string) error {
 		return emitEvent(emit, StreamEvent{Type: "delta", Phase: "initial", Text: delta})
 	})

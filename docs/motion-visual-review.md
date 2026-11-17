@@ -5,6 +5,17 @@ or model contract whose output needs assessment. Render the final motion that
 the shared engine actually compiles. A graph of source control points alone
 can hide timing distortion, additional reversals and quantization artifacts.
 
+## Multi-turn interactive requests
+
+`TestLiveMotionRequestSequence` drives the normal streaming chat handler with a
+local Ollama or signed-in ChatGPT model and a fake transport. Its capture
+records the original requests, admitted history counts, raw proposals, applied
+actions, commanded paths, transport appends and acknowledged Stops. It retains
+failed edits, read-backs and holds. Pass the capture to the atlas with `-llm`
+and to the renderer with `--captured`. Each independent session has its own
+transport timeline. Compare both the shape and the overall speed when checking
+a delayed correction. [Matched runs and reproduction commands](motion-request-quality-2026-11-17.md)
+
 ## Reproduce an atlas
 
 Production captures from `scripts/evaluate-app-autopilot.py` use

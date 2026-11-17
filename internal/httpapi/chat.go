@@ -21,8 +21,6 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/voice"
 )
 
-const interactiveChatHistoryLimit = chat.PromptHistoryLimit
-
 type chatStreamRequest struct {
 	SessionID string `json:"session_id,omitempty"`
 	Message   string `json:"message"`
@@ -325,30 +323,23 @@ func (s *Server) resolveInteractiveChatPersonalization(ctx context.Context, prom
 }
 
 func (s *Server) loadInteractiveChatPromptContext(ctx context.Context, sessionID string, settings config.LLMSettings, currentMessage ...string) (interactiveChatPromptContext, error) {
-	var loggedHistory []chat.LogMessage
-	var err error
-	var historyOmitted int
-	if settings.ActiveConnection != nil {
-		_, historyLimit, historyBytes := settings.ActiveConnection.ConversationWindow()
-		loggedHistory, historyOmitted, err = s.chatLog.RecentPromptHistoryContext(ctx, sessionID, historyLimit, historyBytes)
-	} else if settings.AdvancedMotion() {
-		// Advanced local models use the same bounded conversation retention as
-		// an external connection with the selected application context budget.
-		window := config.ModelConnection{ContextWindow: settings.LocalContextSize()}
-		_, historyLimit, historyBytes := window.ConversationWindow()
-		loggedHistory, historyOmitted, err = s.chatLog.RecentPromptHistoryContext(ctx, sessionID, historyLimit, historyBytes)
-	} else {
-		loggedHistory, err = s.chatLog.RecentSessionContext(ctx, sessionID, interactiveChatHistoryLimit)
-	}
-	if err != nil {
-		return interactiveChatPromptContext{}, err
-	}
 	active, err := s.sessionPersonaContext(ctx, sessionID)
 	if err != nil {
 		return interactiveChatPromptContext{}, err
 	}
+	capabilities := chatCapabilities(settings, active)
+	var loggedHistory []chat.LogMessage
+	var historyOmitted int
+	if capabilities.HistoryMessages > 0 {
+		loggedHistory, historyOmitted, err = s.chatLog.RecentPromptHistoryContext(ctx, sessionID, capabilities.HistoryMessages, capabilities.HistoryBytes)
+	} else {
+		loggedHistory, historyOmitted, err = s.chatLog.RecentCompactPromptHistoryContext(ctx, sessionID)
+	}
+	if err != nil {
+		return interactiveChatPromptContext{}, err
+	}
 	result := interactiveChatPromptContext{
-		Capabilities:   chatCapabilities(settings, active),
+		Capabilities:   capabilities,
 		History:        make([]llm.Message, 0, len(loggedHistory)),
 		HistoryOmitted: historyOmitted,
 		Persona:        active,
@@ -1187,6 +1178,7 @@ func chatCapabilities(settings config.LLMSettings, active *persona.Persona) chat
 	resolved := settings.Capabilities()
 	mode := chatMotionMode(settings.MotionGenerationMode)
 	capabilities := chat.Capabilities{
+		LocalInference:           settings.ActiveConnection == nil && (settings.Provider == config.LLMProviderOllama || settings.Provider == config.LLMProviderLlamaCPP),
 		SimpleMotion:             settings.ModelCapabilityLevel() == config.ModelCapabilitySimple,
 		AdvancedMotion:           settings.AdvancedMotion(),
 		IntermediateMotion:       settings.IntermediateMotion(),
@@ -1203,6 +1195,10 @@ func chatCapabilities(settings config.LLMSettings, active *persona.Persona) chat
 	}
 	if settings.ActiveConnection != nil {
 		_, capabilities.HistoryMessages, capabilities.HistoryBytes = settings.ActiveConnection.ConversationWindow()
+	} else if settings.AdvancedMotion() {
+		// Storage and prompt composition must agree on the saved local window.
+		window := config.ModelConnection{ContextWindow: settings.LocalContextSize()}
+		_, capabilities.HistoryMessages, capabilities.HistoryBytes = window.ConversationWindow()
 	}
 	if active != nil {
 		capabilities.Voice = chatVoiceLevel(active.ChatVoice)

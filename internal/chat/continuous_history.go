@@ -49,11 +49,18 @@ func verbatimMessages(system string, history []llm.Message, message string, opti
 	return append(messages, llm.Message{Role: "user", Content: message})
 }
 
-func hostedHistoryDropped(history, messages []llm.Message, capabilities Capabilities) int {
-	if !capabilities.PreserveConversationText {
-		return 0
+func composedHistoryDropped(history, messages []llm.Message) int {
+	return max(0, len(history)-includedDialogueHistory(messages))
+}
+
+func includedDialogueHistory(messages []llm.Message) int {
+	count := 0
+	for i, m := range messages {
+		if i < len(messages)-1 && (m.Role == "user" || m.Role == "assistant") {
+			count++
+		}
 	}
-	return max(0, len(history)-(len(messages)-2))
+	return count
 }
 
 // History carries speech only; the current authoritative score carries motion.

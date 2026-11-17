@@ -97,7 +97,7 @@ func (s AutopilotService) completeTempoAutopilot(ctx context.Context, request Re
 	}
 	input := llm.ChatRequest{
 		Messages:               messages,
-		HistoryMessagesDropped: request.HistoryMessagesDropped + hostedHistoryDropped(request.History, messages, s.Capabilities),
+		HistoryMessagesDropped: request.HistoryMessagesDropped + composedHistoryDropped(request.History, messages),
 		Model:                  s.Model,
 		Temperature:            min(temperature, 1.2),
 		TopP:                   chatTopP,
