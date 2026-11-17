@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
+
+	"github.com/mapledaemon/MagicHandy/internal/reviewfiles"
 )
 
 // Inert alternatives for physical review. They reuse semantic legs, exact
@@ -81,7 +83,7 @@ func TestLayeredTurnProfileReview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, encoded, 0600); err != nil {
+	if err := reviewfiles.Write(path, encoded); err != nil {
 		t.Fatal(err)
 	}
 }

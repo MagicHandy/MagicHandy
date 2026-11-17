@@ -395,7 +395,7 @@ func mediaContentType(path string) string {
 }
 
 func (s *Server) mediaState(ctx context.Context) map[string]any {
-	summary, err := s.media.Summary(ctx)
+	summary, err := s.summaries.media.read(ctx, s.store.Datastore(), s.media.Summary)
 	if err != nil {
 		return map[string]any{"available": false, "error": "media catalog unavailable"}
 	}

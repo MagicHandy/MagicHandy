@@ -140,6 +140,12 @@ func (f *FanOut) Stop(ctx context.Context, command StopCommand) (CommandResult, 
 	if len(results) > 0 {
 		result = results[0]
 	}
+	for _, participant := range results {
+		if !participant.ConfirmsStop() {
+			result.OK = false
+			break
+		}
+	}
 	if err != nil {
 		f.latch("linked Stop", err)
 		result.OK = false

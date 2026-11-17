@@ -1,4 +1,5 @@
 {
+  "No connected device to stop.": "停止する接続済みデバイスはありません。",
   "Chat and Autopilot choose tempo and rhythm; the VacuGlide makes its own strokes.": "チャットとオートパイロットがテンポとリズムを選び、VacuGlideがストロークを生成します。",
   "The provider is temporarily limiting requests. Wait a moment and try again.": "プロバイダーが一時的にリクエストを制限しています。少し待ってからもう一度お試しください。",
   "Installing…": "インストール中…",

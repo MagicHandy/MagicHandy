@@ -184,8 +184,12 @@ func (l *Library) FeedbackHistory(limit int) ([]Feedback, error) {
 
 // AutoDisable reports the explicit opt-in setting.
 func (l *Library) AutoDisable() (bool, error) {
+	return l.autoDisable(context.Background())
+}
+
+func (l *Library) autoDisable(ctx context.Context) (bool, error) {
 	var value string
-	err := l.db.SQL().QueryRowContext(context.Background(), `
+	err := l.db.SQL().QueryRowContext(ctx, `
 		SELECT value FROM app_kv WHERE key = ?
 	`, autoDisableKey).Scan(&value)
 	if errors.Is(err, sql.ErrNoRows) {

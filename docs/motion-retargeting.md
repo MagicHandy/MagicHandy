@@ -12,6 +12,10 @@ This spec defines how MagicHandy changes active motion while a device is already
 
 The goal is not to make every retarget invisible. The goal is to keep motion continuous, bounded, explainable, and recoverable.
 
+## Interactive queue lead
+
+Several edits can arrive before the next refill. The latest target joins the trajectory already accepted by the transport at the first uncommitted point. Once an interactive owner has its required lead plus a full sampling frame, its normal refill sends that target. The resulting horizon is bounded by the owner lead plus two frames during a burst on a continuously interactive stream. Playback estimates before the handoff follow the accepted trajectory. Fixed media retains its transport-specific prebuffer. [Ten-edit regression and measurements](architecture-review-implementation-2026-11-17.md)
+
 ## Terms
 
 Semantic target:

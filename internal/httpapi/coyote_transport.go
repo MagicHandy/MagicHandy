@@ -39,9 +39,10 @@ type coyoteRuntime struct {
 }
 
 type coyoteSnapshot struct {
-	Output    string                 `json:"output"`
-	Available bool                   `json:"available"`
-	Status    transport.CoyoteStatus `json:"status"`
+	Observation observationStamp       `json:"observation"`
+	Output      string                 `json:"output"`
+	Available   bool                   `json:"available"`
+	Status      transport.CoyoteStatus `json:"status"`
 }
 
 type coyoteStrengthRequest struct {
@@ -54,6 +55,9 @@ type coyoteStrengthRequest struct {
 // data directory's tools folder) owns the radio.
 func (s *Server) configureCoyote(runtime Runtime, settings config.Settings, logger *slog.Logger) {
 	connector := runtime.CoyoteConnector
+	if connector == nil && runtime.MotionSimulated {
+		connector = estim.NewSimulatedConnector()
+	}
 	if connector == nil {
 		s.coyote.helperPath = resolveWorkerBinary("", runtime.ExecutablePath, s.store.DataDir(), bluetoothWorkerName)
 		connector = workerclient.NewConnector(workerclient.Options{Profile: ble.ProfileCoyote, Path: s.coyote.helperPath, Logger: logger})
@@ -189,8 +193,8 @@ func (s *Server) handleCoyoteConnect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, err)
 		return
 	}
-	s.settingsLifecycleMu.Lock()
-	defer s.settingsLifecycleMu.Unlock()
+	releaseSettings := s.motion.life.HoldSettings()
+	defer releaseSettings()
 	settings, _ := s.store.Snapshot()
 	switch {
 	case !settings.Device.HasDevice(config.DeviceOutputCoyote):
@@ -358,12 +362,15 @@ func coyoteChannel(name string) (estim.Channel, bool) {
 }
 
 func (s *Server) coyoteSnapshot() coyoteSnapshot {
+	s.observations.devicesMu.Lock()
+	defer s.observations.devicesMu.Unlock()
 	settings, _ := s.store.Snapshot()
 	status := s.coyote.owner.Status()
 	return coyoteSnapshot{
-		Output:    settings.Device.Output,
-		Available: status.Simulated || s.coyote.helperPath != "",
-		Status:    status,
+		Observation: s.observationStamp(),
+		Output:      settings.Device.Output,
+		Available:   status.Simulated || s.coyote.helperPath != "",
+		Status:      status,
 	}
 }
 

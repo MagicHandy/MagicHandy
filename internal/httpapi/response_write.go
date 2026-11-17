@@ -36,12 +36,16 @@ func writeContextChunk(ctx context.Context, w http.ResponseWriter, data []byte) 
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
-	written, err := w.Write(data)
-	if err != nil {
-		return written, err
-	}
-	if written != len(data) {
-		return written, io.ErrShortWrite
+	written := 0
+	if len(data) > 0 {
+		var err error
+		written, err = w.Write(data)
+		if err != nil {
+			return written, err
+		}
+		if written != len(data) {
+			return written, io.ErrShortWrite
+		}
 	}
 	if err := controller.Flush(); err != nil && !errors.Is(err, http.ErrNotSupported) {
 		return written, err

@@ -14,11 +14,44 @@ func renderCreativeV2Matrix() []motion.Review {
 	settings := config.DefaultSettings().Motion
 	settings.SpeedMinPercent, settings.SpeedMaxPercent = 1, 100
 	entries := []motion.Review{}
-	type scenario struct {
-		name string
-		edit func(*motion.FlowSpec)
+	cases := creativeScenarios()
+	for _, model := range []string{config.HandyModelOriginal, config.HandyModel2Standard, config.HandyModel2Pro} {
+		settings.HandyModel = model
+		for _, speed := range []int{10, 45, 85} {
+			for _, sc := range cases {
+				s := motion.DefaultFlowSpec()
+				g := motion.DefaultGestureSpec()
+				g.FocusPercent, g.FocusRoamPercent = 100, 0 // Preserve explicit anchored comparisons.
+				s.Gesture = &g
+				s.RangeFloorPercent = 10
+				s.SpeedPercent = speed
+				sc.edit(&s)
+				target, err := motion.FlowTarget(s, settings)
+				if err != nil {
+					panic(err)
+				}
+				entry := motion.ReviewMotionOutput(target, settings)
+				entry.Name, entry.Group, entry.Description = sc.name, "creative-v2-matrix", "Generated from semantic parameters; no hardcoded preset path. Seed 17 for comparisons."
+				entries = append(entries, entry)
+			}
+			for _, seed := range []uint32{17, 23681, 1763268511} {
+				d := motion.NormalizeDynamicDefinition(motion.DynamicDefinition{CenterPercent: 50, SpanPercent: 90, SpanMinPercent: 25, SpanProfile: "wander", VariationPercent: 65, PhraseSeed: seed})
+				entry := motion.ReviewMotionOutput(motion.MotionTarget{Dynamic: &d, SpeedPercent: speed}, settings)
+				entry.Name, entry.Group = fmt.Sprintf("Original Creative realization %d", seed), "creative-original"
+				entries = append(entries, entry)
+			}
+		}
 	}
-	cases := []scenario{
+	return entries
+}
+
+type creativeScenario struct {
+	name string
+	edit func(*motion.FlowSpec)
+}
+
+func creativeScenarios() []creativeScenario {
+	return []creativeScenario{
 		{"Free roaming mixed reach", func(s *motion.FlowSpec) {
 			s.Gesture.FocusPercent, s.Gesture.FocusRoamPercent = 50, 100
 		}},
@@ -93,32 +126,4 @@ func renderCreativeV2Matrix() []motion.Review {
 			s.Gesture.VariationPercent = 100
 		}},
 	}
-	for _, model := range []string{config.HandyModelOriginal, config.HandyModel2Standard, config.HandyModel2Pro} {
-		settings.HandyModel = model
-		for _, speed := range []int{10, 45, 85} {
-			for _, sc := range cases {
-				s := motion.DefaultFlowSpec()
-				g := motion.DefaultGestureSpec()
-				g.FocusPercent, g.FocusRoamPercent = 100, 0 // Preserve explicit anchored comparisons.
-				s.Gesture = &g
-				s.RangeFloorPercent = 10
-				s.SpeedPercent = speed
-				sc.edit(&s)
-				target, err := motion.FlowTarget(s, settings)
-				if err != nil {
-					panic(err)
-				}
-				entry := motion.ReviewMotionOutput(target, settings)
-				entry.Name, entry.Group, entry.Description = sc.name, "creative-v2-matrix", "Generated from semantic parameters; no hardcoded preset path. Seed 17 for comparisons."
-				entries = append(entries, entry)
-			}
-			for _, seed := range []uint32{17, 23681, 1763268511} {
-				d := motion.NormalizeDynamicDefinition(motion.DynamicDefinition{CenterPercent: 50, SpanPercent: 90, SpanMinPercent: 25, SpanProfile: "wander", VariationPercent: 65, PhraseSeed: seed})
-				entry := motion.ReviewMotionOutput(motion.MotionTarget{Dynamic: &d, SpeedPercent: speed}, settings)
-				entry.Name, entry.Group = fmt.Sprintf("Original Creative realization %d", seed), "creative-original"
-				entries = append(entries, entry)
-			}
-		}
-	}
-	return entries
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/reviewfiles"
 )
 
 // This opt-in exporter exercises the production fitter, retargeter and sampler
@@ -37,85 +38,13 @@ func TestEdgeVisualReview(t *testing.T) {
 			t.Errorf("%s: %s", name, entry.Error)
 		}
 	}
-	join := func(name string, from, to MotionTarget, limits config.MotionSettings) {
-		old := NewMotionPlan("old", from, limits, 0, 0, time.Unix(0, 0))
-		for _, fraction := range []float64{.17, .43, .71, .93} {
-			at := int64(float64(old.PeriodMillis) * fraction)
-			next := old.Retarget("hold", to, limits, at, time.Unix(0, 0))
-			bridge := layeredTurnTransition(old, nil, &next, at)
-			joined := bridge != nil
-			if bridge == nil {
-				bridge = newPlanTransition(old, nil, at)
-			}
-			var path [][3]float64
-			var peakV, peakA, previousV float64
-			var turns, tiny int
-			lastDirection := 0
-			lastTurn := old.SampleAt(at).PositionPercent
-			for now := at - 250; now <= bridge.endMillis+1000; now += 5 {
-				x := sampleMotionPath(next, bridge, now).PositionPercent
-				v := (sampleMotionPath(next, bridge, now+1).PositionPercent - sampleMotionPath(next, bridge, now-1).PositionPercent) * 500
-				if math.IsNaN(x) || x < -0.01 || x > 100.01 {
-					t.Errorf("%s: out-of-range sample %f", name, x)
-				}
-				if now >= at && now <= bridge.endMillis {
-					peakV = max(peakV, math.Abs(v))
-					peakA = max(peakA, math.Abs(v-previousV)*200)
-					dir := curveDirection(v)
-					if dir != 0 && lastDirection != 0 && dir != lastDirection {
-						if turns > 0 && math.Abs(x-lastTurn) < 1 {
-							tiny++
-						}
-						turns++
-						lastTurn = x
-					}
-					if dir != 0 {
-						lastDirection = dir
-					}
-				}
-				previousV = v
-				path = append(path, [3]float64{float64(now-at) / 1000, x, v})
-			}
-			paths = append(paths, map[string]any{"name": fmt.Sprintf("%s/%.2f", name, fraction), "path": path, "spliced": joined, "tiny_turns": tiny, "peak_velocity": peakV, "peak_acceleration": peakA})
-		}
-	}
-	for _, kind := range []string{"layered", "creative_v2", "library", "steps"} {
-		for _, speed := range []int{15, 50, 90} {
-			spec := DefaultFlowSpec()
-			spec.SpeedPercent = speed
-			spec.PaceVariationPercent = 0
-			if kind == "creative_v2" {
-				g := DefaultGestureSpec()
-				spec.Gesture = &g
-			}
-			if kind == "steps" {
-				spec.Steps = []FlowStep{{MinPercent: 5, MaxPercent: 95, SpeedPercent: speed, Cycles: 2}, {MinPercent: 55, MaxPercent: 95, SpeedPercent: speed, Cycles: 3}}
-			}
-			before, err := FlowTarget(spec, settings)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if kind == "library" {
-				before = MotionTarget{PatternID: "flow-full-sweeps", SpeedPercent: speed}
-			}
-			p := NewMotionPlan("before", before, settings, 0, 0, time.Unix(0, 0))
-			summary := ReviewMotionOutput(before, settings).Summary
-			hold, err := HoldingTarget(ActiveMotionState{Target: p.Target, Perceptual: summary}, settings)
-			if err != nil {
-				t.Fatal(err)
-			}
-			name := fmt.Sprintf("%s/%d", kind, speed)
-			add(name+"/before", before, settings, "", "")
-			add(name+"/hold", hold, settings, "", "")
-			join(name+"/entry", before, hold, settings)
-			join(name+"/return", hold, before, settings)
-		}
-	}
+
+	paths = append(paths, edgeFixturePaths(t, settings, add)...)
 	for _, file := range strings.Split(os.Getenv("MAGICHANDY_EDGE_LIVE_REPORTS"), ",") {
 		if file == "" {
 			continue
 		}
-		data, err := os.ReadFile(file)
+		data, err := reviewfiles.Read(file)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -169,17 +98,103 @@ func TestEdgeVisualReview(t *testing.T) {
 			}
 			add(name+"/holding", hold, limits, row.Model, row.Raw)
 			add(name+"/return", next, limits, row.Model, row.Raw)
-			join(name+"/return", hold, next, limits)
+			paths = append(paths, edgeJoinPaths(t, name+"/return", hold, next, limits)...)
 		}
 	}
+	writeEdgeArtifacts(t, output, entries, paths)
+	t.Logf("rendered %d steady entries and %d handoffs", len(entries), len(paths))
+}
+
+func edgeJoinPaths(t *testing.T, name string, from, to MotionTarget, limits config.MotionSettings) []map[string]any {
+	var paths []map[string]any
+	old := NewMotionPlan("old", from, limits, 0, 0, time.Unix(0, 0))
+	for _, fraction := range []float64{.17, .43, .71, .93} {
+		at := int64(float64(old.PeriodMillis) * fraction)
+		next := old.Retarget("hold", to, limits, at, time.Unix(0, 0))
+		bridge := layeredTurnTransition(old, nil, &next, at)
+		joined := bridge != nil
+		if bridge == nil {
+			bridge = newPlanTransition(old, nil, at)
+		}
+		var path [][3]float64
+		var peakV, peakA, previousV float64
+		var turns, tiny int
+		lastDirection := 0
+		lastTurn := old.SampleAt(at).PositionPercent
+		for now := at - 250; now <= bridge.endMillis+1000; now += 5 {
+			x := sampleMotionPath(next, bridge, now).PositionPercent
+			v := (sampleMotionPath(next, bridge, now+1).PositionPercent - sampleMotionPath(next, bridge, now-1).PositionPercent) * 500
+			if math.IsNaN(x) || x < -0.01 || x > 100.01 {
+				t.Errorf("%s: out-of-range sample %f", name, x)
+			}
+			if now >= at && now <= bridge.endMillis {
+				peakV = max(peakV, math.Abs(v))
+				peakA = max(peakA, math.Abs(v-previousV)*200)
+				dir := curveDirection(v)
+				if dir != 0 && lastDirection != 0 && dir != lastDirection {
+					if turns > 0 && math.Abs(x-lastTurn) < 1 {
+						tiny++
+					}
+					turns++
+					lastTurn = x
+				}
+				if dir != 0 {
+					lastDirection = dir
+				}
+			}
+			previousV = v
+			path = append(path, [3]float64{float64(now-at) / 1000, x, v})
+		}
+		paths = append(paths, map[string]any{"name": fmt.Sprintf("%s/%.2f", name, fraction), "path": path, "spliced": joined, "tiny_turns": tiny, "peak_velocity": peakV, "peak_acceleration": peakA})
+	}
+	return paths
+}
+
+func writeEdgeArtifacts(t *testing.T, output string, entries []Review, paths []map[string]any) {
 	for suffix, value := range map[string]any{"-atlas.json": map[string]any{"schema": "magichandy.motion-atlas.v1", "entries": entries}, "-handoffs.json": paths} {
 		b, err := json.MarshalIndent(value, "", "  ")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = os.WriteFile(output+suffix, b, 0600); err != nil {
+		if err = reviewfiles.Write(output+suffix, b); err != nil {
 			t.Fatal(err)
 		}
 	}
-	t.Logf("rendered %d steady entries and %d handoffs", len(entries), len(paths))
+}
+
+func edgeFixturePaths(t *testing.T, settings config.MotionSettings, add func(string, MotionTarget, config.MotionSettings, string, string)) []map[string]any {
+	var paths []map[string]any
+	for _, kind := range []string{"layered", "creative_v2", "library", "steps"} {
+		for _, speed := range []int{15, 50, 90} {
+			spec := DefaultFlowSpec()
+			spec.SpeedPercent = speed
+			spec.PaceVariationPercent = 0
+			if kind == "creative_v2" {
+				g := DefaultGestureSpec()
+				spec.Gesture = &g
+			}
+			if kind == "steps" {
+				spec.Steps = []FlowStep{{MinPercent: 5, MaxPercent: 95, SpeedPercent: speed, Cycles: 2}, {MinPercent: 55, MaxPercent: 95, SpeedPercent: speed, Cycles: 3}}
+			}
+			before, err := FlowTarget(spec, settings)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if kind == "library" {
+				before = MotionTarget{PatternID: "flow-full-sweeps", SpeedPercent: speed}
+			}
+			p := NewMotionPlan("before", before, settings, 0, 0, time.Unix(0, 0))
+			summary := ReviewMotionOutput(before, settings).Summary
+			hold, err := HoldingTarget(ActiveMotionState{Target: p.Target, Perceptual: summary}, settings)
+			if err != nil {
+				t.Fatal(err)
+			}
+			name := fmt.Sprintf("%s/%d", kind, speed)
+			add(name+"/before", before, settings, "", "")
+			add(name+"/hold", hold, settings, "", "")
+			paths = append(paths, edgeJoinPaths(t, name+"/entry", before, hold, settings)...)
+			paths = append(paths, edgeJoinPaths(t, name+"/return", hold, before, settings)...)
+		}
+	}
+	return paths
 }

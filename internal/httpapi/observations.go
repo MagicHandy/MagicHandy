@@ -10,9 +10,13 @@ import (
 // capture locks cover only in-memory snapshots; no network/database operation
 // or response write may retain one of these locks.
 type observationRuntime struct {
-	settingsMu sync.Mutex
-	motionMu   sync.Mutex
-	sequence   atomic.Uint64
+	settingsMu     sync.Mutex
+	motionMu       sync.Mutex
+	motionCaptured time.Time
+	motionStop     uint64
+	motionValue    map[string]any
+	devicesMu      sync.Mutex
+	sequence       atomic.Uint64
 }
 
 type observationStamp struct {

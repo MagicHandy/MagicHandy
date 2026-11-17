@@ -1,5 +1,6 @@
 //go:build magichandy_labs
 
+// Command cloud-motion-review evaluates semantic model proposals without dispatching motion.
 package main
 
 // The Freestyle direction prototype is inert development tooling, not a new motion owner.

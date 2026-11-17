@@ -50,7 +50,7 @@ func fitLegCurves(legs []gestureLeg, durations []int64, budget legBudget) ([]Cur
 		turns := gestureTurnAccelerations(legs, durations)
 		changed := false
 		for i, leg := range legs {
-			curves[i] = gestureTurnCurve(leg, durations[i], turns[i], turns[(i+1)%len(legs)])
+			curves[i] = fitGestureTurn(curves[i], leg, durations[i], turns[i], turns[(i+1)%len(legs)])
 			if scale := legTimeScale(curves[i], budget.forLeg(leg)); scale > 1 {
 				durations[i] = int64(math.Ceil(float64(durations[i]) * scale * 1.002))
 				changed = true

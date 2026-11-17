@@ -8,7 +8,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
-func (e *Engine) snapshotLocked() ActiveMotionState {
+func (e *Engine) snapshotLocked(target MotionTarget) ActiveMotionState {
 	now := e.now()
 	playbackMillis := int64(0)
 	if e.running {
@@ -29,7 +29,7 @@ func (e *Engine) snapshotLocked() ActiveMotionState {
 		Generation:                 e.generation,
 		StreamID:                   e.streamID,
 		PlanID:                     e.plan.ID,
-		Target:                     cloneMotionTarget(e.plan.Target),
+		Target:                     cloneMotionTarget(target),
 		Settings:                   e.settings,
 		NextSampleMillis:           e.nextSampleMillis,
 		RecentCommandLatencyMillis: e.recentCommandLatencyMillisLocked(),
@@ -89,7 +89,7 @@ func (e *Engine) traceStateLocked(reason string, annotation string) {
 	if e.traces == nil {
 		return
 	}
-	e.traces.Add(diagnostics.MotionTraceRow{
+	e.traces.Record(diagnostics.MotionTraceRow{
 		Source:     e.plan.Target.Source,
 		Reason:     reason,
 		Target:     traceTargetWithPace(e.plan.Target, e.settings, e.plan.Perceptual.Pace),
@@ -113,7 +113,7 @@ func (e *Engine) traceRetargetLocked(
 	if e.traces == nil {
 		return
 	}
-	e.traces.Add(diagnostics.MotionTraceRow{
+	e.traces.Record(diagnostics.MotionTraceRow{
 		Source:     next.Target.Source,
 		Reason:     reason,
 		Target:     traceTargetWithPace(next.Target, nextSettings, next.Perceptual.Pace),
@@ -180,7 +180,7 @@ func (e *Engine) recordTransportResultWithAnnotation(
 			row.Annotation = "transport_error"
 		}
 	}
-	e.traces.Add(row)
+	e.traces.Record(row)
 }
 
 func (e *Engine) traceSource() string {

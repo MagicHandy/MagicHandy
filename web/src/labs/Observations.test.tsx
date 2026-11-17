@@ -32,22 +32,22 @@ describe("saved lab observations",()=>{
     expect(screen.queryByText("Observation saved.")).not.toBeInTheDocument();
   });
   it("reads durable records and passes feedback to a draft only after Use in chat",async()=>{
-    const useInChat=vi.fn();render(<ObservationsPage useInChat={useInChat}/>);
-    await screen.findByText(row.text);expect(useInChat).not.toHaveBeenCalled();
+    const onUseInChat=vi.fn();render(<ObservationsPage onUseInChat={onUseInChat}/>);
+    await screen.findByText(row.text);expect(onUseInChat).not.toHaveBeenCalled();
     expect(screen.getByText(records.storage_path)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button",{name:"Use in chat"}));
-    expect(useInChat).toHaveBeenCalledWith(expect.stringContaining(row.text));
+    expect(onUseInChat).toHaveBeenCalledWith(expect.stringContaining(row.text));
     expect(labApi.chat).not.toHaveBeenCalled();expect(labApi.start).not.toHaveBeenCalled();
   });
   it("requires an explicit delete and renders the returned backend collection",async()=>{
     vi.mocked(labApi.deleteObservation).mockResolvedValue({...records,observations:[]});
-    render(<ObservationsPage useInChat={vi.fn()}/>);await screen.findByText(row.text);
+    render(<ObservationsPage onUseInChat={vi.fn()}/>);await screen.findByText(row.text);
     fireEvent.click(screen.getByRole("button",{name:"Delete"}));expect(labApi.deleteObservation).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button",{name:"Confirm delete"}));
     await screen.findByText("No observations yet");expect(labApi.deleteObservation).toHaveBeenCalledWith(row.id);
   });
   it("keeps observation mutations disabled for readers",async()=>{
-    app.readOnly=true;render(<ObservationsPage useInChat={vi.fn()}/>);await screen.findByText(row.text);
+    app.readOnly=true;render(<ObservationsPage onUseInChat={vi.fn()}/>);await screen.findByText(row.text);
     expect(screen.getByRole("button",{name:"Delete"})).toBeDisabled();
     expect(screen.getByRole("button",{name:"Use in chat"})).toBeDisabled();
     expect(labApi.deleteObservation).not.toHaveBeenCalled();

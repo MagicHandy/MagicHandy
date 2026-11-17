@@ -581,7 +581,7 @@ func TestChatStartRechecksStopAfterWaitingForEngineAdmission(t *testing.T) {
 	server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake})
 	t.Cleanup(server.Close)
 	stopSequence := server.stopSequence.Load()
-	server.motion.lifecycleMu.Lock()
+	releaseOwner := server.motion.life.Hold()
 
 	type dispatchResult struct {
 		dispatch chatMotionDispatch
@@ -594,7 +594,7 @@ func TestChatStartRechecksStopAfterWaitingForEngineAdmission(t *testing.T) {
 	}()
 	time.Sleep(20 * time.Millisecond)
 	finishInvalidation, _ := server.invalidateWorkForStop("test_stop")
-	server.motion.lifecycleMu.Unlock()
+	releaseOwner()
 	defer finishInvalidation()
 
 	select {

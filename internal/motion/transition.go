@@ -69,7 +69,7 @@ func transitionRequired(previous MotionPlan, transition *planTransition, next Mo
 	// adjustment. Change pace directly at the continuous handoff in this narrow
 	// case; spatial/content changes and an in-progress transition still use the
 	// full bounded bridge below.
-	if transition == nil && samePhaseGeometry(previous, next) {
+	if (transition == nil || transition.endMillis <= handoffMillis) && samePhaseGeometry(previous, next) {
 		before := previous.SampleAt(handoffMillis).PositionPercent
 		after := next.SampleAt(handoffMillis).PositionPercent
 		beforeDirection := previous.DirectionAt(handoffMillis)

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "MagicHandy browser UI — Vite + React + TypeScript, built to static assets embedded by the Go binary. Node is a build/CI dependency only; the runtime is the Go binary.",
+  "description": "MagicHandy browser UI \u00e2\u20ac\u201d Vite + React + TypeScript, built to static assets embedded by the Go binary. Node is a build/CI dependency only; the runtime is the Go binary.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -12,19 +12,23 @@
     "typecheck": "tsc --noEmit",
     "test": "node scripts/check-localization.mjs && vitest run",
     "test:watch": "vitest",
-    "localization:check": "node scripts/check-localization.mjs"
+    "localization:check": "node scripts/check-localization.mjs",
+    "lint": "eslint src"
   },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@babel/eslint-parser": "^7.29.13",
     "@testing-library/jest-dom": "^6.4.8",
     "@testing-library/react": "^16.0.1",
     "@testing-library/user-event": "^14.5.2",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^25.0.0",
     "typescript": "^5.5.4",
     "vite": "^5.4.2",

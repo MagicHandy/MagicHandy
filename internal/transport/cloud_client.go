@@ -190,21 +190,9 @@ func NewCloudRESTTransport(prerequisites CloudPrerequisites, options CloudBuildO
 		return nil, err
 	}
 
-	baseURL := strings.TrimSpace(endpoint.BaseURL)
-	if baseURL == "" {
-		baseURL = defaultCloudBaseURL
-	}
-	parsed, err := url.Parse(baseURL)
+	parsed, err := endpoint.baseURL()
 	if err != nil {
-		return nil, fmt.Errorf("parse cloud REST base URL: %w", err)
-	}
-	if parsed.Scheme == "" || parsed.Host == "" {
-		return nil, errors.New("cloud REST base URL must include scheme and host")
-	}
-	if parsed.Path == "" {
-		parsed.Path = "/"
-	} else if !strings.HasSuffix(parsed.Path, "/") {
-		parsed.Path += "/"
+		return nil, err
 	}
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
@@ -1118,3 +1106,26 @@ func cloneRaw(data []byte) json.RawMessage {
 	copy(clone, data)
 	return clone
 }
+
+func (endpoint CloudEndpointConfig) baseURL() (*url.URL, error) {
+	baseURL := strings.TrimSpace(endpoint.BaseURL)
+	if baseURL == "" {
+		baseURL = defaultCloudBaseURL
+	}
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse cloud REST base URL: %w", err)
+	}
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return nil, errors.New("cloud REST base URL must include scheme and host")
+	}
+	if parsed.Path == "" {
+		parsed.Path = "/"
+	} else if !strings.HasSuffix(parsed.Path, "/") {
+		parsed.Path += "/"
+	}
+	return parsed, nil
+}
+
+// Validate checks the Cloud API endpoint without constructing a transport.
+func (endpoint CloudEndpointConfig) Validate() error { _, err := endpoint.baseURL(); return err }

@@ -273,8 +273,8 @@ func (s *Server) handleLabTestFeedback(w http.ResponseWriter, r *http.Request) {
 	}
 	// Advancing never silently leaves an audition running behind the next card.
 	// This is an admission check only; Stop continues to use the shared path.
-	s.motion.lifecycleMu.Lock()
-	defer s.motion.lifecycleMu.Unlock()
+	releaseOwner := s.motion.life.Hold()
+	defer releaseOwner()
 	if engine := s.currentMotionEngine(); engine != nil {
 		snapshot := engine.Snapshot()
 		if snapshot.Running || snapshot.Paused {

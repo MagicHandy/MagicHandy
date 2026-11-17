@@ -695,7 +695,7 @@ func (m *mediaSyncRuntime) trace(reason string, event mediaSyncEvent, drift int6
 	if m.server.traces == nil {
 		return
 	}
-	m.server.traces.Add(diagnostics.MotionTraceRow{
+	m.server.traces.Record(diagnostics.MotionTraceRow{
 		Source: motion.TargetSourceMedia,
 		Reason: reason,
 		Target: &diagnostics.MotionTraceTarget{

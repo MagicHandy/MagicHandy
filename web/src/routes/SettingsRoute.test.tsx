@@ -215,14 +215,8 @@ describe("SettingsRoute", () => {
     view.rerender(<SettingsRoute />);
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    const update = saveSettings.mock.calls[0][0];
-    expect(update.device).toEqual(expect.objectContaining({ linked_failure_policy: "continue_healthy", intiface_server_address: "ws://127.0.0.1:23456" }));
-    expect(update.device).not.toHaveProperty("handy_connection_key");
-    expect(update.clear_connection_key).toBe(false);
-    expect(update.motion.reverse_direction).toBe(true);
-    expect(update.server.port).toBe(49718);
-    expect(update).not.toHaveProperty("estim");
-    expect(update).not.toHaveProperty("vibration");
+    expect(saveSettings.mock.calls[0][0].changes).toEqual({});
+
   });
 
   beforeEach(() => {
@@ -308,7 +302,7 @@ describe("SettingsRoute", () => {
     expect(transcript).toHaveValue("My unsaved transcript.");
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
     await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
-      voice: expect.objectContaining({ tts_module_root: "new-runtime", tts_reference_text: "My unsaved transcript." }),
+      changes: { voice: { tts_reference_text: "My unsaved transcript." } },
     })));
   });
 
@@ -326,13 +320,9 @@ describe("SettingsRoute", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    expect(saveSettings.mock.calls[0][0].ui).toEqual({
+    expect(saveSettings.mock.calls[0][0].changes.ui).toEqual({
       locale: "ja",
       show_remote_navigation: false,
-      theme: "steel-azure",
-      setup_completed: true,
-      update_check_mode: "automatic",
-      notification_categories: ["system", "voice", "updates"],
     });
   });
 
@@ -354,13 +344,8 @@ describe("SettingsRoute", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    expect(saveSettings.mock.calls[0][0].ui).toEqual({
-      locale: "en",
+    expect(saveSettings.mock.calls[0][0].changes.ui).toEqual({
       theme: "midnight-gold",
-      show_remote_navigation: true,
-      setup_completed: true,
-      update_check_mode: "automatic",
-      notification_categories: ["system", "voice", "updates"],
     });
   });
 
@@ -380,7 +365,7 @@ describe("SettingsRoute", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    expect(saveSettings.mock.calls[0][0].ui?.notification_categories).toEqual(["system", "voice", "library"]);
+    expect(saveSettings.mock.calls[0][0].changes.ui?.notification_categories).toEqual(["system", "voice", "library"]);
   });
 
   it("does not overwrite immediate playback filters from a stale settings draft", async () => {
@@ -391,13 +376,7 @@ describe("SettingsRoute", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Save settings" }));
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    const media = saveSettings.mock.calls[0][0].media;
-    // The guard is the omission: these two save through their own immediate
-    // endpoint, so a stale Settings draft must never carry them.
-    expect(media).not.toHaveProperty("script_smoothing_percent");
-    expect(media).not.toHaveProperty("peak_rounding_ms");
-    expect(media.library_paths).toEqual(["C:\\Media"]);
-    expect(media.script_offset_ms).toBe(125);
+    expect(saveSettings.mock.calls[0][0].changes).not.toHaveProperty("media");
   });
 
   it("localizes settings navigation and chat option labels", async () => {
@@ -465,7 +444,7 @@ describe("SettingsRoute", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    expect(saveSettings.mock.calls[0][0].llm.llama_cpp_context_size).toBe(65536);
+    expect(saveSettings.mock.calls[0][0].changes.llm?.llama_cpp_context_size).toBe(65536);
     expect(app.refresh).toHaveBeenCalledOnce();
   });
 
@@ -485,7 +464,7 @@ describe("SettingsRoute", () => {
     await waitFor(() => expect(screen.getByRole("combobox", { name: "Diagnostics verbosity" })).toHaveValue("normal"));
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    expect(saveSettings.mock.calls[0][0].diagnostics).toEqual({ verbosity: "normal" });
+    expect(saveSettings.mock.calls[0][0].changes).toEqual({});
   });
 
   it("renders a persistent first-load error and recovers through Retry", async () => {
@@ -552,9 +531,8 @@ describe("SettingsRoute", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    expect(saveSettings.mock.calls[0][0].chat).toEqual({
+    expect(saveSettings.mock.calls[0][0].changes.chat).toEqual({
       startup_behavior: "new",
-      keep_unsaved_on_exit: false,
     });
   });
 
@@ -569,7 +547,7 @@ describe("SettingsRoute", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    expect(saveSettings.mock.calls[0][0].llm.chat_voice).toBe("explicit");
+    expect(saveSettings.mock.calls[0][0].changes.llm?.chat_voice).toBe("explicit");
   });
 
   it("persists anatomy and persona prompt context", async () => {
@@ -591,7 +569,7 @@ describe("SettingsRoute", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    expect(saveSettings.mock.calls[0][0].llm).toMatchObject({
+    expect(saveSettings.mock.calls[0][0].changes.llm).toMatchObject({
       user_anatomy: "custom",
       custom_anatomy: "chosen wording",
       persona_description: "An energetic partner",
@@ -608,7 +586,7 @@ describe("SettingsRoute", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    expect(saveSettings.mock.calls[0][0].motion.apply_video_speed_limit).toBe(true);
+    expect(saveSettings.mock.calls[0][0].changes.motion?.apply_video_speed_limit).toBe(true);
   });
 
   it.each(["#/settings/model", "#/settings/chat/model", "#/settings/prompts", "#/settings/chat/prompts"])("keeps %s inside the consolidated Chat settings", async (hash) => {
@@ -640,8 +618,8 @@ describe("SettingsRoute", () => {
     expect(screen.getAllByRole("button", { name: "Save settings" })).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    expect(saveSettings.mock.calls[0][0].chat?.startup_behavior).toBe("new");
-    expect(saveSettings.mock.calls[0][0].llm.chat_voice).toBe("warm");
+    expect(saveSettings.mock.calls[0][0].changes.chat?.startup_behavior).toBe("new");
+    expect(saveSettings.mock.calls[0][0].changes.llm?.chat_voice).toBe("warm");
   });
 
   it("opens conversation for an unknown Chat child without adding a sidebar to General", async () => {
@@ -669,7 +647,7 @@ describe("SettingsRoute", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    expect(saveSettings.mock.calls[0][0].media).toMatchObject({
+    expect(saveSettings.mock.calls[0][0].changes.media).toMatchObject({
       auto_scan_on_startup: true,
       remove_missing_on_scan: false,
     });

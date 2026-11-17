@@ -154,6 +154,13 @@ func NewTraceRing(capacity int) *TraceRing {
 
 // Add stores a sanitized trace row and returns the stored row.
 func (r *TraceRing) Add(row MotionTraceRow) MotionTraceRow {
+	return cloneTraceRow(r.store(row))
+}
+
+// Record stores an independent sanitized row for callers that only publish events.
+func (r *TraceRing) Record(row MotionTraceRow) { r.store(row) }
+
+func (r *TraceRing) store(row MotionTraceRow) MotionTraceRow {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -168,11 +175,11 @@ func (r *TraceRing) Add(row MotionTraceRow) MotionTraceRow {
 		r.rows[r.start] = stored
 		r.start = (r.start + 1) % r.capacity
 		r.dropped++
-		return cloneTraceRow(stored)
+		return stored
 	}
 
 	r.rows = append(r.rows, stored)
-	return cloneTraceRow(stored)
+	return stored
 }
 
 // Rows returns the trace rows in oldest-first order.
@@ -261,6 +268,7 @@ func cloneTraceTarget(target *MotionTraceTarget) *MotionTraceTarget {
 		return nil
 	}
 	clone := *target
+	clone.DynamicAnchors = append([]string(nil), target.DynamicAnchors...)
 	clone.PaceLimiters = append([]string(nil), target.PaceLimiters...)
 	return &clone
 }

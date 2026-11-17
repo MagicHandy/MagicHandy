@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -45,7 +46,8 @@ const (
 
 // DB wraps the process-owned SQLite connection and schema helpers.
 type DB struct {
-	sql *sql.DB
+	sql      *sql.DB
+	revision atomic.Uint64
 
 	writer   chan struct{}
 	recovery RecoveryStatus
@@ -89,6 +91,9 @@ func sqliteDSN(path string) string {
 	values.Add("_pragma", "cache_size(-2000)")
 	return path + "?" + values.Encode()
 }
+
+// Revision changes after each successful process-owned write transaction.
+func (db *DB) Revision() uint64 { return db.revision.Load() }
 
 // SQL exposes the underlying handle for package-owned reads. Production writes
 // must use WithTx so every logical domain shares the serialized writer.
@@ -147,7 +152,11 @@ func (db *DB) WithTx(ctx context.Context, fn func(*sql.Tx) error) error {
 	if err := fn(tx); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	db.revision.Add(1)
+	return nil
 }
 
 // LegacyImportStatus returns the recorded import state for a legacy JSON file.

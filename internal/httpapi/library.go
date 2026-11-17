@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,11 +33,11 @@ func (s *Server) libraryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/library/auto-disable", s.handleLibraryAutoDisable)
 }
 
-func (s *Server) libraryState() patterns.Summary {
+func (s *Server) libraryState(ctx context.Context) patterns.Summary {
 	if s.patterns == nil {
 		return patterns.Summary{Available: false}
 	}
-	summary, err := s.patterns.Summary()
+	summary, err := s.summaries.library.read(ctx, s.store.Datastore(), s.patterns.Summary)
 	if err != nil {
 		return patterns.Summary{Available: false}
 	}

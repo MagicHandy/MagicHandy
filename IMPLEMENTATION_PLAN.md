@@ -1,5 +1,7 @@
 # MagicHandy Go Implementation Plan
 
+Device admission, settings refresh, Resume, Stop and owner retirement now share the `internal/deviceapp` lifecycle coordinator. A paused run reads the latest saved limits before sending its first command. Interactive edits coalesce at the first uncommitted handoff. Backend observation ordering and the dirty-field settings patch protect updates from delayed clients. The [November 17 architecture review](docs/architecture-review-implementation-2026-11-17.md) records all 19 changes, their regressions and measured costs.
+
 Model roles gain **Answer roleplay cues with motion**, on by default, for
 Advanced Chat models in Layered or Creative v2. Turning it off trades alpha.84's
 scene motion for quicker replies. On the same requests no release since

@@ -53,8 +53,8 @@ func (s *Server) handleSelectHandy(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
-	s.settingsLifecycleMu.Lock()
-	defer s.settingsLifecycleMu.Unlock()
+	releaseSettings := s.motion.life.HoldSettings()
+	defer releaseSettings()
 	id := r.PathValue("id")
 	settings, _ := s.store.Snapshot()
 	c, ok := settings.Device.HandyConnection(id)

@@ -84,24 +84,7 @@ func main() {
 		must(os.WriteFile(*output, data, 0600))
 	}
 	for _, variant := range strings.Split(*models, ",") {
-		parts := strings.Split(variant, "/")
-		model := parts[0]
-		effort, tier := "", ""
-		if len(parts) > 1 && parts[1] != "default" {
-			effort = parts[1]
-		}
-		if len(parts) > 2 {
-			tier = parts[2]
-		}
-		var p llm.Provider
-		if *localModel != "" {
-			model = *localModel
-			variant = model
-			p, err = llm.NewOllamaProvider(llm.HTTPProviderOptions{BaseURL: "http://127.0.0.1:11434", Model: model, Timeout: 90 * time.Second})
-		} else {
-			p, err = llm.NewOpenAIResponsesProvider(llm.OpenAIOptions{PlanUsage: true, Model: model, Token: token, Timeout: 45 * time.Second, Client: &http.Client{Transport: probeTransport{effort, tier}}})
-		}
-		must(err)
+		variant, model, p := reviewProvider(variant, *localModel, token)
 		for repeat := 0; repeat < *repeats; repeat++ {
 			methods := []string{"creative_v2"}
 			if *phase == "suite" {
@@ -123,36 +106,8 @@ func main() {
 					if method == "adaptive" {
 						trial = adaptive(ctx, p, model, message, current, limits, history)
 					}
-					compiled := false
-					summary := motion.PerceptualSummary{}
-					if trial.Valid {
-						target, e := motion.FlowTarget(trial.After, limits)
-						compiled = e == nil
-						if e != nil {
-							trial.Error = e.Error()
-							trial.Valid = false
-						} else {
-							review := motion.ReviewMotionOutput(target, limits)
-							summary = review.Summary
-							if review.Error != "" {
-								trial.Error = review.Error
-								trial.Valid = false
-								compiled = false
-							}
-						}
-					}
-					data, _ := json.Marshal(trial)
-					row := map[string]any{}
-					_ = json.Unmarshal(data, &row)
-					row["variant"] = variant
-					row["repeat"] = repeat
-					row["case"] = index
-					row["compiled"] = compiled
-					intent := reviewIntent(*phase, method, index, trial, current, summary)
-					row["output"] = summary
-					row["intent_pass"] = intent
-					row["steering"] = *steering
-					row["expected_recipe"] = fmt.Sprintf("%s case %d", *phase, index)
+					compiled, summary := compileReviewTrial(&trial, limits)
+					row := trialReviewRecord(trial, summary, current, *phase, method, variant, index, repeat, compiled, *steering)
 					rows = append(rows, row)
 					save()
 					fmt.Printf("%s r%d %s/%d valid=%v compiled=%v ms=%d error=%s\n", variant, repeat, method, index, trial.Valid, compiled, trial.ElapsedMillis, trial.Error)
@@ -169,4 +124,65 @@ func must(err error) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func compileReviewTrial(trial *chat.LLMLabTrial, limits config.MotionSettings) (bool, motion.PerceptualSummary) {
+	compiled := false
+	summary := motion.PerceptualSummary{}
+	if trial.Valid {
+		target, e := motion.FlowTarget(trial.After, limits)
+		compiled = e == nil
+		if e != nil {
+			trial.Error = e.Error()
+			trial.Valid = false
+		} else {
+			review := motion.ReviewMotionOutput(target, limits)
+			summary = review.Summary
+			if review.Error != "" {
+				trial.Error = review.Error
+				trial.Valid = false
+				compiled = false
+			}
+		}
+	}
+	return compiled, summary
+}
+
+func reviewProvider(variant, localModel string, token llm.TokenSource) (string, string, llm.Provider) {
+	parts := strings.Split(variant, "/")
+	model := parts[0]
+	effort, tier := "", ""
+	if len(parts) > 1 && parts[1] != "default" {
+		effort = parts[1]
+	}
+	if len(parts) > 2 {
+		tier = parts[2]
+	}
+	var err error
+	var p llm.Provider
+	if localModel != "" {
+		model = localModel
+		variant = model
+		p, err = llm.NewOllamaProvider(llm.HTTPProviderOptions{BaseURL: "http://127.0.0.1:11434", Model: model, Timeout: 90 * time.Second})
+	} else {
+		p, err = llm.NewOpenAIResponsesProvider(llm.OpenAIOptions{PlanUsage: true, Model: model, Token: token, Timeout: 45 * time.Second, Client: &http.Client{Transport: probeTransport{effort, tier}}})
+	}
+	must(err)
+	return variant, model, p
+}
+
+func trialReviewRecord(trial chat.LLMLabTrial, summary motion.PerceptualSummary, current motion.FlowSpec, phase, method, variant string, index, repeat int, compiled, steering bool) map[string]any {
+	data, _ := json.Marshal(trial)
+	row := map[string]any{}
+	_ = json.Unmarshal(data, &row)
+	row["variant"] = variant
+	row["repeat"] = repeat
+	row["case"] = index
+	row["compiled"] = compiled
+	intent := reviewIntent(phase, method, index, trial, current, summary)
+	row["output"] = summary
+	row["intent_pass"] = intent
+	row["steering"] = steering
+	row["expected_recipe"] = fmt.Sprintf("%s case %d", phase, index)
+	return row
 }

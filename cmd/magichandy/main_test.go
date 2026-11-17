@@ -2,19 +2,33 @@ package main
 
 import (
 	"bytes"
+	"errors"
+	"net"
+	"net/url"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/autoblowsim"
+	"github.com/mapledaemon/MagicHandy/internal/buttplugsim"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 )
 
 func TestApplicationRuntimeMotionSimulationIsExplicit(t *testing.T) {
-	production := applicationRuntime(false)
+	production, closeProduction, err := applicationRuntime(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(closeProduction)
 	if production.MotionTransport != nil || production.MotionSimulated {
 		t.Fatal("production runtime unexpectedly bypasses the selected device owner")
 	}
 
-	review := applicationRuntime(true)
+	review, closeReview, err := applicationRuntime(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(closeReview)
 	if !review.MotionSimulated {
 		t.Fatal("review runtime does not disclose motion simulation")
 	}
@@ -363,5 +377,38 @@ func TestValidateListenAddressRequiresAuthenticatedHTTPSForRemoteBinding(t *test
 	}
 	if err := validateListenAddress("8.8.8.8:8080", true, true); err == nil || !strings.Contains(err.Error(), "internet-facing") {
 		t.Fatalf("public address error = %v, want internet-facing rejection", err)
+	}
+}
+
+func TestSimulatorFailureAbortsStartupAndClosesEarlierServices(t *testing.T) {
+	failure := errors.New("fixture listener unavailable")
+	second := func() (*autoblowsim.Server, error) { return nil, failure }
+	runtime, _, err := buildApplicationRuntime(true, func() (*buttplugsim.Server, error) { return nil, failure }, func() (*autoblowsim.Server, error) {
+		t.Fatal("second simulator started after failure")
+		return nil, nil
+	})
+	if !errors.Is(err, failure) || runtime.MotionTransport != nil {
+		t.Fatal("Intiface failure produced a live runtime")
+	}
+	var address string
+	runtime, _, err = buildApplicationRuntime(true, func() (*buttplugsim.Server, error) {
+		sim, startErr := buttplugsim.Start()
+		if startErr == nil {
+			address = sim.Address()
+			t.Cleanup(func() { _ = sim.Close() })
+		}
+		return sim, startErr
+	}, second)
+	if !errors.Is(err, failure) || runtime.MotionTransport != nil {
+		t.Fatal("Autoblow failure produced a live runtime")
+	}
+	endpoint, err := url.Parse(address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := net.DialTimeout("tcp", endpoint.Host, 200*time.Millisecond)
+	if err == nil {
+		_ = conn.Close()
+		t.Fatal("earlier simulator remained open after failed startup")
 	}
 }

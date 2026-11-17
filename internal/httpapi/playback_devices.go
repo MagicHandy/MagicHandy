@@ -116,6 +116,86 @@ func (s *Server) playbackDeviceTransport(settings config.Settings, device string
 	}
 }
 
+// playbackReadiness observes the selected owners without constructing sessions.
+func (s *Server) playbackReadiness() error {
+	settings, _ := s.store.Snapshot()
+	devices := settings.Device.PlaybackSet()
+	if len(devices) == 0 {
+		return errNoPlaybackDevices
+	}
+	for index := len(devices) - 1; index >= 0; index-- {
+		if err := s.playbackDeviceReady(settings, devices[index]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Server) playbackDeviceReady(settings config.Settings, device string) error {
+	switch device {
+	case config.DeviceOutputHandy:
+		if s.motion.transport != nil {
+			return nil
+		}
+		if s.motion.simulated {
+			return errors.New("motion simulator is unavailable")
+		}
+		return s.primaryHandyReady(settings)
+	case config.DeviceOutputCoyote:
+		return s.coyote.owner.MotionReady()
+	case config.DeviceVibrator:
+		v, err := s.currentVibrator()
+		if err != nil {
+			return err
+		}
+		return v.MotionReady()
+	case config.DeviceAutoblow, config.DeviceVacuGlide:
+		if (device == config.DeviceAutoblow && s.autoblow.ultra.Connected()) || (device == config.DeviceVacuGlide && s.autoblow.vacuglide.Connected()) {
+			return nil
+		}
+		return errors.New("connect the selected Autoblow device before playback")
+	default:
+		_, _, _, err := s.namedHandyBinding(device)
+		return err
+	}
+}
+
+func (s *Server) primaryHandyReady(settings config.Settings) error {
+	switch settings.Device.HSPDispatchOwner {
+	case config.DispatchOwnerCloudREST:
+		if _, err := transport.BuildCloudAuthMetadata(cloudPrerequisites(settings)); err != nil {
+			return err
+		}
+		if s.cloud.baseURL != "" {
+			if err := (transport.CloudEndpointConfig{BaseURL: s.cloud.baseURL}).Validate(); err != nil {
+				return err
+			}
+		}
+		if s.cloudControlReleased() {
+			return errCloudControlReleased
+		}
+	case config.DispatchOwnerNativeBluetooth:
+		if !s.nativeBluetooth.owner.Status().Connected {
+			return errors.New("native Bluetooth is not connected")
+		}
+	case config.DispatchOwnerBrowserBluetooth:
+		snapshot := s.bluetooth.bridge.Snapshot()
+		if !snapshot.Ready {
+			message := snapshot.Message
+			if message == "" {
+				message = "Bluetooth is not connected."
+			}
+			return fmt.Errorf("browser Bluetooth is not ready: %s", message)
+		}
+	case config.DispatchOwnerIntiface:
+		_, err := s.readyIntifaceHandy()
+		return err
+	default:
+		return errMotionUnavailable
+	}
+	return nil
+}
+
 // newSelectedStopTransport reaches every configured device, whether or not
 // it plays, so Stop without an engine still silences a prepared device.
 func (s *Server) newSelectedStopTransport() (transport.Transport, error) {

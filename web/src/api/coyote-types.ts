@@ -62,6 +62,7 @@ export interface CoyoteStatus {
 }
 
 export interface CoyoteTransportSnapshot {
+  observation?: import("./types").BackendObservation;
   output: DeviceOutput | string;
   available: boolean;
   status: CoyoteStatus;

@@ -88,9 +88,11 @@ func (s quinticSegment) jerk(u float64) float64 {
 }
 
 func (s quinticSegment) maximumAcceleration() float64 {
-	candidates := []float64{0, 1}
+	storage := [6]float64{0, 1}
+	candidates := storage[:2]
 	c := s.coefficients
-	for _, root := range quadraticRoots(60*c[5], 24*c[4], 6*c[3]) {
+	var roots [2]float64
+	for _, root := range quadraticRoots(roots[:0], 60*c[5], 24*c[4], 6*c[3]) {
 		if root > 0 && root < 1 {
 			candidates = append(candidates, root)
 		}
@@ -103,9 +105,10 @@ func (s quinticSegment) maximumAcceleration() float64 {
 }
 
 func (s quinticSegment) maximumVelocity() float64 {
-	candidates := []float64{0, 1}
+	storage := [6]float64{0, 1}
+	candidates := storage[:2]
 	c := s.coefficients
-	candidates = append(candidates, cubicRootsInUnitInterval(20*c[5], 12*c[4], 6*c[3], 2*c[2])...)
+	candidates = appendCubicRoots(candidates, 20*c[5], 12*c[4], 6*c[3], 2*c[2])
 	maximum := 0.0
 	for _, u := range candidates {
 		maximum = math.Max(maximum, math.Abs(s.velocity(u)))
@@ -114,7 +117,8 @@ func (s quinticSegment) maximumVelocity() float64 {
 }
 
 func (s quinticSegment) maximumJerk() float64 {
-	candidates := []float64{0, 1}
+	storage := [6]float64{0, 1}
+	candidates := storage[:2]
 	c := s.coefficients
 	if math.Abs(c[5]) > 1e-12 {
 		if vertex := -c[4] / (5 * c[5]); vertex > 0 && vertex < 1 {
@@ -128,28 +132,29 @@ func (s quinticSegment) maximumJerk() float64 {
 	return maximum
 }
 
-func quadraticRoots(a, b, c float64) []float64 {
+func quadraticRoots(result []float64, a, b, c float64) []float64 {
 	if math.Abs(a) <= 1e-12 {
 		if math.Abs(b) <= 1e-12 {
 			return nil
 		}
-		return []float64{-c / b}
+		return append(result, -c/b)
 	}
 	discriminant := b*b - 4*a*c
 	if discriminant < 0 {
 		return nil
 	}
 	root := math.Sqrt(discriminant)
-	return []float64{(-b - root) / (2 * a), (-b + root) / (2 * a)}
+	return append(result, (-b-root)/(2*a), (-b+root)/(2*a))
 }
 
-// cubicRootsInUnitInterval isolates the roots of one cubic by splitting it at
+// appendCubicRoots isolates the roots of one cubic by splitting it at
 // its quadratic derivative extrema. Each resulting interval is monotone, so a
 // sign change has exactly one root and bisection is deterministic and robust.
-func cubicRootsInUnitInterval(a, b, c, d float64) []float64 {
+func appendCubicRoots(result []float64, a, b, c, d float64) []float64 {
+	var scratch [2]float64
+	first := len(result)
 	if math.Abs(a) <= 1e-12 {
-		roots := quadraticRoots(b, c, d)
-		result := make([]float64, 0, len(roots))
+		roots := quadraticRoots(scratch[:0], b, c, d)
 		for _, root := range roots {
 			if root > 0 && root < 1 {
 				result = append(result, root)
@@ -157,20 +162,20 @@ func cubicRootsInUnitInterval(a, b, c, d float64) []float64 {
 		}
 		return result
 	}
-	boundaries := []float64{0, 1}
-	for _, root := range quadraticRoots(3*a, 2*b, c) {
+	bounds := [4]float64{0, 1}
+	boundaries := bounds[:2]
+	for _, root := range quadraticRoots(scratch[:0], 3*a, 2*b, c) {
 		if root > 0 && root < 1 {
 			boundaries = append(boundaries, root)
 		}
 	}
 	slices.Sort(boundaries)
 	value := func(u float64) float64 { return ((a*u+b)*u+c)*u + d }
-	result := make([]float64, 0, 3)
 	appendRoot := func(root float64) {
 		if root <= 0 || root >= 1 {
 			return
 		}
-		if len(result) == 0 || math.Abs(result[len(result)-1]-root) > 1e-9 {
+		if len(result) == first || math.Abs(result[len(result)-1]-root) > 1e-9 {
 			result = append(result, root)
 		}
 	}
@@ -270,7 +275,11 @@ func buildQuinticSegments(
 	points []CurvePoint,
 	slopes, accelerations []float64,
 ) []quinticSegment {
-	segments := make([]quinticSegment, len(points)-1)
+	return fitQuinticSegments(nil, points, slopes, accelerations)
+}
+
+func fitQuinticSegments(storage []quinticSegment, points []CurvePoint, slopes, accelerations []float64) []quinticSegment {
+	segments := slices.Grow(storage[:0], len(points)-1)[:len(points)-1]
 	for index := range segments {
 		segments[index] = newQuinticSegment(
 			points[index], points[index+1],

@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -19,6 +18,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 	"github.com/mapledaemon/MagicHandy/internal/openaiauth"
+	"github.com/mapledaemon/MagicHandy/internal/reviewfiles"
 )
 
 type reviewCase struct {
@@ -72,7 +72,7 @@ func main() {
 		rows = append(rows, row)
 		encoded, e := json.MarshalIndent(map[string]any{"turns": rows}, "", "  ")
 		must(e)
-		must(os.WriteFile(*output, encoded, 0600))
+		must(reviewfiles.Write(*output, encoded))
 		fmt.Printf("%s expected=%t verdict=%s reason=%s pass=%v ms=%d err=%v\n", item.id, item.bad, review.Verdict, review.Reason, row["intent_pass"], elapsed, err)
 	}
 }
@@ -91,7 +91,7 @@ func productionCases(directory string) []reviewCase {
 				Response string `json:"response"`
 			} `json:"turns"`
 		}
-		data, e := os.ReadFile(path)
+		data, e := reviewfiles.Read(path)
 		must(e)
 		must(json.Unmarshal(data, &capture))
 		limits := config.DefaultSettings().Motion
@@ -138,14 +138,7 @@ func productionCheck(index int, before, applied motion.FlowSpec) func(motion.Flo
 		}
 		switch index {
 		case 0:
-			limits := config.DefaultSettings().Motion
-			limits.SpeedMinPercent, limits.SpeedMaxPercent = 20, 80
-			target, err := motion.FlowTarget(s, limits)
-			if err != nil {
-				return false
-			}
-			feel := motion.ReviewMotionOutput(target, limits).Summary
-			return feel.PositionMinPercent >= 70 && feel.PositionMaxPercent <= 100 && g.FasterDirection == "tip" && g.ContrastPercent > 0 && s.SpeedPercent == applied.SpeedPercent
+			return matchesProductionTip(s, applied.SpeedPercent)
 		case 1:
 			return g.InertiaPercent > before.Gesture.InertiaPercent && s.SpeedPercent == before.SpeedPercent && s.MinPercent == before.MinPercent && s.MaxPercent == before.MaxPercent
 		case 2:
@@ -200,4 +193,16 @@ func must(err error) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func matchesProductionTip(s motion.FlowSpec, appliedSpeed int) bool {
+	limits := config.DefaultSettings().Motion
+	limits.SpeedMinPercent, limits.SpeedMaxPercent = 20, 80
+	target, err := motion.FlowTarget(s, limits)
+	if err != nil {
+		return false
+	}
+	feel := motion.ReviewMotionOutput(target, limits).Summary
+	return feel.PositionMinPercent >= 70 && feel.PositionMaxPercent <= 100 && s.Gesture.FasterDirection == "tip" && s.Gesture.ContrastPercent > 0 && s.SpeedPercent == appliedSpeed
+
 }

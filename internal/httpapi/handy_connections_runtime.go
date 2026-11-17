@@ -62,6 +62,12 @@ func (s *Server) handyEntry(id string) *handyConnectionRuntime {
 	return entry
 }
 
+func (s *Server) existingHandyEntry(id string) *handyConnectionRuntime {
+	s.handys.mu.Lock()
+	defer s.handys.mu.Unlock()
+	return s.handys.entries[id]
+}
+
 func (e *handyConnectionRuntime) current() (transport.Transport, uint64) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -78,12 +84,16 @@ func (s *Server) handyConnectionSnapshots() []handyConnectionState {
 }
 
 func (s *Server) handyConnectionSnapshot(id string) handyConnectionState {
-	entry := s.handyEntry(id)
+	state := handyConnectionState{ID: id, Status: "disconnected", Simulated: s.motion.simulated,
+		NativeAvailable: s.nativeBluetooth.available, NativeSupported: s.nativeBluetooth.supported}
+	entry := s.existingHandyEntry(id)
+	if entry == nil {
+		return state
+	}
 	entry.mu.Lock()
 	owner, connecting, lost := entry.owner, entry.connecting, entry.lost
 	entry.mu.Unlock()
-	state := handyConnectionState{ID: id, Connecting: connecting, Status: "disconnected", Simulated: s.motion.simulated,
-		NativeAvailable: s.nativeBluetooth.available, NativeSupported: s.nativeBluetooth.supported}
+	state.Connecting = connecting
 	if owner != nil {
 		d := owner.Diagnostics()
 		state.Connected, state.LatencyMillis = d.Connected, d.LastLatencyMillis
@@ -106,20 +116,31 @@ func (s *Server) handyConnectionSnapshot(id string) handyConnectionState {
 	return state
 }
 
-func (s *Server) namedHandyTransport(id string) (transport.Transport, error) {
+func (s *Server) namedHandyBinding(id string) (*handyConnectionRuntime, transport.Transport, uint64, error) {
 	settings, _ := s.store.Snapshot()
 	if _, ok := settings.Device.HandyConnection(id); !ok {
-		return nil, errors.New("handy connection does not exist")
+		return nil, nil, 0, errors.New("handy connection does not exist")
 	}
-	entry := s.handyEntry(id)
+	entry := s.existingHandyEntry(id)
+	if entry == nil {
+		return nil, nil, 0, errors.New("connect the selected Handy before playback")
+	}
 	owner, generation := entry.current()
 	if owner == nil || !owner.Diagnostics().Connected {
-		return nil, errors.New("connect the selected Handy before playback")
+		return nil, nil, 0, errors.New("connect the selected Handy before playback")
 	}
 	if linear, ok := owner.(*transport.Intiface); ok {
 		if linear.Status().SelectedDeviceIndex == nil {
-			return nil, errors.New("choose an Intiface device for this Handy before playback")
+			return nil, nil, 0, errors.New("choose an Intiface device for this Handy before playback")
 		}
+	}
+	return entry, owner, generation, nil
+}
+
+func (s *Server) namedHandyTransport(id string) (transport.Transport, error) {
+	entry, owner, generation, err := s.namedHandyBinding(id)
+	if err != nil {
+		return nil, err
 	}
 	return transport.NewLeasedTransport(owner, func() bool {
 		current, currentGeneration := entry.current()
@@ -136,8 +157,8 @@ func (s *Server) handleConnectHandy(w http.ResponseWriter, r *http.Request) {
 		s.handlePrimaryHandyChoice(w, r)
 		return
 	}
-	s.settingsLifecycleMu.Lock()
-	defer s.settingsLifecycleMu.Unlock()
+	releaseSettings := s.motion.life.HoldSettings()
+	defer releaseSettings()
 	settings, _ := s.store.Snapshot()
 	c, ok := settings.Device.HandyConnection(id)
 	if !ok {
@@ -192,7 +213,7 @@ func (s *Server) handleConnectHandy(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) connectNamedHandy(ctx context.Context, c config.HandyConnection, candidate string) (transport.Transport, error) {
 	if s.motion.simulated && c.Method == config.DispatchOwnerCloudREST {
-		return transport.NewFake(), nil
+		return transport.NewSimulator(), nil
 	}
 	settings, _ := s.store.Snapshot()
 	switch c.Method {
@@ -224,8 +245,8 @@ func (s *Server) handleDisconnectHandy(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
-	s.settingsLifecycleMu.Lock()
-	defer s.settingsLifecycleMu.Unlock()
+	releaseSettings := s.motion.life.HoldSettings()
+	defer releaseSettings()
 	id := r.PathValue("id")
 	settings, _ := s.store.Snapshot()
 	c, ok := settings.Device.HandyConnection(id)

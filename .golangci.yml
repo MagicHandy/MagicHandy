@@ -13,36 +13,65 @@ linters:
       rules:
         httpapi-is-edge-only:
           files:
-            - internal/config/**/*.go
-            - internal/logging/**/*.go
-            - internal/motion/**/*.go
-            - internal/transport/**/*.go
-            - internal/chat/**/*.go
-            - internal/llm/**/*.go
-            - internal/modes/**/*.go
-            - internal/patterns/**/*.go
-            - internal/media/**/*.go
-            - internal/remote/**/*.go
-            - internal/voice/**/*.go
+            - "**/internal/config/*.go"
+            - "**/internal/config/**/*.go"
+            - "**/internal/logging/*.go"
+            - "**/internal/logging/**/*.go"
+            - "**/internal/motion/*.go"
+            - "**/internal/motion/**/*.go"
+            - "**/internal/transport/*.go"
+            - "**/internal/transport/**/*.go"
+            - "**/internal/chat/*.go"
+            - "**/internal/chat/**/*.go"
+            - "**/internal/llm/*.go"
+            - "**/internal/llm/**/*.go"
+            - "**/internal/modes/*.go"
+            - "**/internal/modes/**/*.go"
+            - "**/internal/patterns/*.go"
+            - "**/internal/patterns/**/*.go"
+            - "**/internal/media/*.go"
+            - "**/internal/media/**/*.go"
+            - "**/internal/remote/*.go"
+            - "**/internal/remote/**/*.go"
+            - "**/internal/voice/*.go"
+            - "**/internal/voice/**/*.go"
           deny:
             - pkg: github.com/mapledaemon/MagicHandy/internal/httpapi
               desc: HTTP API is an edge adapter; core packages must not depend on it.
             - pkg: github.com/mapledaemon/MagicHandy/internal/chatapp
               desc: Conversation application orchestration stays above the core domains.
+            - pkg: github.com/mapledaemon/MagicHandy/internal/deviceapp
+              desc: Device lifecycle orchestration stays above the core domains.
+        application-never-imports-httpapi:
+          files:
+            - "**/internal/deviceapp/*.go"
+            - "**/internal/deviceapp/**/*.go"
+            - "**/internal/chatapp/*.go"
+            - "**/internal/chatapp/**/*.go"
+          deny:
+            - pkg: github.com/mapledaemon/MagicHandy/internal/httpapi
+              desc: Application coordinators stay independent of HTTP.
         no-transport-from-semantic-clients:
           files:
-            - internal/chat/**/*.go
-            - internal/llm/**/*.go
-            - internal/modes/**/*.go
-            - internal/patterns/**/*.go
-            - internal/media/**/*.go
-            - internal/voice/**/*.go
+            - "**/internal/chat/*.go"
+            - "**/internal/chat/**/*.go"
+            - "**/internal/llm/*.go"
+            - "**/internal/llm/**/*.go"
+            - "**/internal/modes/*.go"
+            - "**/internal/modes/**/*.go"
+            - "**/internal/patterns/*.go"
+            - "**/internal/patterns/**/*.go"
+            - "**/internal/media/*.go"
+            - "**/internal/media/**/*.go"
+            - "**/internal/voice/*.go"
+            - "**/internal/voice/**/*.go"
           deny:
             - pkg: github.com/mapledaemon/MagicHandy/internal/transport
               desc: Chat, LLM, modes, patterns, media, and voice produce semantic outputs and must not call transport.
         voice-never-touches-motion:
           files:
-            - internal/voice/**/*.go
+            - "**/internal/voice/*.go"
+            - "**/internal/voice/**/*.go"
           deny:
             - pkg: github.com/mapledaemon/MagicHandy/internal/motion
               desc: Voice worker failures must stay out of the motion path (ADR 0003).
@@ -54,7 +83,8 @@ linters:
               desc: Voice must not drive autonomous modes directly.
         remote-relays-intent-only:
           files:
-            - internal/remote/**/*.go
+            - "**/internal/remote/*.go"
+            - "**/internal/remote/**/*.go"
           deny:
             - pkg: github.com/mapledaemon/MagicHandy/internal/motion
               desc: The remote queues intent for the desktop; it never reaches the engine (ADR 0032).

@@ -79,6 +79,7 @@ func TestFreestyleStreamReplansOnTheRealEngineWithoutStallOrBlend(t *testing.T) 
 	if engine == nil || !engine.Snapshot().Running {
 		t.Fatal("engine not running after control changes; freestyle stalled")
 	}
+	waitUntil(t, "continued dispatch after the coalesced edits", func() bool { return countModeCommands(fake.Commands()).adds >= 4 })
 	counts := countModeCommands(fake.Commands())
 	if counts.plays != 1 || counts.stops != 0 || counts.adds < 4 {
 		t.Fatalf("commands = %+v, want one play, no stop and continuous dispatch", counts)

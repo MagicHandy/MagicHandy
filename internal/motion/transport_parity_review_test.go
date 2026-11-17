@@ -26,31 +26,7 @@ func TestTransportParityReview(t *testing.T) {
 	var metrics []map[string]any
 	for _, speed := range []int{10, 20, 25, 35, 43, 75} {
 		for _, name := range []string{"full-sweeps", "soft-turns", "pace-wave", "creative", "layered", "v2-full", "v2-varied", "v2-directional"} {
-			spec := DefaultFlowSpec()
-			spec.MinPercent, spec.MaxPercent, spec.SpeedPercent = 0, 100, speed
-			g := DefaultGestureSpec()
-			g.FocusMixPercent, g.VariationPercent = 0, 0
-			spec.Gesture = &g
-			switch name {
-			case "v2-varied":
-				g = DefaultGestureSpec()
-			case "v2-directional":
-				g.FasterDirection, g.ContrastPercent, g.InertiaPercent = "tip", 65, 70
-			case "layered":
-				spec.Gesture = nil
-			}
-			target, err := FlowTarget(spec, settings)
-			if err != nil {
-				t.Fatal(err)
-			}
-			switch name {
-			case "full-sweeps", "soft-turns", "pace-wave":
-				ids := map[string]PatternID{"full-sweeps": PatternFullSweeps, "soft-turns": "flow-soft-sweeps", "pace-wave": "flow-pace-wave"}
-				target = MotionTarget{PatternID: ids[name], SpeedPercent: speed}
-			case "creative":
-				d := NormalizeDynamicDefinition(DynamicDefinition{CenterPercent: 50, SpanPercent: 100, SpanMinPercent: 100, SpanProfile: "steady"})
-				target = MotionTarget{Dynamic: &d, SpeedPercent: speed}
-			}
+			target := parityTarget(t, name, speed, settings)
 			plan := NewMotionPlan("parity", target, settings, 0, 0, time.Unix(0, 0))
 			if err := plan.compilationError(); err != nil {
 				t.Fatal(err)
@@ -117,4 +93,33 @@ func TestTransportParityReview(t *testing.T) {
 		}
 	}
 	writeSpeedReviewReport(t, path, map[string]any{"schema": "magichandy.motion-atlas.v1", "entries": entries, "metrics": metrics})
+}
+
+func parityTarget(t *testing.T, name string, speed int, settings config.MotionSettings) MotionTarget {
+	spec := DefaultFlowSpec()
+	spec.MinPercent, spec.MaxPercent, spec.SpeedPercent = 0, 100, speed
+	g := DefaultGestureSpec()
+	g.FocusMixPercent, g.VariationPercent = 0, 0
+	spec.Gesture = &g
+	switch name {
+	case "v2-varied":
+		g = DefaultGestureSpec()
+	case "v2-directional":
+		g.FasterDirection, g.ContrastPercent, g.InertiaPercent = "tip", 65, 70
+	case "layered":
+		spec.Gesture = nil
+	}
+	target, err := FlowTarget(spec, settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	switch name {
+	case "full-sweeps", "soft-turns", "pace-wave":
+		ids := map[string]PatternID{"full-sweeps": PatternFullSweeps, "soft-turns": "flow-soft-sweeps", "pace-wave": "flow-pace-wave"}
+		target = MotionTarget{PatternID: ids[name], SpeedPercent: speed}
+	case "creative":
+		d := NormalizeDynamicDefinition(DynamicDefinition{CenterPercent: 50, SpanPercent: 100, SpanMinPercent: 100, SpanProfile: "steady"})
+		target = MotionTarget{Dynamic: &d, SpeedPercent: speed}
+	}
+	return target
 }

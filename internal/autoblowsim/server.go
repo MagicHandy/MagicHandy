@@ -39,6 +39,7 @@ type Options struct {
 
 // Server is a running simulator.
 type Server struct {
+	serveDone chan struct{}
 	listener  net.Listener
 	server    *http.Server
 	heartbeat time.Duration
@@ -87,6 +88,7 @@ func StartWith(options Options) (*Server, error) {
 		heartbeat = 30 * time.Second
 	}
 	s := &Server{
+		serveDone:   make(chan struct{}),
 		listener:    listener,
 		heartbeat:   heartbeat,
 		offline:     map[string]bool{},
@@ -104,7 +106,7 @@ func StartWith(options Options) (*Server, error) {
 	mux.HandleFunc("PUT /vacuglide/{command...}", s.vacuglideCommand)
 	mux.HandleFunc("GET /events/stream", s.events)
 	s.server = &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
-	go func() { _ = s.server.Serve(listener) }()
+	go func() { defer close(s.serveDone); _ = s.server.Serve(listener) }()
 	return s, nil
 }
 
@@ -129,7 +131,9 @@ func (s *Server) Close() error {
 	}
 	s.subscribers = map[string]map[chan string]struct{}{}
 	s.mu.Unlock()
-	return s.server.Close()
+	err := s.server.Close()
+	<-s.serveDone
+	return err
 }
 
 // SetOnline turns a simulated device's online mode on or off.

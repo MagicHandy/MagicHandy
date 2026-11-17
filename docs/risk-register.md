@@ -1082,6 +1082,8 @@ Exit evidence:
 
 ## R3: Motion Retargeting Complexity
 
+The November 17 simulator regression bounds ten successive speed edits at the first uncommitted handoff and compares actual point positions. Resume and stale-form tests also enforce the saved physical envelope. A deterministic fitting failure after Play now triggers a recovery Stop. Hardware response under sustained edits remains an open acceptance item. [Regression evidence](architecture-review-implementation-2026-11-17.md)
+
 Level: High
 
 Description:

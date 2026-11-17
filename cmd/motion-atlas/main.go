@@ -174,21 +174,7 @@ func unwrapTrials(data []byte, path string) ([]byte, []motion.Review) {
 }
 
 func renderTrials(data []byte, settings config.MotionSettings) []motion.Review {
-	var rows []struct {
-		Model, Method, Message, Request, Raw, Error, Selected, Expected string
-		RecipeName                                                      string `json:"recipe_name"`
-		ExpectedRecipe                                                  string `json:"expected_recipe"`
-		IntentPass                                                      *bool  `json:"intent_pass"`
-		Intent                                                          bool
-		Command                                                         *struct {
-			Area         string `json:"area"`
-			SpeedPercent *int   `json:"speed_percent"`
-		}
-		Valid  bool
-		Limits *config.MotionSettings
-		After  *motion.FlowSpec
-		Output motion.PerceptualSummary
-	}
+	var rows []atlasTrial
 	must(json.Unmarshal(data, &rows))
 	entries := make([]motion.Review, 0, len(rows))
 	for index, row := range rows {
@@ -198,43 +184,7 @@ func renderTrials(data []byte, settings config.MotionSettings) []motion.Review {
 		if row.IntentPass != nil {
 			row.Intent = *row.IntentPass
 		}
-		entry := motion.Review{ID: fmt.Sprintf("trial-%d", index+1), Name: fmt.Sprintf("LLM trial %d", index+1)}
-		switch {
-		case !row.Valid:
-			entry.Error = row.Error
-			if entry.Error == "" {
-				entry.Error = "Rejected model response; no motion compiled"
-			}
-		case row.After != nil:
-			trialLimits := settings
-			if row.Limits != nil {
-				trialLimits = *row.Limits
-			}
-			target, err := motion.FlowTarget(*row.After, trialLimits)
-			if err != nil {
-				entry.Error = err.Error()
-			} else {
-				entry = motion.ReviewMotionOutput(target, trialLimits)
-			}
-		case row.Selected == "stop":
-			entry.Name = "Stop"
-			entry.Error = "Stop action: no moving output"
-		case row.Selected != "":
-			target := motion.MotionTarget{PatternID: motion.PatternID(row.Selected), SpeedPercent: row.Output.Pace.RequestedPercent}
-			if row.Command != nil {
-				switch row.Command.Area {
-				case "base":
-					target.AreaFocus = &motion.AreaFocus{MinPercent: 0, MaxPercent: 34}
-				case "shaft":
-					target.AreaFocus = &motion.AreaFocus{MinPercent: 33, MaxPercent: 67}
-				case "tip":
-					target.AreaFocus = &motion.AreaFocus{MinPercent: 66, MaxPercent: 100}
-				}
-			}
-			entry = motion.ReviewMotionOutput(target, settings)
-		default:
-			entry.Error = "No compiled action recorded"
-		}
+		entry := renderTrialAction(row, index, settings)
 		entry.Group, entry.Model, entry.Raw = "llm-output", row.Model, row.Raw
 		if row.RecipeName != "" {
 			entry.Name = row.RecipeName
@@ -265,4 +215,61 @@ func must(err error) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+type atlasTrial struct {
+	Model, Method, Message, Request, Raw, Error, Selected, Expected string
+	RecipeName                                                      string `json:"recipe_name"`
+	ExpectedRecipe                                                  string `json:"expected_recipe"`
+	IntentPass                                                      *bool  `json:"intent_pass"`
+	Intent                                                          bool
+	Command                                                         *struct {
+		Area         string `json:"area"`
+		SpeedPercent *int   `json:"speed_percent"`
+	}
+	Valid  bool
+	Limits *config.MotionSettings
+	After  *motion.FlowSpec
+	Output motion.PerceptualSummary
+}
+
+func renderTrialAction(row atlasTrial, index int, settings config.MotionSettings) motion.Review {
+	entry := motion.Review{ID: fmt.Sprintf("trial-%d", index+1), Name: fmt.Sprintf("LLM trial %d", index+1)}
+	switch {
+	case !row.Valid:
+		entry.Error = row.Error
+		if entry.Error == "" {
+			entry.Error = "Rejected model response; no motion compiled"
+		}
+	case row.After != nil:
+		trialLimits := settings
+		if row.Limits != nil {
+			trialLimits = *row.Limits
+		}
+		target, err := motion.FlowTarget(*row.After, trialLimits)
+		if err != nil {
+			entry.Error = err.Error()
+		} else {
+			entry = motion.ReviewMotionOutput(target, trialLimits)
+		}
+	case row.Selected == "stop":
+		entry.Name = "Stop"
+		entry.Error = "Stop action: no moving output"
+	case row.Selected != "":
+		target := motion.MotionTarget{PatternID: motion.PatternID(row.Selected), SpeedPercent: row.Output.Pace.RequestedPercent}
+		if row.Command != nil {
+			switch row.Command.Area {
+			case "base":
+				target.AreaFocus = &motion.AreaFocus{MinPercent: 0, MaxPercent: 34}
+			case "shaft":
+				target.AreaFocus = &motion.AreaFocus{MinPercent: 33, MaxPercent: 67}
+			case "tip":
+				target.AreaFocus = &motion.AreaFocus{MinPercent: 66, MaxPercent: 100}
+			}
+		}
+		entry = motion.ReviewMotionOutput(target, settings)
+	default:
+		entry.Error = "No compiled action recorded"
+	}
+	return entry
 }

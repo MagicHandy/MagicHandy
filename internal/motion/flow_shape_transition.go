@@ -133,7 +133,8 @@ func joinContinuousTurnWithin(previous MotionPlan, next *MotionPlan, start, stro
 // speed minimum; finish the old turn instead when its momentum requires one.
 func singleCrestJoin(segment quinticSegment, distance float64) bool {
 	c := segment.coefficients
-	for _, u := range cubicRootsInUnitInterval(20*c[5], 12*c[4], 6*c[3], 2*c[2]) {
+	var storage [4]float64
+	for _, u := range appendCubicRoots(storage[:0], 20*c[5], 12*c[4], 6*c[3], 2*c[2]) {
 		if u > 1e-6 && u < 1-1e-6 && math.Copysign(1, distance)*(6*c[3]+24*c[4]*u+60*c[5]*u*u) > 1e-8 {
 			return false
 		}

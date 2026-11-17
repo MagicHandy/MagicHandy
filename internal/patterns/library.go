@@ -95,8 +95,7 @@ func (l *Library) Snapshot() (Snapshot, error) {
 }
 
 // Summary returns indexed counts for the regular app-state poll.
-func (l *Library) Summary() (Summary, error) {
-	ctx := context.Background()
+func (l *Library) Summary(ctx context.Context) (Summary, error) {
 	summary := Summary{Available: true}
 	if err := l.db.SQL().QueryRowContext(ctx, `
 		SELECT COUNT(*), COALESCE(SUM(CASE WHEN tags_json NOT LIKE '%"deprecated"%' THEN enabled ELSE 0 END), 0) FROM patterns
@@ -106,7 +105,7 @@ func (l *Library) Summary() (Summary, error) {
 	if err := l.db.SQL().QueryRowContext(ctx, `SELECT COUNT(*) FROM programs`).Scan(&summary.ProgramCount); err != nil {
 		return Summary{}, err
 	}
-	autoDisable, err := l.AutoDisable()
+	autoDisable, err := l.autoDisable(ctx)
 	if err != nil {
 		return Summary{}, err
 	}

@@ -29,13 +29,30 @@ func (v *IntifaceVibrator) MotionTransport() (Transport, error) {
 	v.session.mu.Unlock()
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if !connected {
-		return nil, errors.New("Intiface connection is stale")
-	}
-	if !v.selection.selected {
-		return nil, errVibratorNotSelected
+	if err := v.motionReadyLocked(connected); err != nil {
+		return nil, err
 	}
 	return &vibratorRun{owner: v, epoch: v.epoch}, nil
+}
+
+// MotionReady checks vibrator selection without binding a run.
+func (v *IntifaceVibrator) MotionReady() error {
+	v.session.mu.Lock()
+	connected := v.session.connected
+	v.session.mu.Unlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.motionReadyLocked(connected)
+}
+
+func (v *IntifaceVibrator) motionReadyLocked(connected bool) error {
+	if !connected {
+		return errors.New("Intiface connection is stale")
+	}
+	if !v.selection.selected {
+		return errVibratorNotSelected
+	}
+	return nil
 }
 
 // AppendPoints stores the stream's neutral points. The owner only samples

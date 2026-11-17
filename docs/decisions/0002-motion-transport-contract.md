@@ -50,6 +50,12 @@ The motion engine owns target selection, plan sampling, active state, retargetin
 - Active settings changes for speed, stroke range, or reverse direction must refresh active motion immediately.
 - Emergency stop interrupts all motion loops, planners, and transports.
 
+## Device lifecycle and Stop acknowledgement
+
+The device application coordinator serializes owner admission and retirement. It holds settings serialization across persistence and engine refresh. Resume checks the captured Stop generation after obtaining the latest saved limits. Stop revokes outstanding commands independently of the settings writer.
+
+Stop acknowledgements distinguish local engine state from device confirmation. A transport confirms only with a successful Stop command result. A linked owner requires each addressed participant to confirm. The HTTP adapter and console project the same outcome, including an incomplete or unavailable acknowledgement. [Implementation and regression cases](../architecture-review-implementation-2026-11-17.md)
+
 ## Motion Engine Responsibilities
 
 - Maintain the current semantic target.

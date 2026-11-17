@@ -123,11 +123,11 @@ func TestStopCancelsQueuedSettingBeforeDurableCommit(t *testing.T) {
 	s, _, _, cookie := newControllerSessionFixture(t)
 	claimAuthenticatedController(t, s, cookie)
 	before, _ := s.store.Snapshot()
-	s.settingsLifecycleMu.Lock()
+	releaseSettings := s.motion.life.HoldSettings()
 	unlocked := false
 	defer func() {
 		if !unlocked {
-			s.settingsLifecycleMu.Unlock()
+			releaseSettings()
 		}
 	}()
 	response := make(chan *httptest.ResponseRecorder, 1)
@@ -152,7 +152,7 @@ func TestStopCancelsQueuedSettingBeforeDurableCommit(t *testing.T) {
 	if stop.Code != http.StatusOK {
 		t.Fatalf("Stop waited on the settings lane: %d %s", stop.Code, stop.Body.String())
 	}
-	s.settingsLifecycleMu.Unlock()
+	releaseSettings()
 	unlocked = true
 	select {
 	case result := <-response:

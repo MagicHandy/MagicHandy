@@ -42,7 +42,7 @@ export function observationDraft(row:LabObservation):string {
   return t("Observation on {source}: {observation}",{source:context,observation:row.text});
 }
 
-export function ObservationsPage({useInChat}:{useInChat:(text:string)=>void}) {
+export function ObservationsPage({onUseInChat}:{onUseInChat:(text:string)=>void}) {
   const {backendOnline,readOnly}=useAppState();
   const [data,setData]=useState<LabObservations|null>(null);
   const [error,setError]=useState("");
@@ -75,7 +75,7 @@ export function ObservationsPage({useInChat}:{useInChat:(text:string)=>void}) {
         {row.trial&&<><p><strong>{t("Request")}: </strong>{row.trial.message}</p><p><strong>{t("Reply")}: </strong>{row.trial.reply||row.trial.error}</p><p className="hint">{row.trial.model} · {row.method}</p></>}
         <pre>{JSON.stringify({spec:row.spec,limits:row.settings,trial:row.trial},null,2)}</pre>
       </details>
-      <div className="row-actions"><button className="btn btn-secondary" disabled={readOnly} onClick={()=>useInChat(observationDraft(row))}>{t("Use in chat")}</button>
+      <div className="row-actions"><button className="btn btn-secondary" disabled={readOnly} onClick={()=>onUseInChat(observationDraft(row))}>{t("Use in chat")}</button>
         {confirmDelete===row.id?<><span>{t("Delete this observation?")}</span><button className="btn btn-danger-outline" disabled={Boolean(removing)||readOnly||!backendOnline} onClick={()=>void remove(row.id)}>{t("Confirm delete")}</button><button className="btn btn-secondary" disabled={Boolean(removing)} onClick={()=>setConfirmDelete("")}>{t("Cancel")}</button></>
           :<button className="btn btn-danger-outline" disabled={Boolean(removing)||readOnly||!backendOnline} onClick={()=>setConfirmDelete(row.id)}>{t("Delete")}</button>}
       </div>

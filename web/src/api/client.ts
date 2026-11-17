@@ -69,7 +69,6 @@ import type {
   PersonasPayload,
   PromptCompositionPayload,
   PublicSettings,
-  SettingsUpdate,
   UpdateStatus,
   VoiceRequestSnapshot,
   VoiceState,
@@ -575,7 +574,7 @@ export const api = {
   commandReceipt: (id: string, signal?: AbortSignal) => request<CommandReceipt>("GET", `/api/controller/commands/${encodeURIComponent(id)}`, undefined, signal),
 
   // Motion — semantic commands only.
-  stopMotion: () => request<{ error?: string }>("POST", "/api/motion/stop", {}),
+  stopMotion: () => request<{ error?: string; stop_status?: "confirmed" | "pending" | "unconfirmed" | "no_device"; transport_stop_confirmed?: boolean }>("POST", "/api/motion/stop", {}),
   // Manual test target uses semantic pattern and speed fields.
   startManualTest: (body: { pattern: string; speed_percent: number }) =>
     request("POST", "/api/motion/start", body),
@@ -828,8 +827,8 @@ export const api = {
   cancelModelCheck: () => request<ModelCheckReport>("DELETE", "/api/llm/model-check"),
 
   // Settings.
-  getSettings: () => request<{ settings: PublicSettings }>("GET", "/api/settings"),
-  saveSettings: (update: SettingsUpdate) => request("PUT", "/api/settings", update),
+  getSettings: () => request<{ settings: PublicSettings; status?: { loaded_at: string } }>("GET", "/api/settings"),
+  saveSettings: (patch: import("../util/settings-draft").SettingsPatch) => request<{ settings: PublicSettings }>("PATCH", "/api/settings", patch),
   setLabsEnabled: (enabled:boolean) => request<{enabled:boolean}>("PUT", "/api/settings/labs", {enabled}),
   // The Chat motion card: the mode, plus the Pattern library's two options.
   setLLMMotionMode: (mode: "dynamic" | "pattern" | "layered" | "creative_v2" | "off", options: { area_focus?: boolean; experimental_patterns?: boolean } = {}) =>
@@ -888,7 +887,7 @@ export const api = {
   nativeBluetoothConnect: () => request<NativeBluetoothSnapshot>("POST", "/api/transport/native-bluetooth/connect", {}),
   nativeBluetoothDisconnect: () => request<NativeBluetoothSnapshot>("POST", "/api/transport/native-bluetooth/disconnect", {}),
   nativeBluetoothForget: () => request<NativeBluetoothSnapshot>("POST", "/api/transport/native-bluetooth/forget", {}),
-  coyoteStatus: () => request<CoyoteTransportSnapshot>("GET", "/api/transport/coyote/status"),
+  coyoteStatus: (signal?: AbortSignal) => request<CoyoteTransportSnapshot>("GET", "/api/transport/coyote/status", undefined, signal),
   coyoteConnect: (candidateID?: string) => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/connect", { candidate_id: candidateID }),
   coyoteDiscover: () => request<{ candidates: { id: string; name: string; rssi: number; identification: "remembered" | "name_match" | "possible" }[] }>("POST", "/api/transport/coyote/discover", {}),
   coyoteDisconnect: () => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/disconnect", {}),
@@ -900,7 +899,7 @@ export const api = {
       { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
   coyoteZero: () => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/zero", {}),
   // Autoblow's cloud devices (ADR 0069). The token has its own explicit Save.
-  autoblowStatus: () => request<AutoblowTransportSnapshot>("GET", "/api/transport/autoblow/status"),
+  autoblowStatus: (signal?: AbortSignal) => request<AutoblowTransportSnapshot>("GET", "/api/transport/autoblow/status", undefined, signal),
   autoblowConnect: (device: AutoblowDevice) => request<AutoblowTransportSnapshot>("POST", "/api/transport/autoblow/connect", { device }),
   autoblowDisconnect: (device: AutoblowDevice) => request<AutoblowTransportSnapshot>("POST", "/api/transport/autoblow/disconnect", { device }),
   autoblowTest: (device: AutoblowDevice, stopSequence: number) =>
@@ -923,7 +922,7 @@ export const api = {
     request<{ settings: PublicSettings }>("PATCH", `/api/settings/handys/${encodeURIComponent(id)}`, patch),
   removeHandy: (id: HandyInstanceId) =>
     request<{ settings: PublicSettings }>("DELETE", `/api/settings/handys/${encodeURIComponent(id)}`),
-  handyConnections: () => request<{ connections: HandyConnectionState[] }>("GET", "/api/transport/handys"),
+  handyConnections: (signal?: AbortSignal) => request<{ connections: HandyConnectionState[] }>("GET", "/api/transport/handys", undefined, signal),
   // Discovery and a chosen candidate serve the primary Handy too, for when
   // several Handys advertise nearby.
   handyDiscover: (id: "handy" | HandyInstanceId) =>
@@ -940,7 +939,7 @@ export const api = {
     request<{ settings: PublicSettings }>("PUT", "/api/settings/device/output", { output }),
   setEstimSafety: (acknowledged: boolean) =>
     request<{ settings: PublicSettings }>("PUT", "/api/settings/estim/safety", { acknowledged }),
-  intifaceStatus: () => request<IntifaceTransportSnapshot>("GET", "/api/transport/intiface/status"),
+  intifaceStatus: (signal?: AbortSignal) => request<IntifaceTransportSnapshot>("GET", "/api/transport/intiface/status", undefined, signal),
   // Each device that reaches Intiface holds a lease on the one shared
   // connection; no device means the Handy, as older builds sent.
   intifaceConnect: (device?: "handy" | "vibrator") =>

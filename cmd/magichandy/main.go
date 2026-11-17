@@ -210,32 +210,40 @@ func logSettingsLoadStatus(logger *slog.Logger, status config.LoadStatus) {
 // no injected motion transport so the selected device owner remains
 // authoritative; review and test processes can opt into a credential-free
 // in-process transport that exercises the complete shared motion engine.
-func applicationRuntime(simulateMotion bool) httpapi.Runtime {
-	fake := transport.NewFake()
+func applicationRuntime(simulateMotion bool) (httpapi.Runtime, func(), error) {
+	return buildApplicationRuntime(simulateMotion, buttplugsim.Start, autoblowsim.Start)
+}
+
+func buildApplicationRuntime(simulateMotion bool, startIntiface func() (*buttplugsim.Server, error), startAutoblow func() (*autoblowsim.Server, error)) (httpapi.Runtime, func(), error) {
+	fake := transport.NewSimulator()
 	runtime := httpapi.Runtime{
 		Traces:         diagnostics.NewTraceRing(512),
 		Transport:      fake,
 		ExecutablePath: executablePath(),
 	}
-	if simulateMotion {
-		runtime.MotionTransport = fake
-		runtime.MotionSimulated = true
-		// The Coyote is simulated too: connected devices produce no output.
-		runtime.CoyoteConnector = estim.NewSimulatedConnector()
-		runtime.NativeBluetoothConnector = handyble.NewSimulatedConnector()
-		// Intiface is simulated by an in-process server for the life of the
-		// process; it advertises a stroker and a vibrator and drives nothing.
-		if sim, err := buttplugsim.Start(); err == nil {
-			runtime.IntifaceSimulatorAddress = sim.Address()
-		}
-		// Autoblow's cloud is imitated the same way, so a simulated build never
-		// sends a device token to Autoblow or moves a real device.
-		if sim, err := autoblowsim.Start(); err == nil {
-			runtime.AutoblowClient = autoblow.Options{LatencyURL: sim.URL(), ClusterURL: sim.ClusterURL}
-			runtime.AutoblowSimulated = true
-		}
+	if !simulateMotion {
+		return runtime, func() {}, nil
 	}
-	return runtime
+	intiface, err := startIntiface()
+	if err != nil {
+		return httpapi.Runtime{}, nil, fmt.Errorf("start Intiface simulator: %w", err)
+	}
+	cloud, err := startAutoblow()
+	if err != nil {
+		_ = intiface.Close()
+		return httpapi.Runtime{}, nil, fmt.Errorf("start Autoblow simulator: %w", err)
+	}
+	runtime.MotionTransport = fake
+	runtime.MotionSimulated = true
+	runtime.CoyoteConnector = estim.NewSimulatedConnector()
+	runtime.NativeBluetoothConnector = handyble.NewSimulatedConnector()
+	runtime.IntifaceSimulatorAddress = intiface.Address()
+	runtime.AutoblowClient = autoblow.Options{LatencyURL: cloud.URL(), ClusterURL: cloud.ClusterURL}
+	runtime.AutoblowSimulated = true
+	return runtime, func() {
+		_ = cloud.Close()
+		_ = intiface.Close()
+	}, nil
 }
 
 func prepareForUninstall(stdout io.Writer) error {

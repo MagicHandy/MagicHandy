@@ -106,8 +106,8 @@ func (s *Server) disableLabs(ctx context.Context) error {
 	// Emergency Stop never need this lab-only admission lock.
 	s.lab.startMu.Lock()
 	defer s.lab.startMu.Unlock()
-	s.motion.lifecycleMu.Lock()
-	defer s.motion.lifecycleMu.Unlock()
+	releaseOwner := s.motion.life.Hold()
+	defer releaseOwner()
 	engine := s.currentMotionEngine()
 	if engine == nil || engine.Snapshot().Target.Source != motion.TargetSourceMotionLab {
 		return nil

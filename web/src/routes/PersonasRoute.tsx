@@ -1,3 +1,4 @@
+import "../styles/personas.css";
 import { useCallback, useEffect, useState } from "react";
 import { t } from "../i18n";
 import { api } from "../api/client";

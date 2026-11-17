@@ -52,13 +52,8 @@ type importRule struct {
 
 func internalBoundaryRules(internal string) []importRule {
 	rules := []importRule{
-		{
-			name: "conversation application stays above core domains",
-			appliesTo: func(importPath string) bool {
-				return !hasAnyPrefix(importPath, internal+"httpapi", internal+"chatapp")
-			},
-			forbidden: []string{internal + "chatapp"},
-		},
+		applicationBoundary(internal, "chatapp"),
+		applicationBoundary(internal, "deviceapp"),
 		{
 			name: "httpapi is an edge adapter",
 			appliesTo: func(importPath string) bool {
@@ -148,6 +143,16 @@ func internalBoundaryRules(internal string) []importRule {
 		},
 	}
 	return append(rules, nativeBluetoothBoundaryRules(internal)...)
+}
+
+func applicationBoundary(internal, name string) importRule {
+	return importRule{
+		name: name + " orchestration stays above core domains",
+		appliesTo: func(importPath string) bool {
+			return !hasAnyPrefix(importPath, internal+"httpapi", internal+name)
+		},
+		forbidden: []string{internal + name},
+	}
 }
 
 func nativeBluetoothBoundaryRules(internal string) []importRule {

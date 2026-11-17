@@ -153,7 +153,7 @@ func NewManager(options Options) (*Manager, error) {
 		return nil, errors.New("mode manager requires engine and settings accessors")
 	}
 	if options.Now == nil {
-		options.Now = func() time.Time { return time.Now().UTC() }
+		options.Now = time.Now
 	}
 	if options.Tick <= 0 {
 		options.Tick = defaultTickInterval

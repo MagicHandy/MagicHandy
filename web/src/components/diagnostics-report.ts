@@ -1,3 +1,4 @@
+import { motionPhase } from "../state/motion-phase";
 import type { AppState, MediaToolStatus } from "../api/types";
 
 /**
@@ -43,13 +44,7 @@ function duration(seconds: unknown): string {
 }
 
 export function engineStateLabel(state: AppState | null | undefined): string {
-  const engine = state?.motion?.engine;
-  if (!engine) return "unavailable";
-  if (engine.starting) return "starting";
-  if (engine.completing) return "stopping";
-  if (engine.running) return "running";
-  if (engine.paused) return "paused";
-  return "idle";
+  return motionPhase(state?.motion?.engine, state?.motion?.available);
 }
 
 /**
