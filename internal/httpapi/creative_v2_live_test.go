@@ -125,6 +125,11 @@ func TestCreativeV2LiveProductionConversation(t *testing.T) {
 // reaches the provider; the harness always uses the fake transport above.
 func creativeReviewProvider(t *testing.T, model string) (llm.Provider, bool) {
 	t.Helper()
+	return creativeReviewProviderAtContext(t, model, 0)
+}
+
+func creativeReviewProviderAtContext(t *testing.T, model string, window int) (llm.Provider, bool) {
+	t.Helper()
 	if directory := os.Getenv("MAGICHANDY_HOSTED_DATA_DIR"); directory != "" {
 		manager, err := openaiauth.Open(openaiauth.Options{DataDir: directory})
 		if err != nil {
@@ -135,13 +140,13 @@ func creativeReviewProvider(t *testing.T, model string) (llm.Provider, bool) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		provider, err := llm.NewOpenAIResponsesProvider(llm.OpenAIOptions{Model: model, PlanUsage: true, ReasoningEffort: "low", Token: token, Timeout: 45 * time.Second, Client: &http.Client{Transport: creativeReviewTransport{t}}})
+		provider, err := llm.NewOpenAIResponsesProvider(llm.OpenAIOptions{Model: model, PlanUsage: true, ReasoningEffort: "low", ContextSize: window, Token: token, Timeout: 45 * time.Second, Client: &http.Client{Transport: creativeReviewTransport{t}}})
 		if err != nil {
 			t.Fatal(err)
 		}
 		return provider, true
 	}
-	provider, err := llm.NewOllamaProvider(llm.HTTPProviderOptions{BaseURL: "http://127.0.0.1:11434", Model: model, Timeout: 90 * time.Second})
+	provider, err := llm.NewOllamaProvider(llm.HTTPProviderOptions{BaseURL: "http://127.0.0.1:11434", Model: model, ContextSize: window, Timeout: 90 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}

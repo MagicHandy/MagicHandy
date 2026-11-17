@@ -92,6 +92,21 @@ def contact_sheets(entries, destination):
     return pages
 
 
+def captured_sessions(paths):
+    for path in paths:
+        source = json.loads(path.read_text(encoding="utf-8-sig"))
+        if source.get("schema") != "motion_quality.v1":
+            yield source
+            continue
+        for scenario, commands in source["session_commands"].items():
+            yield {
+                "scenario": f"{path.stem} · {scenario}",
+                "model": source["model"],
+                "commands": commands,
+                "turns": [turn for turn in source["turns"] if turn["scenario"] == scenario],
+            }
+
+
 def captured_transport_charts(paths, destination, start_index):
     """Render real captured test-dispatch points, including queued retargets.
 
@@ -99,8 +114,7 @@ def captured_transport_charts(paths, destination, start_index):
     commands. Points queued after Stop are explicitly shaded as canceled.
     """
     items = []
-    for path in paths:
-        source = json.loads(path.read_text(encoding="utf-8-sig"))
+    for source in captured_sessions(paths):
         speeds = []
         for turn in source.get("turns", []):
             speed = turn.get("motion", {}).get("speed_percent")

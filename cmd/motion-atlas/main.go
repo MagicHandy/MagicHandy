@@ -121,13 +121,17 @@ func readTrials(path string, settings config.MotionSettings) []motion.Review {
 func unwrapTrials(data []byte, path string) ([]byte, []motion.Review) {
 	if strings.HasPrefix(strings.TrimSpace(string(data)), "{") {
 		var report struct {
-			Model string
-			Turns json.RawMessage
-			Inert bool
+			Schema string
+			Model  string
+			Turns  json.RawMessage
+			Inert  bool
 		}
 		must(json.Unmarshal(data, &report))
 		if len(report.Turns) == 0 {
 			must(fmt.Errorf("%s: expected a trial array or an exported object containing turns", path))
+		}
+		if report.Schema == "motion_quality.v1" {
+			return nil, qualityEntries(report.Turns, report.Model, path)
 		}
 		var turns []struct {
 			Request, Response string
