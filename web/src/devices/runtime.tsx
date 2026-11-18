@@ -12,8 +12,8 @@ import { t, translateKnown } from "../i18n";
 import { useAppState, useToast } from "../state/app-state";
 import type { DeviceContext, DeviceRequestKey } from "./types";
 
-// Levels change faster than the app-state poll while someone watches them.
-const WATCH_POLL_MS = 500;
+import { useDeviceObservation, useDevicePoll } from "./useDeviceObservation";
+
 
 export const EMPTY_INTIFACE: IntifaceTransportSnapshot = {
   dispatch_owner: "intiface",
@@ -51,9 +51,9 @@ export function DeviceRuntimeProvider({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState<Partial<Record<DeviceRequestKey, string>>>({});
   const [failed, setFailedMap] = useState<Partial<Record<DeviceRequestKey, boolean>>>({});
   const pending = useRef(new Set<DeviceRequestKey>());
-  const [coyote, setCoyote] = useState(state?.coyote_transport);
-  const [autoblow, setAutoblow] = useState(state?.autoblow_transport);
-  const [intiface, setIntiface] = useState(state?.intiface_transport);
+  const [coyote, setCoyote] = useDeviceObservation(state?.coyote_transport);
+  const [autoblow, setAutoblow] = useDeviceObservation(state?.autoblow_transport);
+  const [intiface, setIntiface] = useDeviceObservation(state?.intiface_transport);
   const [handys, setHandys] = useState(state?.handy_connections);
   const [bluetooth, setBluetooth] = useState(EMPTY_BLUETOOTH);
   const [watchers, setWatchers] = useState(0);
@@ -70,37 +70,17 @@ export function DeviceRuntimeProvider({ children }: { children: ReactNode }) {
   const usesIntiface = configured.includes("vibrator") || (configured.includes("handy") && owner === "intiface")
     || additionalHandys.some((connection) => connection.method === "intiface");
 
-  useEffect(() => { if (state?.coyote_transport) setCoyote(state.coyote_transport); }, [state?.coyote_transport]);
-  useEffect(() => { if (state?.autoblow_transport) setAutoblow(state.autoblow_transport); }, [state?.autoblow_transport]);
-  useEffect(() => { if (state?.intiface_transport) setIntiface(state.intiface_transport); }, [state?.intiface_transport]);
   useEffect(() => { if (state?.handy_connections) setHandys(state.handy_connections); }, [state?.handy_connections]);
   // A failed attempt belongs to the method it was made with.
   useEffect(() => setFailedMap((current) => (current.handy ? { ...current, handy: false } : current)), [owner]);
 
-  // A watcher opening shows current device lists at once, not a poll later.
-  useEffect(() => {
-    if (!watching || !backendOnline || !usesIntiface) return;
-    void api.intifaceStatus().then(setIntiface).catch(() => undefined);
-  }, [watching, backendOnline, usesIntiface]);
-  useEffect(() => {
-    if (!watching || !backendOnline || !additionalHandys.length) return;
-    void api.handyConnections().then((result) => setHandys(result.connections)).catch(() => undefined);
-  }, [watching, backendOnline, additionalHandys.length]);
-  useEffect(() => {
-    if (!watching || !coyoteConnected) return;
-    const timer = window.setInterval(() => void api.coyoteStatus().then(setCoyote).catch(() => undefined), WATCH_POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [watching, coyoteConnected]);
-  useEffect(() => {
-    if (!watching || !autoblowConnected) return;
-    const timer = window.setInterval(() => void api.autoblowStatus().then(setAutoblow).catch(() => undefined), WATCH_POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [watching, autoblowConnected]);
-  useEffect(() => {
-    if (!watching || !vibratorLeased) return;
-    const timer = window.setInterval(() => void api.intifaceStatus().then(setIntiface).catch(() => undefined), WATCH_POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [watching, vibratorLeased]);
+  const panelOnline = watching && backendOnline;
+  useDevicePoll(panelOnline && coyoteConnected, true, api.coyoteStatus, setCoyote, owner);
+  useDevicePoll(panelOnline && autoblowConnected, true, api.autoblowStatus, setAutoblow, owner);
+  useDevicePoll(panelOnline && usesIntiface, vibratorLeased, api.intifaceStatus, setIntiface, owner);
+  const acceptHandys = useCallback((result: { connections: HandyConnectionState[] }) => setHandys(result.connections), []);
+  const handyIDs = additionalHandys.map((connection) => connection.id + "/" + connection.method).join(",");
+  useDevicePoll(panelOnline && !!handyIDs, false, api.handyConnections, acceptHandys, handyIDs);
 
   // A connection attempt's outcome stays on its row until the next attempt.
   const run = useCallback<DeviceContext["run"]>(async (device, action, request) => {
@@ -147,7 +127,7 @@ export function DeviceRuntimeProvider({ children }: { children: ReactNode }) {
 
   const runtime = useMemo<DeviceRuntime>(() => ({
     busy, failed, setFailed, run, coyote, setCoyote, autoblow, setAutoblow, intiface, setIntiface, handys, setHandy, bluetooth, browserBluetooth, watch, setBluetoothDetails,
-  }), [busy, failed, setFailed, run, coyote, autoblow, intiface, handys, setHandy, bluetooth, browserBluetooth, watch]);
+  }), [busy, failed, setFailed, run, coyote, setCoyote, autoblow, setAutoblow, intiface, setIntiface, handys, setHandy, bluetooth, browserBluetooth, watch]);
 
   return (
     <DeviceRuntimeContext.Provider value={runtime}>

@@ -42,13 +42,7 @@ func TestMotionPathReview(t *testing.T) {
 			for _, name := range names {
 				spec := fixtures[name]
 				target, err := FlowTarget(spec, settings)
-				policies := []string{"cloud"}
-				if (speed == 25 || speed == 100) && (name == "full" || name == "short" || name == "compound" || name == "regional" || name == "creative-v2") {
-					policies = append(policies, "immediate-50", "intiface")
-				}
-				if os.Getenv("MAGICHANDY_PATH_REVIEW_TRANSPORT") == "ble" {
-					policies = []string{"ble"}
-				}
+				policies := reviewSamplingPolicies(name, speed)
 				for _, policy := range policies {
 					id := fmt.Sprintf("%s-%s-%03d-%s", model, name, speed, policy)
 					var entry Review
@@ -209,4 +203,15 @@ func measureMotionPath(entry Review, target MotionTarget, settings config.Motion
 		}
 	}
 	return metric
+}
+
+func reviewSamplingPolicies(name string, speed int) []string {
+	policies := []string{"cloud"}
+	if (speed == 25 || speed == 100) && (name == "full" || name == "short" || name == "compound" || name == "regional" || name == "creative-v2") {
+		policies = append(policies, "immediate-50", "intiface")
+	}
+	if os.Getenv("MAGICHANDY_PATH_REVIEW_TRANSPORT") == "ble" {
+		policies = []string{"ble"}
+	}
+	return policies
 }

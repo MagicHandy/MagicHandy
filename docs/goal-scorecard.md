@@ -1,5 +1,45 @@
 # Goal Scorecard
 
+## 2026-11-17 — Architecture review
+
+The comparison uses the fresh release base `bafc7ec4`, Windows amd64, Go 1.26.11 and a Ryzen 9 9950X3D. Sizes are bytes. Memory is decimal MB for the Go process alone. [Implementation and regression coverage for all 19 items](architecture-review-implementation-2026-11-17.md)
+
+| Measurement | Release base | Architecture branch |
+| --- | ---: | ---: |
+| Pure-Go core, `-trimpath -ldflags "-s -w"` | 25,294,336 B | 25,393,152 B |
+| Entire canonical `web/dist` tree | 2,958,849 B | 2,959,304 B |
+| Main JS, uncompressed | 1,358,102 B | 827,779 B |
+| Main JS, HTTP body with gzip accepted | 1,358,102 B | 224,237 B |
+| First Diagnostics visit, all JS and CSS response bodies | 1,565,629 B across 2 files | 324,350 B across 7 files |
+| Process start to first healthy HTTP response, five fresh profiles | 93.3 ms median (82.0–120.9) | 84.4 ms median (77.6–99.8) |
+| Interactive target HTTP latency, 50 requests, median / p95 | 0.63 / 1.02 ms | 0.51 / 0.76 ms |
+| Tenth edit’s selected handoff lead, median of five bursts | 9,993 ms | 1,995 ms |
+| Interactive accepted tail after those bursts, median | 10,988 ms | 1,990 ms |
+| Creative v2 preparation, speed 75 | 10.24 ms, 6,801,363 B, 150,096 allocations | 8.56 ms, 3,425,232 B, 9,872 allocations |
+| Full state, 4,096 catalog rows, one tab | 0.687 ms, 69,300 B, 560 allocations | 0.207 ms, 63,247 B, 396 allocations |
+| Full state, same database, eight sequential tab requests | 7.682 ms, 554,373 B, 4,480 allocations | 2.109 ms, 505,974 B, 3,168 allocations |
+
+The browser transfer figures count actual first-request HTTP bodies for the English Diagnostics route. The entry alone is 83.5% smaller on the wire. The whole embedded tree grew 455 B and the stripped core grew 98,816 B. New npm dependencies run only during development and CI.
+
+The HTTP trials alternated builds, created a fresh data directory for each start and used a persistent loopback connection for ten speed edits. The latency interval ends when the response is read. A separate fixed-playback-clock regression compares accepted geometric points and measures the tenth edit’s first difference at 2,000 ms. CPU figures are medians of three single-CPU benchmark executions. On the same 4,096-point program the full internal snapshot takes 4.90 µs and 65,728 B, and the browser projection takes 0.30 µs and 128 B.
+
+### One hour with a Diagnostics tab
+
+Each isolated simulator played `flow-full-sweeps` at 25% for 3,600 seconds. One headless Chrome Diagnostics tab retained its state poll and motion stream. A supervising client renewed its controller lease and sampled the core every 30 seconds. There were 120 samples per build. Warm and final columns below use medians of the 5–10 and 55–60 minute windows. The command counter includes setup and Stop.
+
+| Core and transport observations | Release base | Bounded-history candidate |
+| --- | ---: | ---: |
+| Warm / final working set | 83.54 / 70.82 MB | 81.98 / 54.19 MB |
+| Warm / final private bytes | 66.68 / 72.53 MB | 64.39 / 66.24 MB |
+| Accepted tail lead, p5 / median / p95 | 415 / 832 / 1,312 ms | 466 / 883 / 1,340 ms |
+| Accepted tail lead, min–max | 396–1,381 ms | 398–1,393 ms |
+| Last Stop, elapsed client request | 3.37 ms | 4.81 ms |
+| Successful commands / additional commands during 2 s after Stop | 3,604 / 0 | 3,604 / 0 |
+
+Both owners acknowledged a Stop and both engines finished idle. The candidate also returned explicit transport confirmation. Steady and stopped trace exports were captured in each isolated profile. The candidate soak used the bounded 64-entry recorder and the same steady playback code as the final build. Final work on conflict handling, snapshot ordering, route loading and simulator lifecycle was checked separately on the completed branch. The soak covered one active stream with a browser and no model generation. Windows working-set trimming and concurrent background work limit what this single pair can establish about RSS.
+
+The stripped core and cold-start results meet the 30 MB and 500 ms targets. The candidate’s final active working set is below 80 MB, while its 5–10 minute median was 81.98 MB. Final working set growth was within the +20% one-hour threshold. The idle review process after a text-only model turn and with one Diagnostics tab measured 79.92–80.12 MB across ten samples over 27 seconds. The **40 MB idle target remains open**. Browser and model processes are excluded from all RSS figures.
+
 ## 2026-11-14 — Windows branding integration review
 
 - Independently reproduced the preceding icon measurement with Go 1.26.11 and

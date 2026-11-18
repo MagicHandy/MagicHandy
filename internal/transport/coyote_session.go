@@ -32,13 +32,26 @@ func (c *Coyote) SessionID() uint64 {
 func (c *Coyote) MotionTransport() (Transport, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.link == nil {
-		return nil, errCoyoteNotConnected
-	}
-	if !c.playbackReadyLocked() {
-		return nil, errCoyoteNotReady
+	if err := c.motionReadyLocked(); err != nil {
+		return nil, err
 	}
 	return &coyoteSession{owner: c, link: c.link}, nil
+}
+
+// MotionReady checks admission without creating a session.
+func (c *Coyote) MotionReady() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.motionReadyLocked()
+}
+func (c *Coyote) motionReadyLocked() error {
+	if c.link == nil {
+		return errCoyoteNotConnected
+	}
+	if !c.playbackReadyLocked() {
+		return errCoyoteNotReady
+	}
+	return nil
 }
 
 func (c *Coyote) playbackReadyLocked() bool {

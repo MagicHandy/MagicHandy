@@ -95,6 +95,7 @@ type Engine struct {
 	startupRecovery                *StartupRecoveryState
 	startupResetCancel             context.CancelFunc
 	latencyMillis                  []int64
+	pendingEdit                    *editHandoff
 	transition                     *planTransition
 	preservePlanKnots              bool
 	minimumPointIntervalMillis     int64
@@ -345,7 +346,7 @@ func (e *Engine) applyTarget(ctx context.Context, target MotionTarget, reason st
 	if err := e.retarget(runEpoch, target, reason); err != nil {
 		return e.Snapshot(), err
 	}
-	err = e.dispatchNextChunk(dispatchCtx, runEpoch, "retarget_points")
+	err = e.dispatchInteractiveEdit(dispatchCtx, runEpoch, "retarget_points")
 	return e.Snapshot(), err
 }
 
@@ -381,7 +382,7 @@ func (e *Engine) RefreshSettings(ctx context.Context, settings config.MotionSett
 	if err := e.setStrokeWindow(ctx, runEpoch, "settings_stroke_window", true); err != nil {
 		return e.Snapshot(), err
 	}
-	err = e.dispatchNextChunk(ctx, runEpoch, "settings_points")
+	err = e.dispatchInteractiveEdit(ctx, runEpoch, "settings_points")
 	return e.Snapshot(), err
 }
 
@@ -439,6 +440,16 @@ func (e *Engine) Pause(ctx context.Context, reason string) (ActiveMotionState, e
 // Resume continues paused motion with the same target and preserved phase on
 // a fresh stream.
 func (e *Engine) Resume(ctx context.Context, reason string) (ActiveMotionState, error) {
+	return e.resume(ctx, reason, nil, e.AdmissionGeneration())
+}
+
+// ResumeAtGeneration admits the saved envelope and paused plan only if Stop
+// has not invalidated the request while it waited for a settings write.
+func (e *Engine) ResumeAtGeneration(ctx context.Context, reason string, settings config.MotionSettings, admission uint64) (ActiveMotionState, error) {
+	return e.resume(ctx, reason, &settings, admission)
+}
+
+func (e *Engine) resume(ctx context.Context, reason string, settings *config.MotionSettings, admission uint64) (ActiveMotionState, error) {
 	if reason == "" {
 		reason = "resume"
 	}
@@ -456,7 +467,7 @@ func (e *Engine) Resume(ctx context.Context, reason string) (ActiveMotionState, 
 		cancel()
 		return e.Snapshot(), err
 	}
-	runEpoch, resumeAdmission, err := e.beginResume(loopCtx, reason, cancel)
+	runEpoch, resumeAdmission, err := e.beginResume(loopCtx, reason, cancel, settings, admission)
 	if err != nil {
 		cancel()
 		return e.Snapshot(), err
@@ -501,9 +512,12 @@ func startupAbortReason(prefix, fallback string, cause error) string {
 	return fallback
 }
 
-func (e *Engine) beginResume(loopCtx context.Context, reason string, cancel context.CancelFunc) (uint64, uint64, error) {
+func (e *Engine) beginResume(loopCtx context.Context, reason string, cancel context.CancelFunc, settings *config.MotionSettings, admission uint64) (uint64, uint64, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if e.stopGeneration != admission {
+		return 0, 0, errRunInvalidated
+	}
 	if e.running || e.completing || e.stopBarriers > 0 {
 		return 0, 0, errors.New("motion is running or stopping")
 	}
@@ -519,12 +533,17 @@ func (e *Engine) beginResume(loopCtx context.Context, reason string, cancel cont
 	e.streamID = fmt.Sprintf("%s-%06d", e.streamIDPrefix, e.generation)
 	e.startedAt = e.now()
 	e.nextSampleMillis = 0
+	e.pendingEdit = nil
 	e.lastResult = nil
 	e.lastError = ""
 	e.startupRecovery = nil
 	e.latencyMillis = nil
 	e.transition = nil
 	e.frozenPhase = e.pausedPhase
+	if settings != nil {
+		e.settings = normalizeMotionSettings(*settings)
+	}
+	e.lastSample = nil
 	plan := NewMotionPlan(e.planIDLocked(), e.pausedTarget, e.settings, e.pausedPhase, 0, e.startedAt)
 	if err := plan.compilationError(); err != nil {
 		e.runCtx = nil
@@ -624,7 +643,16 @@ func (e *Engine) Stop(ctx context.Context, reason string) (ActiveMotionState, er
 func (e *Engine) Snapshot() ActiveMotionState {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.snapshotLocked()
+	return e.snapshotLocked(e.plan.Target)
+}
+
+// Observation returns the browser projection without retaining or copying resolved content.
+func (e *Engine) Observation() ActiveMotionState {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	target := e.plan.Target
+	target.Pattern, target.Program, target.Media, target.prepared = nil, nil, nil, nil
+	return e.snapshotLocked(target)
 }
 
 func (e *Engine) begin(ctx context.Context, loopCtx context.Context, target MotionTarget, settings config.MotionSettings, cancel context.CancelFunc, admission uint64, promoting bool) (uint64, error) {
@@ -658,6 +686,7 @@ func (e *Engine) begin(ctx context.Context, loopCtx context.Context, target Moti
 	e.settings = settings
 	e.startedAt = e.now()
 	e.nextSampleMillis = 0
+	e.pendingEdit = nil
 	e.lastSample = nil
 	e.currentSample = nil
 	e.lastResult = nil
@@ -719,28 +748,27 @@ func (e *Engine) retarget(runEpoch uint64, target MotionTarget, reason string) e
 		leadMillis = 0
 	}
 	recentLatency := e.recentCommandLatencyMillisLocked()
-	previous := e.plan
+	desired := e.plan.Target
 	if target.Vibration == nil {
-		target.Vibration = previous.Target.Vibration
+		target.Vibration = desired.Vibration
 	}
 	if target.Vibration != nil {
 		if err := target.Vibration.Validate(); err != nil {
 			return err
 		}
 	}
-	target.VibrationOnly = previous.Target.VibrationOnly
+	target.VibrationOnly = desired.VibrationOnly
 	if target.Tempo == nil {
-		target.Tempo = previous.Target.Tempo
+		target.Tempo = desired.Tempo
 	}
-	target.TempoOnly = previous.Target.TempoOnly
+	target.TempoOnly = desired.TempoOnly
 	if target.Tempo != nil && e.tempoOutput {
 		if err := validateRunTempo(*target.Tempo, target.TempoOnly); err != nil {
 			return err
 		}
 	}
 	previousSettings := e.settings
-	previousTransition := pruneTransitionHistory(e.transition, estimatedMillis)
-	e.transition = previousTransition
+	previous, previousTransition := e.editPathLocked(estimatedMillis)
 	current := sampleMotionPath(previous, previousTransition, estimatedMillis)
 	handoffPosition := sampleMotionPath(previous, previousTransition, handoff).PositionPercent
 	handoffDirection := motionPathDirection(previous, previousTransition, handoff)
@@ -755,16 +783,7 @@ func (e *Engine) retarget(runEpoch uint64, target MotionTarget, reason string) e
 		e.lastError = err.Error()
 		return err
 	}
-	bridgeInserted := transitionRequired(previous, previousTransition, next, handoff)
-	if bridgeInserted {
-		e.transition = layeredTurnTransition(previous, previousTransition, &next, handoff)
-		if e.transition == nil {
-			e.transition = newPlanTransition(previous, previousTransition, handoff)
-		}
-	} else {
-		e.transition = nil
-	}
-	e.plan = next
+	bridgeInserted := e.installEditLocked(previous, previousTransition, &next, handoff, estimatedMillis)
 	if target.Vibration != nil && (e.vibration == nil || e.vibration.spec != *target.Vibration) {
 		e.setVibrationLocked(*target.Vibration, estimatedMillis)
 	}
@@ -791,10 +810,8 @@ func (e *Engine) refreshSettings(runEpoch uint64, settings config.MotionSettings
 		leadMillis = 0
 	}
 	recentLatency := e.recentCommandLatencyMillisLocked()
-	previous := e.plan
 	previousSettings := e.settings
-	previousTransition := pruneTransitionHistory(e.transition, estimatedMillis)
-	e.transition = previousTransition
+	previous, previousTransition := e.editPathLocked(estimatedMillis)
 	current := sampleMotionPath(previous, previousTransition, estimatedMillis)
 	target := NormalizeTarget(e.plan.Target, settings)
 	e.generation++
@@ -805,16 +822,7 @@ func (e *Engine) refreshSettings(runEpoch uint64, settings config.MotionSettings
 	}
 	e.settings = settings
 	next.PhasePreserved = true
-	bridgeInserted := transitionRequired(previous, previousTransition, next, handoff)
-	if bridgeInserted {
-		e.transition = layeredTurnTransition(previous, previousTransition, &next, handoff)
-		if e.transition == nil {
-			e.transition = newPlanTransition(previous, previousTransition, handoff)
-		}
-	} else {
-		e.transition = nil
-	}
-	e.plan = next
+	bridgeInserted := e.installEditLocked(previous, previousTransition, &next, handoff, estimatedMillis)
 	e.traceRetargetLocked(reason, previous, previousSettings, next, e.settings, current, handoff, leadMillis, recentLatency, bridgeInserted, "")
 	return true, nil
 }
@@ -1049,18 +1057,13 @@ func (e *Engine) finishRecovery(ctx context.Context, reason string, message stri
 		Kind: transport.CommandKindStop,
 		Stop: &stopCommand,
 	}, result, err, "recovery="+message)
-	e.finishStopped(result, err)
+	cause := errors.Join(errors.New(message), err)
+	e.finishStopped(result, cause)
 	e.mu.Lock()
-	if err == nil {
-		e.lastError = message
-	}
 	e.endStopBarrierLocked()
 	e.mu.Unlock()
 	e.commandMu.Unlock()
-	if err != nil {
-		return err
-	}
-	return errors.New(message)
+	return cause
 }
 
 func recoveryFromLoop(ctx context.Context) bool {
@@ -1175,7 +1178,7 @@ func playbackStateNeedsRecovery(state string) bool {
 
 func (e *Engine) applyDefaults() {
 	if e.now == nil {
-		e.now = func() time.Time { return time.Now().UTC() }
+		e.now = time.Now
 	}
 	if e.chunkSize <= 0 {
 		e.chunkSize = defaultChunkSize

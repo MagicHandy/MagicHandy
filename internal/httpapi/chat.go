@@ -13,6 +13,7 @@ import (
 	"unicode"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
+	"github.com/mapledaemon/MagicHandy/internal/chatapp"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
@@ -713,8 +714,8 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 		// Keep no-engine transport Stop and engine Stop serialized against new
 		// engine admission. The global Stop epoch was already advanced by the
 		// deterministic fast path before this lock can wait.
-		s.motion.lifecycleMu.Lock()
-		defer s.motion.lifecycleMu.Unlock()
+		releaseOwner := s.motion.life.Hold()
+		defer releaseOwner()
 		engine := s.currentMotionEngine()
 		if engine == nil {
 			_, err := s.stopSelectedTransport(ctx, "chat_stop_no_engine")
@@ -965,7 +966,14 @@ func (s *Server) chatState(ctx context.Context) map[string]any {
 		return map[string]any{"available": false, "latest_seq": int64(0), "active_session_id": "", "current_mood": ""}
 	}
 	settings, _ := s.store.Snapshot()
-	state, err := s.chatWorkspace.Observe(ctx, settings.LLM.ChatVoice != config.LLMChatVoiceUtility)
+	trackMood := settings.LLM.ChatVoice != config.LLMChatVoiceUtility
+	cache := &s.summaries.chat
+	if trackMood {
+		cache = &s.summaries.chatWithMood
+	}
+	state, err := cache.read(ctx, s.store.Datastore(), func(ctx context.Context) (chatapp.Observation, error) {
+		return s.chatWorkspace.Observe(ctx, trackMood)
+	})
 	var mood any = ""
 	if state.CurrentMood != "" {
 		mood = state.CurrentMood

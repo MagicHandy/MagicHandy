@@ -119,7 +119,7 @@ type BrowserBluetoothBridge struct {
 func NewBrowserBluetoothBridge(options ...BrowserBluetoothBridgeOption) *BrowserBluetoothBridge {
 	bridge := &BrowserBluetoothBridge{
 		notify:         make(chan struct{}),
-		clock:          func() time.Time { return time.Now().UTC() },
+		clock:          time.Now,
 		commandTimeout: defaultBluetoothCommandTimeout,
 		staleAfter:     defaultBluetoothStaleAfter,
 		queueLimit:     defaultBluetoothQueueLimit,

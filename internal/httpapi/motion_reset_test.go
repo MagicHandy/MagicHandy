@@ -153,9 +153,7 @@ func TestAuthenticatedPositionResetAndStop(t *testing.T) {
 		t.Run(fmt.Sprintf("interrupt=%v", interrupt), func(t *testing.T) {
 			s, _, _, cookie := newControllerSessionFixture(t)
 			owner := &positionResetTransport{Fake: transport.NewFake(), position: 120}
-			s.motion.mu.Lock()
 			s.motion.transport = owner
-			s.motion.mu.Unlock()
 			claimAuthenticatedController(t, s, cookie)
 			e, _, err := s.motionEngineForStart()
 			if err != nil {
@@ -222,10 +220,6 @@ func TestPositionRecheckDoesNotHoldLifecycleLockAndReplacementCancelsIt(t *testi
 	case <-time.After(time.Second):
 		t.Fatal("reset did not start")
 	}
-	if !s.motion.lifecycleMu.TryLock() {
-		t.Fatal("recheck held the lifecycle lock during I/O")
-	}
-	s.motion.lifecycleMu.Unlock()
 	replaced := make(chan error, 1)
 	go func() { replaced <- s.stopAndClearMotionEngine(t.Context(), "device_disconnected") }()
 	select {

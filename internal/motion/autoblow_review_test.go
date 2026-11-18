@@ -57,14 +57,7 @@ func TestAutoblowMotionReview(t *testing.T) {
 					t.Errorf("%s: %s", entry.ID, entry.Error)
 					continue
 				}
-				for i, point := range entry.Wire {
-					if math.IsNaN(point.PositionPercent) || point.PositionPercent < 0 || point.PositionPercent > 100 {
-						t.Errorf("%s: invalid point %+v", entry.ID, point)
-					}
-					if i > 0 && point.TimeMillis <= entry.Wire[i-1].TimeMillis {
-						t.Errorf("%s: time not increasing", entry.ID)
-					}
-				}
+				checkAutoblowWire(t, entry)
 				if owner == "vacuglide" && len(entry.Wire) > 0 {
 					// The engine derives follow tempo from its plan; the owner
 					// maps it onto the default full Tempo range.
@@ -86,4 +79,16 @@ func TestAutoblowMotionReview(t *testing.T) {
 	}
 	writeSpeedReviewReport(t, path, map[string]any{"schema": "magichandy.motion-atlas.v1", "entries": entries, "motors": motors})
 	t.Logf("retained %d trajectories", len(entries))
+}
+
+func checkAutoblowWire(t *testing.T, entry Review) {
+	for i, point := range entry.Wire {
+		if math.IsNaN(point.PositionPercent) || point.PositionPercent < 0 || point.PositionPercent > 100 {
+			t.Errorf("%s: invalid point %+v", entry.ID, point)
+		}
+		if i > 0 && point.TimeMillis <= entry.Wire[i-1].TimeMillis {
+			t.Errorf("%s: time not increasing", entry.ID)
+		}
+	}
+
 }

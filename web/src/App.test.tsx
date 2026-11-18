@@ -251,6 +251,11 @@ function installFetch(opts: InstallFetchOptions = {}) {
       },
     });
     if (u.includes("/api/settings")) {
+      if (_init?.method === "PATCH" && _init.body) {
+        const { changes } = JSON.parse(String(_init.body));
+        if (changes.llm) state.settings.llm = { ...state.settings.llm, ...changes.llm };
+        if (changes.voice) state.settings.voice = { ...state.settings.voice, ...changes.voice };
+      }
       if (_init?.method === "PUT" && _init.body) {
         const update = JSON.parse(String(_init.body)) as { connection_key?: string; llm?: typeof state.settings.llm };
         if (u.endsWith("/device/connection-key") && update.connection_key) state.settings.device.connection_key_set = true;
@@ -793,9 +798,9 @@ describe("app shell safety invariants", () => {
     expect(screen.getByText(/save settings before runtime actions/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
-    await waitFor(() => expect(fetch.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "PUT")).toBe(true));
-    const [, request] = fetch.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PUT") ?? [];
-    const payload = JSON.parse(String((request as RequestInit).body));
+    await waitFor(() => expect(fetch.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "PATCH")).toBe(true));
+    const [, request] = fetch.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PATCH") ?? [];
+    const payload = JSON.parse(String((request as RequestInit).body)).changes;
     expect(payload.llm.model).toBe("managed-model-a1b2c3");
     expect(payload.llm).not.toHaveProperty("llama_cpp_runner_path");
     expect(payload.llm).not.toHaveProperty("llama_cpp_model_path");
@@ -827,9 +832,9 @@ describe("app shell safety invariants", () => {
     expect(screen.getByText(/may improve difficult intent interpretation/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
 
-    await waitFor(() => expect(fetch.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "PUT")).toBe(true));
-    const [, request] = fetch.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PUT") ?? [];
-    const payload = JSON.parse(String((request as RequestInit).body));
+    await waitFor(() => expect(fetch.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "PATCH")).toBe(true));
+    const [, request] = fetch.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PATCH") ?? [];
+    const payload = JSON.parse(String((request as RequestInit).body)).changes;
     expect(payload.llm.max_output_tokens).toBe(128);
     expect(payload.llm.reasoning_mode).toBe("auto");
   });
@@ -1010,10 +1015,10 @@ describe("app shell safety invariants", () => {
     fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
 
     await waitFor(() => {
-      expect(fetch.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "PUT")).toBe(true);
+      expect(fetch.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "PATCH")).toBe(true);
     });
-    const [, request] = fetch.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PUT") ?? [];
-    const payload = JSON.parse(String((request as RequestInit).body));
+    const [, request] = fetch.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PATCH") ?? [];
+    const payload = JSON.parse(String((request as RequestInit).body)).changes;
     expect(payload.voice.asr_worker_args).toEqual([
       "-server-path",
       "C:\\Program Files\\MagicHandy\\parakeet-server.exe",

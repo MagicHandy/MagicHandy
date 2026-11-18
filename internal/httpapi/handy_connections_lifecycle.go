@@ -44,6 +44,6 @@ func (s *Server) stopNamedHandysOutsideEngine(ctx context.Context, engineOwner, 
 	if len(participants) == 0 {
 		return nil
 	}
-	_, err := transport.NewLinkedSession(participants, false).Stop(ctx, transport.StopCommand{Reason: reason})
-	return err
+	result, err := transport.NewLinkedSession(participants, false).Stop(ctx, transport.StopCommand{Reason: reason})
+	return stopAcknowledgementError(result, err)
 }

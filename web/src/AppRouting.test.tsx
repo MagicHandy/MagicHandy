@@ -76,15 +76,15 @@ describe("App route lifetime", () => {
 
     expect(await screen.findByRole("dialog", { name: "Run setup again?" })).toBeInTheDocument();
     expect(window.location.hash).toBe("#/chat");
-    expect(screen.getByText("Chat route")).toBeInTheDocument();
+    expect(await screen.findByText("Chat route")).toBeInTheDocument();
   });
 
-  it("does not interrupt an in-progress setup after its first settings save", () => {
+  it("does not interrupt an in-progress setup after its first settings save", async () => {
     app.route = "#/setup";
     app.state = { settings: { ui: { setup_completed: false } }, settings_status: { using_defaults: false } };
     render(<App />);
 
-    expect(screen.getByText("Setup route")).toBeInTheDocument();
+    expect(await screen.findByText("Setup route")).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Run setup again?" })).not.toBeInTheDocument();
   });
 
@@ -94,18 +94,18 @@ describe("App route lifetime", () => {
     app.state = { settings: { ui: { setup_completed: true } }, settings_status: { using_defaults: false } };
     render(<App />);
 
-    expect(screen.getByText("Chat route")).toBeInTheDocument();
+    expect(await screen.findByText("Chat route")).toBeInTheDocument();
     expect(screen.queryByText("Setup route")).not.toBeInTheDocument();
     await waitFor(() => expect(window.location.hash).toBe("#/chat"));
   });
 
-  it("keeps setup open when a completed user explicitly requests reconfiguration", () => {
+  it("keeps setup open when a completed user explicitly requests reconfiguration", async () => {
     app.route = "#/setup/reconfigure";
     window.location.hash = "#/setup/reconfigure";
     app.state = { settings: { ui: { setup_completed: true } }, settings_status: { using_defaults: false } };
     render(<App />);
 
-    expect(screen.getByText("Setup route")).toBeInTheDocument();
+    expect(await screen.findByText("Setup route")).toBeInTheDocument();
     expect(window.location.hash).toBe("#/setup/reconfigure");
   });
 
@@ -131,29 +131,29 @@ describe("App route lifetime", () => {
     await waitFor(() => expect(window.location.hash).toBe("#/setup/reconfigure"));
   });
 
-  it("preserves settings drafts between subsections but resets them after leaving Settings", () => {
+  it("preserves settings drafts between subsections but resets them after leaving Settings", async () => {
     app.route = "#/settings/device";
     const result = render(<App />);
-    fireEvent.change(screen.getByRole("textbox", { name: "Settings draft" }), { target: { value: "49999" } });
+    fireEvent.change(await screen.findByRole("textbox", { name: "Settings draft" }), { target: { value: "49999" } });
 
     app.route = "#/settings/model";
     result.rerender(<App />);
-    expect(screen.getByRole("textbox", { name: "Settings draft" })).toHaveValue("49999");
+    expect(await screen.findByRole("textbox", { name: "Settings draft" })).toHaveValue("49999");
 
     app.route = "#/chat";
     result.rerender(<App />);
-    expect(screen.getByText("Chat route")).toBeInTheDocument();
+    expect(await screen.findByText("Chat route")).toBeInTheDocument();
 
     app.route = "#/settings/device";
     result.rerender(<App />);
-    expect(screen.getByRole("textbox", { name: "Settings draft" })).toHaveValue("");
+    expect(await screen.findByRole("textbox", { name: "Settings draft" })).toHaveValue("");
   });
 
-  it("routes Videos independently from the pattern library", () => {
+  it("routes Videos independently from the pattern library", async () => {
     app.route = "#/videos";
     render(<App />);
 
-    expect(screen.getByText("Videos route")).toBeInTheDocument();
+    expect(await screen.findByText("Videos route")).toBeInTheDocument();
     expect(screen.queryByText("Library route")).not.toBeInTheDocument();
   });
 

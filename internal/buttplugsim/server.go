@@ -22,10 +22,12 @@ const pingMillis = 1000
 
 // Server is one simulated Intiface Central endpoint on loopback.
 type Server struct {
-	listener net.Listener
-	server   *http.Server
-	mu       sync.Mutex
-	conns    map[*websocket.Conn]struct{}
+	serveDone chan struct{}
+	closed    bool
+	listener  net.Listener
+	server    *http.Server
+	mu        sync.Mutex
+	conns     map[*websocket.Conn]struct{}
 }
 
 // Start listens on an ephemeral loopback port.
@@ -34,9 +36,9 @@ func Start() (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	sim := &Server{listener: listener, conns: map[*websocket.Conn]struct{}{}}
+	sim := &Server{serveDone: make(chan struct{}), listener: listener, conns: map[*websocket.Conn]struct{}{}}
 	sim.server = &http.Server{Handler: http.HandlerFunc(sim.serve), ReadHeaderTimeout: 5 * time.Second}
-	go func() { _ = sim.server.Serve(listener) }()
+	go func() { defer close(sim.serveDone); _ = sim.server.Serve(listener) }()
 	return sim, nil
 }
 
@@ -48,13 +50,16 @@ func (s *Server) Address() string {
 // Close stops the server and drops every client.
 func (s *Server) Close() error {
 	s.mu.Lock()
+	s.closed = true
 	for conn := range s.conns {
 		_ = conn.CloseNow()
 	}
 	s.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	return s.server.Shutdown(ctx)
+	err := s.server.Shutdown(ctx)
+	<-s.serveDone
+	return err
 }
 
 func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
@@ -63,6 +68,11 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		_ = conn.CloseNow()
+		return
+	}
 	s.conns[conn] = struct{}{}
 	s.mu.Unlock()
 	defer func() {

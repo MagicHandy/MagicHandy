@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setLocaleForTest } from "../i18n";
 import english from "../i18n/locales/en.json";
 import { StopButton } from "./StopButton";
-import { api } from "../api/client";
+import { api, ApiError } from "../api/client";
 
 const app = vi.hoisted(() => ({ refresh: vi.fn(), show: vi.fn() }));
 
@@ -17,7 +17,7 @@ vi.mock("../api/client", async (importOriginal) => {
 });
 
 describe("StopButton", () => {
-  beforeEach(() => setLocaleForTest("en", english));
+  beforeEach(() => { vi.clearAllMocks(); setLocaleForTest("en", english); });
 
   it("uses the concise label and enlarges only the square stop glyph", () => {
     render(<StopButton />);
@@ -27,6 +27,22 @@ describe("StopButton", () => {
     expect(button).not.toHaveTextContent("Stop everything");
     expect(button.querySelector("svg")).toHaveAttribute("width", "21");
     expect(button.querySelector("svg")).toHaveAttribute("height", "21");
+  });
+
+  it.each([
+    ["confirmed", "Stopped.", "info"],
+    ["unconfirmed", "Stop is unconfirmed. Check the device locally.", "error"],
+    ["pending", "stop requested; device confirmation is still pending", "error"],
+    ["no_device", "No connected device to stop.", "info"],
+  ] as const)("reports a %s device result", async (status, message, kind) => {
+    const reply = { stop_status: status, transport_stop_confirmed: status === "confirmed" };
+    if (status === "unconfirmed" || status === "pending") {
+      vi.mocked(api.stopMotion).mockRejectedValueOnce(new ApiError(message, status === "pending" ? 503 : 502, reply));
+    } else vi.mocked(api.stopMotion).mockResolvedValueOnce(reply);
+    render(<StopButton />);
+    fireEvent.click(screen.getByRole("button", { name: "Emergency stop all motion" }));
+    await waitFor(() => expect(app.show).toHaveBeenCalledWith(english[message], kind));
+    expect(app.refresh).toHaveBeenCalledOnce();
   });
 
   it("keeps the one global Stop inside fullscreen and restores it on exit", async () => {

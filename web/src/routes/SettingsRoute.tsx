@@ -1,14 +1,16 @@
+import "../styles/model-manager.css";
+import "../styles/settings-form.css";
 // Settings as a routed workspace (not an overlay). Sub-sections are real hash
 // routes: #/settings/devices|media|chat|diagnostics. Routed sections share one
 // Save; Devices saves each option as it changes, and prompt sets, memory and
 // reset use their own immediate APIs.
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { NotificationCategory, PublicSettings, SettingsUpdate } from "../api/types";
+import type { NotificationCategory, PublicSettings } from "../api/types";
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
 import { MediaSettingsPanel } from "../components/MediaSettingsPanel";
 import { VoiceSettingsPanel } from "../components/VoiceSettingsPanel";
-import { rebaseSettingsDraft } from "../util/settings-draft";
+import { rebaseSettingsDraft, settingsPatch } from "../util/settings-draft";
 import { WorkspaceHead } from "../components/WorkspaceHead";
 import { ThemePicker } from "../components/ThemePicker";
 import { UpdateSettingsPanel } from "../components/UpdateSettingsPanel";
@@ -16,7 +18,6 @@ import { RuntimeUpdateSettings } from "../components/RuntimeUpdateSettings";
 import { LOCALE_OPTIONS, normalizeLocale, t, translateKnown, type MessageKey } from "../i18n";
 import { useAppState, useHashRoute, useToast } from "../state/app-state";
 import type { MediaSettingsPayload } from "../api/types";
-import { DEFAULT_THEME, normalizeTheme } from "../theme";
 import { notificationCategories } from "../notification-preferences";
 import { AccountSettingsPanel } from "../components/AccountSettingsPanel";
 import { ChatSettingsPanel, resolveChatSettingsSection } from "../components/ChatSettingsPanel";
@@ -89,9 +90,14 @@ export function SettingsRoute() {
   const [saving, setSaving] = useState(false);
   const mounted = useRef(true);
   const loadGeneration = useRef(0);
+  const credentialRevision = useRef("");
   const savingRef = useRef(false);
+  const hasCredentialEdit = useRef(false);
+  hasCredentialEdit.current = Boolean(newElevenLabsKey.trim() || clearElevenLabsKey || newOpenAITTSKey.trim() || clearOpenAITTSKey);
   const savedRef = useRef(saved);
   savedRef.current = saved;
+  const draftRef = useRef(s);
+  draftRef.current = s;
   const locked = !backendOnline || readOnly || loading || state?.capabilities?.configure_host === false;
   // These sections save immediately elsewhere (the device panel, Settings >
   // Devices, Access). Follow their confirmed values so Save never sends a
@@ -108,7 +114,7 @@ export function SettingsRoute() {
     if (!liveSections || !baseline) return;
     const next: PublicSettings = { ...baseline, ...liveSections, server: liveSections.server ?? baseline.server };
     setS((draft) => draft ? rebaseSettingsDraft(baseline, draft, next) : draft);
-    setSaved(next);
+    setSaved(draftRef.current ? rebaseSettingsDraft(draftRef.current, baseline, next) : next);
   }, [liveKey]);
 
   async function load(preserveDraft = false) {
@@ -119,11 +125,14 @@ export function SettingsRoute() {
     try {
       const res = await api.getSettings();
       if (!mounted.current || generation !== loadGeneration.current) return;
+      if (!preserveDraft || !hasCredentialEdit.current) credentialRevision.current = res.status?.loaded_at ?? "";
       const baseline = savedRef.current;
       setS((draft) => preserveDraft && baseline && draft
         ? rebaseSettingsDraft(baseline, draft, res.settings)
         : res.settings);
-      setSaved(res.settings);
+      setSaved(preserveDraft && baseline && draftRef.current
+        ? rebaseSettingsDraft(draftRef.current, baseline, res.settings)
+        : res.settings);
     } catch (e) {
       if (mounted.current && generation === loadGeneration.current) setLoadError(msg(e));
     } finally {
@@ -147,10 +156,6 @@ export function SettingsRoute() {
       ui: {
         ...cur.ui,
         locale: cur.ui?.locale ?? "en",
-        theme: cur.ui?.theme ?? DEFAULT_THEME,
-        setup_completed: cur.ui?.setup_completed ?? true,
-        update_check_mode: cur.ui?.update_check_mode ?? "automatic",
-        notification_categories: notificationCategories(cur.ui?.notification_categories),
         ...p,
       },
     } : cur));
@@ -192,110 +197,17 @@ export function SettingsRoute() {
   }
 
   async function save() {
-    if (!s || savingRef.current) return;
+    if (!s || !saved || savingRef.current) return;
     savingRef.current = true;
     setSaving(true);
     const elevenLabsKey = newElevenLabsKey.trim();
     const openAITTSKey = newOpenAITTSKey.trim();
-    const update: SettingsUpdate = {
-      server: { port: s.server.port },
-      ui: {
-        locale: normalizeLocale(s.ui?.locale),
-        theme: normalizeTheme(s.ui?.theme),
-        setup_completed: s.ui?.setup_completed ?? true,
-        update_check_mode: s.ui?.update_check_mode ?? "automatic",
-        notification_categories: notificationCategories(s.ui?.notification_categories),
-        show_remote_navigation: s.ui?.show_remote_navigation ?? true,
-      },
-      // Playback filters save through their immediate endpoint. Omitting them
-      // here prevents a stale Settings draft from overwriting newer values.
-      // Everything else in this section has no immediate endpoint, so it has to
-      // be listed here or the form would appear to save and change nothing.
-      media: {
-        library_paths: s.media?.library_paths ?? [],
-        auto_scan_on_startup: s.media?.auto_scan_on_startup ?? false,
-        remove_missing_on_scan: s.media?.remove_missing_on_scan ?? true,
-        script_offset_ms: s.media?.script_offset_ms ?? 0,
-        ffmpeg_path: s.media?.ffmpeg_path ?? "",
-        convert_h265_for_compatibility: s.media?.convert_h265_for_compatibility ?? false,
-        reencode_codec: s.media?.reencode_codec ?? "h264",
-        reencode_crf_h264: s.media?.reencode_crf_h264 ?? 23,
-        reencode_crf_h265: s.media?.reencode_crf_h265 ?? 28,
-        reencode_preset: s.media?.reencode_preset ?? "medium",
-        reencode_audio_kbps: s.media?.reencode_audio_kbps ?? 192,
-        generate_thumbnails_on_scan: s.media?.generate_thumbnails_on_scan ?? false,
-        convert_incompatible_on_scan: s.media?.convert_incompatible_on_scan ?? false,
-        show_superseded_originals: s.media?.show_superseded_originals ?? false,
-      },
-      // Device options save in Settings > Devices; the write shape requires
-      // these, so they repeat the followed values. The optional Coyote and
-      // vibrator blocks are left out entirely, and so is the playback set:
-      // the backend keeps it, so a stale draft never changes who plays or
-      // drops an additional Handy.
-      device: {
-        linked_failure_policy: s.device.linked_failure_policy ?? "stop_all",
-        hsp_dispatch_owner: s.device.hsp_dispatch_owner,
-        intiface_server_address: s.device.intiface_server_address,
-        firmware_api_requirement: s.device.firmware_api_requirement,
-        api_application_id_source: s.device.api_application_id_source,
-        api_application_id_override: s.device.api_application_id_override ?? "",
-      },
-      motion: s.motion,
-      autopilot: s.autopilot,
-      llm: s.llm,
-      // Exact write shape: the ElevenLabs key is write-only (sent only when
-      // newly typed); elevenlabs_key_set never goes back to the server.
-      voice: {
-        enabled: s.voice?.enabled ?? false,
-        tts_provider: s.voice?.tts_provider ?? "none",
-        asr_provider: s.voice?.asr_provider ?? "none",
-        tts_worker_path: s.voice?.tts_worker_path ?? "",
-        tts_worker_args: s.voice?.tts_worker_args ?? [],
-        asr_worker_path: s.voice?.asr_worker_path ?? "",
-        asr_worker_args: s.voice?.asr_worker_args ?? [],
-        speak_replies: s.voice?.speak_replies ?? false,
-        chat_speech_policy: s.voice?.chat_speech_policy ?? "interrupt",
-        elevenlabs_voice_id: s.voice?.elevenlabs_voice_id ?? "",
-        elevenlabs_model_id: s.voice?.elevenlabs_model_id ?? "",
-        tts_auto_launch: s.voice?.tts_auto_launch ?? false,
-        tts_base_url: s.voice?.tts_base_url ?? "http://127.0.0.1:8991",
-        tts_model: s.voice?.tts_model ?? "",
-        tts_voice: s.voice?.tts_voice ?? "",
-        tts_response_format: s.voice?.tts_response_format ?? "wav",
-        tts_health_path: s.voice?.tts_health_path ?? "/health",
-        tts_module_root: s.voice?.tts_module_root ?? "",
-        tts_server_port: s.voice?.tts_server_port ?? 8991,
-        tts_reference_wav: s.voice?.tts_reference_wav ?? "",
-        tts_reference_text: s.voice?.tts_reference_text ?? "",
-        tts_language: s.voice?.tts_language ?? "Auto",
-        tts_device: s.voice?.tts_device ?? "auto",
-        tts_seed: s.voice?.tts_seed ?? 1337,
-        tts_seed_mode: s.voice?.tts_seed_mode ?? "fixed",
-        tts_tone_preset: s.voice?.tts_tone_preset ?? "natural",
-        tts_tone_prompt: s.voice?.tts_tone_prompt ?? "",
-        parakeet_server_path: s.voice?.parakeet_server_path ?? "",
-        parakeet_model_path: s.voice?.parakeet_model_path ?? "",
-        parakeet_port: s.voice?.parakeet_port ?? 8990,
-        parakeet_source: s.voice?.parakeet_source ?? "app_managed",
-        asr_base_url: s.voice?.asr_base_url ?? "",
-        asr_model: s.voice?.asr_model ?? "",
-        input_mode: s.voice?.input_mode ?? "hands_free",
-        input_sensitivity: s.voice?.input_sensitivity ?? 55,
-        input_silence_ms: s.voice?.input_silence_ms ?? 900,
-        input_noise_suppression: s.voice?.input_noise_suppression ?? true,
-        ...(elevenLabsKey ? { elevenlabs_api_key: elevenLabsKey } : {}),
-        clear_elevenlabs_key: elevenLabsKey ? false : clearElevenLabsKey,
-        ...(openAITTSKey ? { openai_tts_api_key: openAITTSKey } : {}),
-        clear_openai_tts_key: openAITTSKey ? false : clearOpenAITTSKey,
-      },
-      chat: {
-        startup_behavior: s.chat?.startup_behavior ?? "previous",
-        keep_unsaved_on_exit: s.chat?.keep_unsaved_on_exit ?? false,
-      },
-      diagnostics: s.diagnostics,
-      clear_connection_key: false,
-    };
+    const update = settingsPatch(saved, s, {
+      elevenlabs: elevenLabsKey || (clearElevenLabsKey ? "" : undefined),
+      openai_tts: openAITTSKey || (clearOpenAITTSKey ? "" : undefined),
+    });
     try {
+      if (hasCredentialEdit.current) update.credential_revision = credentialRevision.current;
       await api.saveSettings(update);
       show(t("Settings saved."));
       refresh();

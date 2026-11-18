@@ -1,3 +1,5 @@
+import "../styles/autopilot.css";
+import "../styles/freestyle.css";
 import { t, translateKnown } from "../i18n";
 // Preset Modes owns deterministic autonomous motion. Assistant-driven
 // Autopilot lives with its conversation on the Chat route; both remain clients

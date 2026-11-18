@@ -45,8 +45,13 @@ func gestureLegCurve(leg gestureLeg, duration int64) Curve {
 }
 
 func gestureTurnCurve(leg gestureLeg, duration int64, startAcceleration, endAcceleration float64) Curve {
+	return fitGestureTurn(Curve{}, leg, duration, startAcceleration, endAcceleration)
+}
+
+func fitGestureTurn(curve Curve, leg gestureLeg, duration int64, startAcceleration, endAcceleration float64) Curve {
 	const intervals = 8
-	times := make([]int64, intervals+1)
+	var knots [intervals + 3]int64
+	times := knots[:intervals+1]
 	for index := range times {
 		times[index] = int64(math.Round(float64(index) * float64(duration) / intervals))
 	}
@@ -59,8 +64,9 @@ func gestureTurnCurve(leg gestureLeg, duration int64, startAcceleration, endAcce
 		times = slices.Compact(times)
 		rise, fall = float64(riseAt)/float64(duration), 1-float64(fallAt)/float64(duration)
 	}
-	points := make([]CurvePoint, len(times))
-	velocities, accelerations := make([]float64, len(times)), make([]float64, len(times))
+	points := slices.Grow(curve.points[:0], len(times))[:len(times)]
+	velocities := slices.Grow(curve.slopes[:0], len(times))[:len(times)]
+	accelerations := slices.Grow(curve.accelerations[:0], len(times))[:len(times)]
 	distance := leg.to - leg.from
 	_, _, nativeStart := legProgress(0, leg.inertia, leg.softness)
 	_, _, nativeEnd := legProgress(1, leg.inertia, leg.softness)
@@ -88,7 +94,7 @@ func gestureTurnCurve(leg gestureLeg, duration int64, startAcceleration, endAcce
 	velocities[0], velocities[last] = 0, 0
 	accelerations[0], accelerations[last] = startAcceleration, endAcceleration
 	return Curve{points: points, slopes: velocities, accelerations: accelerations,
-		quintics: buildQuinticSegments(points, velocities, accelerations), duration: duration}
+		quintics: fitQuinticSegments(curve.quintics, points, velocities, accelerations), duration: duration}
 }
 
 // Distribute the shared-turn correction over the entire stroke. Overwriting
@@ -203,7 +209,8 @@ func assembleLegs(legs []gestureLeg, curves []Curve, name string, loop bool) (Cu
 		}
 		c := segment.coefficients
 		sign := math.Copysign(1, segment.position(1)-segment.position(0))
-		candidates := append([]float64{0, 1}, cubicRootsInUnitInterval(20*c[5], 12*c[4], 6*c[3], 2*c[2])...)
+		storage := [6]float64{0, 1}
+		candidates := appendCubicRoots(storage[:2], 20*c[5], 12*c[4], 6*c[3], 2*c[2])
 		for _, u := range candidates {
 			if sign*segment.velocity(u) < -1e-9 {
 				return Curve{}, errors.New(name + " interpolation introduced an unintended reversal")

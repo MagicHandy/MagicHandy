@@ -162,8 +162,8 @@ func (s *Server) handlePrimaryHandyChoice(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	s.settingsLifecycleMu.Lock()
-	defer s.settingsLifecycleMu.Unlock()
+	releaseSettings := s.motion.life.HoldSettings()
+	defer releaseSettings()
 	s.handys.nativeMu.Lock()
 	defer s.handys.nativeMu.Unlock()
 	settings, _ := s.store.Snapshot()
@@ -204,8 +204,8 @@ func (s *Server) handleForgetHandy(w http.ResponseWriter, r *http.Request) {
 	if !s.requireHandyHost(w, r) {
 		return
 	}
-	s.settingsLifecycleMu.Lock()
-	defer s.settingsLifecycleMu.Unlock()
+	releaseSettings := s.motion.life.HoldSettings()
+	defer releaseSettings()
 	id := r.PathValue("id")
 	settings, _ := s.store.Snapshot()
 	if _, ok := settings.Device.HandyConnection(id); !ok {

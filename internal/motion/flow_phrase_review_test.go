@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/reviewfiles"
 )
 
 // Export the actual shared handoff path, without a transport or playback loop.
@@ -68,7 +69,7 @@ func TestPhraseHandoffVisualReview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(output, data, 0600); err != nil {
+	if err := reviewfiles.Write(output, data); err != nil {
 		t.Fatal(err)
 	}
 }

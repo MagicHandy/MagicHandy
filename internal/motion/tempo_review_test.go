@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/mapledaemon/MagicHandy/internal/reviewfiles"
 )
 
 // Export every captured model result, including rejected selections, through
@@ -38,7 +40,7 @@ func TestExportTempoReview(t *testing.T) {
 		rows = append(rows, row)
 	}
 	for _, path := range paths {
-		data, err := os.ReadFile(path)
+		data, err := reviewfiles.Read(path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -72,7 +74,7 @@ func TestExportTempoReview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(directory, "atlas.json"), data, 0600); err != nil {
+	if err := reviewfiles.Write(filepath.Join(directory, "atlas.json"), data); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("retained %d results and routine samples", len(rows))

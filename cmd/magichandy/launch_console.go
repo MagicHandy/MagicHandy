@@ -97,11 +97,13 @@ func (c *launchConsole) connect(api *httpapi.Server, baseURL, remoteURL string) 
 		Stop: func(ctx context.Context) (console.StopOutcome, error) {
 			result, err := api.ConsoleStop(ctx)
 			switch {
+			case result.Status == "pending":
+				return console.StopPending, nil
 			case err != nil:
 				return console.StopUnconfirmed, err
 			case result.Confirmed:
 				return console.StopConfirmed, nil
-			case !result.Available:
+			case result.Status == "no_device":
 				return console.StopNothingConnected, nil
 			default:
 				return console.StopUnconfirmed, nil

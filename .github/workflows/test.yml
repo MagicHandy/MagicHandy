@@ -3,6 +3,7 @@ name: Test
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -47,6 +48,16 @@ jobs:
       # Headroom for slow runners: internal/httpapi once came close to the
       # default 10-minute timeout under the race detector; see
       # docs/goal-scorecard.md (2026-09-30, httpapi race test time).
+      - name: Publish source size advisories
+        shell: bash
+        run: |
+          set -o pipefail
+          go test -v ./internal/architecture -run '^TestSourceFileLineBudgets$' | tee "$RUNNER_TEMP/source-sizes.txt"
+          {
+            echo '### Source size advisories'
+            awk '/advisory:/ { sub(/^.*advisory: /, "- "); print; found=1 } END { if (!found) print "All checked files are within their advisory guidelines." }' "$RUNNER_TEMP/source-sizes.txt"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Race test
         run: go test -race -timeout 20m ./...
 
@@ -75,6 +86,9 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: React Hooks lint
+        run: npm run lint
 
       - name: Component tests
         run: npm run test
@@ -128,15 +142,54 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@v4
+      - name: Compile tagged review commands
+        run: go build -tags magichandy_labs ./cmd/motion-atlas ./cmd/cloud-motion-review ./cmd/motion-second-opinion-review
+      - name: Tagged Go lint
+        uses: golangci/golangci-lint-action@v9
         with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Build release UI with optional Labs
-        working-directory: web
-        run: npm ci && npm run build:labs
+          version: v2.12.2
+          args: --build-tags magichandy_labs
+      - name: Capture inert speed review
+        run: |
+          mkdir -p .scratch
+          MAGICHANDY_SPEED_RUNTIME_REPORT="$PWD/.scratch/speed-review.json" go test -tags magichandy_labs ./internal/motion -run '^TestSpeedReviewRuntime$' -v -count=1
+          test -s .scratch/speed-review.json
       - name: Test runtime Labs gates and shared motion path
         run: go test -race -timeout 20m ./internal/motion ./internal/chat ./internal/httpapi ./web
       - name: CGO-free release build
         run: CGO_ENABLED=0 go build ./cmd/magichandy
+
+  depguard-fixture:
+    name: Depguard rejection (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
+          install-only: true
+      - run: python scripts/check-depguard.py
+
+  transport-parity:
+    name: Inert transport comparison
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: |
+          mkdir -p .scratch
+          MAGICHANDY_TRANSPORT_PARITY_REPORT="$PWD/.scratch/parity.json" go test -tags magichandy_labs ./internal/motion -run '^TestTransportParityReview$' -v -count=1
+          test -s .scratch/parity.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: transport-parity
+          path: .scratch/parity.json

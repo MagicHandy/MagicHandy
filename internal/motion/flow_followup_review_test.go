@@ -81,46 +81,7 @@ func TestLayeredFollowupReview(t *testing.T) {
 		entry.ID, entry.Name, entry.Group = fmt.Sprintf("variation-%d", variation), fmt.Sprintf("Deliberate pace variation %d%%", variation), "pace-reporting"
 		entries = append(entries, entry)
 	}
-	var joins []followupJoinReview
-	for _, shape := range []string{"full", "short", "compound"} {
-		for _, speed := range []int{1, 5, 25, 100} {
-			before := followupTarget(t, layeredSpeedFixture(shape, speed), settings)
-			hold, err := HoldingTarget(ActiveMotionState{Target: before}, settings)
-			if err != nil {
-				t.Fatal(err)
-			}
-			pairs := map[string]MotionTarget{"edge": hold}
-			if speed == 100 {
-				pairs["drop-1"] = followupTarget(t, layeredSpeedFixture(shape, 1), settings)
-				pairs["drop-5"] = followupTarget(t, layeredSpeedFixture(shape, 5), settings)
-			}
-			for name, after := range pairs {
-				old := NewMotionPlan("before", before, settings, 0, 0, time.Unix(0, 0))
-				for _, phase := range []float64{.01, .07, .17, .31, .43, .57, .71, .83, .93, .999} {
-					at := int64(float64(old.PeriodMillis) * phase)
-					next := old.Retarget("after", after, settings, at, time.Unix(0, 0))
-					started := time.Now()
-					bridge := layeredTurnTransition(old, nil, &next, at)
-					cost := time.Since(started).Microseconds()
-					spliced := bridge != nil
-					if bridge == nil {
-						bridge = newPlanTransition(old, nil, at)
-					}
-					row := followupJoinReview{Name: fmt.Sprintf("%s-%d-%s", shape, speed, name), Phase: phase, Splice: spliced, ComputeMicros: cost,
-						DelayMillis: bridge.strokeStartMillis - at, DurationMillis: bridge.endMillis - at,
-						OldAcceleration: maximumPlanAcceleration(old), NewAcceleration: maximumPlanAcceleration(next)}
-					if spliced {
-						row.Acceleration = bridge.stroke.maximumAcceleration() * 1e6
-						row.Jerk = bridge.stroke.maximumJerk() * 1e9
-					}
-					for clock := max(int64(0), at-300); clock <= bridge.endMillis+500; clock += 2 {
-						row.Samples = append(row.Samples, CurvePoint{TimeMillis: clock - at, PositionPercent: sampleMotionPath(next, bridge, clock).PositionPercent})
-					}
-					joins = append(joins, row)
-				}
-			}
-		}
-	}
+	joins := reviewFollowupJoins(t, settings)
 	writeSpeedReviewReport(t, path, map[string]any{"schema": "magichandy.motion-atlas.v1", "entries": entries, "mixed": mixed, "joins": joins})
 }
 
@@ -162,4 +123,48 @@ func TestLayeredRapidFollowupReview(t *testing.T) {
 		rows["candidate"] = append(rows["candidate"], CurvePoint{TimeMillis: clock, PositionPercent: sampleMotionPath(next, bridge, clock).PositionPercent})
 	}
 	writeSpeedReviewReport(t, path, map[string]any{"handoff_ms": at, "first_handoff_ms": 1200, "samples": rows})
+}
+
+func reviewFollowupJoins(t *testing.T, settings config.MotionSettings) []followupJoinReview {
+	var joins []followupJoinReview
+	for _, shape := range []string{"full", "short", "compound"} {
+		for _, speed := range []int{1, 5, 25, 100} {
+			before := followupTarget(t, layeredSpeedFixture(shape, speed), settings)
+			hold, err := HoldingTarget(ActiveMotionState{Target: before}, settings)
+			if err != nil {
+				t.Fatal(err)
+			}
+			pairs := map[string]MotionTarget{"edge": hold}
+			if speed == 100 {
+				pairs["drop-1"] = followupTarget(t, layeredSpeedFixture(shape, 1), settings)
+				pairs["drop-5"] = followupTarget(t, layeredSpeedFixture(shape, 5), settings)
+			}
+			for name, after := range pairs {
+				old := NewMotionPlan("before", before, settings, 0, 0, time.Unix(0, 0))
+				for _, phase := range []float64{.01, .07, .17, .31, .43, .57, .71, .83, .93, .999} {
+					at := int64(float64(old.PeriodMillis) * phase)
+					next := old.Retarget("after", after, settings, at, time.Unix(0, 0))
+					started := time.Now()
+					bridge := layeredTurnTransition(old, nil, &next, at)
+					cost := time.Since(started).Microseconds()
+					spliced := bridge != nil
+					if bridge == nil {
+						bridge = newPlanTransition(old, nil, at)
+					}
+					row := followupJoinReview{Name: fmt.Sprintf("%s-%d-%s", shape, speed, name), Phase: phase, Splice: spliced, ComputeMicros: cost,
+						DelayMillis: bridge.strokeStartMillis - at, DurationMillis: bridge.endMillis - at,
+						OldAcceleration: maximumPlanAcceleration(old), NewAcceleration: maximumPlanAcceleration(next)}
+					if spliced {
+						row.Acceleration = bridge.stroke.maximumAcceleration() * 1e6
+						row.Jerk = bridge.stroke.maximumJerk() * 1e9
+					}
+					for clock := max(int64(0), at-300); clock <= bridge.endMillis+500; clock += 2 {
+						row.Samples = append(row.Samples, CurvePoint{TimeMillis: clock - at, PositionPercent: sampleMotionPath(next, bridge, clock).PositionPercent})
+					}
+					joins = append(joins, row)
+				}
+			}
+		}
+	}
+	return joins
 }

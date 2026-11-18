@@ -43,6 +43,20 @@ func connectTestHandy(t *testing.T, s *Server, id string) {
 		t.Fatalf("connect: %d %s", w.Code, w.Body.String())
 	}
 }
+func TestObservingDisconnectedHandyDoesNotAllocateOwner(t *testing.T) {
+	s := newTestServer(t)
+	id := addTestHandy(t, s, config.DispatchOwnerNativeBluetooth)
+	if state := s.handyConnectionSnapshot(id); state.Status != "disconnected" {
+		t.Fatalf("unexpected status %q", state.Status)
+	}
+	if _, _, _, err := s.namedHandyBinding(id); err == nil {
+		t.Fatal("unconnected owner was ready")
+	}
+	if s.existingHandyEntry(id) != nil {
+		t.Fatal("observation allocated an owner")
+	}
+}
+
 func TestNamedHandysReconnectRetiresOldEngineLease(t *testing.T) {
 	s := newTestServer(t)
 	s.motion.simulated = true

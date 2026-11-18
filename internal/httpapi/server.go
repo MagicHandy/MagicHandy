@@ -96,6 +96,8 @@ type Runtime struct {
 
 // Server owns the local HTTP routes and embedded static asset serving.
 type Server struct {
+	summaries           stateSummaries
+	assets              compressedAssets
 	static              fs.FS
 	logger              *slog.Logger
 	store               *config.Store
@@ -164,22 +166,22 @@ type Server struct {
 	lifecycleCancel       context.CancelFunc
 	quiesceOnce           sync.Once
 	closeOnce             sync.Once
-	settingsLifecycleMu   sync.Mutex
-	personaMutationMu     sync.Mutex
-	chatWorkspace         *chatapp.Workspace
-	chatRepair            chatRepairRuntime
-	chatSpeechMu          chatPublicationGate
-	chatSpeechRequests    map[int64]string
-	hostPathPicker        hostPathPicker
-	chatLog               *chat.MessageLog
-	patterns              *patterns.Library
-	media                 *media.Catalog
-	mediaSync             *mediaSyncRuntime
-	remoteURL             string
-	remote                *remote.Hub
-	started               time.Time
-	version               VersionInfo
-	handler               http.Handler
+
+	personaMutationMu  sync.Mutex
+	chatWorkspace      *chatapp.Workspace
+	chatRepair         chatRepairRuntime
+	chatSpeechMu       chatPublicationGate
+	chatSpeechRequests map[int64]string
+	hostPathPicker     hostPathPicker
+	chatLog            *chat.MessageLog
+	patterns           *patterns.Library
+	media              *media.Catalog
+	mediaSync          *mediaSyncRuntime
+	remoteURL          string
+	remote             *remote.Hub
+	started            time.Time
+	version            VersionInfo
+	handler            http.Handler
 }
 
 // New wires the HTTP API to the embedded static assets and structured logger.
@@ -340,7 +342,7 @@ func normalizeRuntime(runtime Runtime) Runtime {
 		runtime.Traces = diagnostics.NewTraceRing(1)
 	}
 	if runtime.Transport == nil {
-		runtime.Transport = transport.NewFake()
+		runtime.Transport = transport.NewSimulator()
 	}
 	return runtime
 }
@@ -484,6 +486,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 func (s *Server) settingsAndUpdateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
+	mux.HandleFunc("PATCH /api/settings", s.handlePatchSettings)
 	mux.HandleFunc("PUT /api/settings/labs", s.handleSetLabsEnabled)
 	mux.HandleFunc("PUT /api/settings/llm-motion-mode", s.handlePutLLMMotionMode)
 	mux.HandleFunc("GET /api/update", s.handleUpdateStatus)
@@ -702,7 +705,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"motion_review":              s.motionReview.snapshot(),
 		"voice":                      s.clientVoiceState(r),
 		"chat":                       s.chatState(r.Context()),
-		"library":                    s.libraryState(),
+		"library":                    s.libraryState(r.Context()),
 		"media":                      s.clientMediaState(r),
 		"motion":                     s.clientMotionState(r),
 		"motion_simulated":           s.motion.simulated,
@@ -739,14 +742,42 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.saveFormSettings(w, r, func(current config.Settings) (config.Settings, error) { return current.ApplyUpdate(update) })
+}
+
+func (s *Server) handlePatchSettings(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	var patch config.SettingsPatch
+	if err := decodeJSON(r, &patch); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	s.saveFormSettings(w, r, func(current config.Settings) (config.Settings, error) {
+		if patch.ChangesCredential() {
+			_, status := s.store.Snapshot()
+			if patch.CredentialRevision == "" || patch.CredentialRevision != status.LoadedAt {
+				return current, config.ErrSettingsConflict
+			}
+		}
+		return current.ApplyPatch(patch)
+	})
+}
+
+func (s *Server) saveFormSettings(w http.ResponseWriter, r *http.Request, apply func(config.Settings) (config.Settings, error)) {
 	var updateErr error
 	_, saved, saveErr, runtimeErr := s.updateSettingsAndRuntime(r.Context(), func(current config.Settings) (config.Settings, error) {
 		var next config.Settings
-		next, updateErr = current.ApplyUpdate(update)
+		next, updateErr = apply(current)
 		return next, updateErr
 	})
 	if updateErr != nil {
-		writeError(w, http.StatusBadRequest, updateErr)
+		status := http.StatusBadRequest
+		if errors.Is(updateErr, config.ErrSettingsConflict) {
+			status = http.StatusConflict
+		}
+		writeError(w, status, updateErr)
 		return
 	}
 	if saveErr != nil {
@@ -823,6 +854,19 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, errors.New("API endpoint not found"))
 		return
 	}
+	if hashedBrowserAsset.MatchString(name) {
+		if data, err := s.assets.representation(s.static, name, acceptsGzip(r.Header.Values("Accept-Encoding"))); err == nil {
+			w.Header().Add("Vary", "Accept-Encoding")
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			w.Header().Set("ETag", data.etag)
+			if data.encoding != "" {
+				w.Header().Set("Content-Encoding", data.encoding)
+			}
+			setStaticHeaders(w, name)
+			serveBoundedContent(w, r, name, time.Time{}, bytes.NewReader(data.bytes))
+			return
+		}
+	}
 	data, err := fs.ReadFile(s.static, name)
 	if err != nil {
 		if strings.Contains(path.Base(name), ".") {
@@ -837,6 +881,9 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if name == "index.html" {
+		w.Header().Set("Cache-Control", "no-store")
+	}
 	if name == "index.html" && requestInterface(r) == accounts.InterfaceRemote {
 		data = bytes.Replace(data, []byte("<html"), []byte(`<html data-application-interface="remote"`), 1)
 	}

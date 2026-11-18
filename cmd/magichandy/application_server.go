@@ -25,7 +25,12 @@ type serverLaunchOptions struct {
 }
 
 func startApplication(store *config.Store, settings config.Settings, options serverLaunchOptions, logger *slog.Logger, consoleUI *launchConsole, installerShutdown <-chan struct{}, launch *launchSession) error {
-	runtime := applicationRuntime(options.simulate)
+	runtime, closeRuntime, err := applicationRuntime(options.simulate)
+	if err != nil {
+		_ = store.Close()
+		return err
+	}
+	defer closeRuntime()
 	if options.simulate {
 		logger.Info("motion simulation enabled", "transport", runtime.MotionTransport.Diagnostics().Name)
 	}

@@ -51,6 +51,7 @@ export interface AutoblowStatus {
 }
 
 export interface AutoblowTransportSnapshot {
+  observation?: import("./types").BackendObservation;
   autoblow: AutoblowStatus;
   vacuglide: AutoblowStatus;
 }

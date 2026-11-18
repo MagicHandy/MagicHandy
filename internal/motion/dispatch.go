@@ -26,8 +26,20 @@ func (e *Engine) dispatchThrough(
 	e.commandMu.Lock()
 	streamID, points, lastSample, err := e.nextChunkThrough(runEpoch, targetTailMillis)
 	if err != nil {
+		e.mu.Lock()
+		starting := e.starting
+		e.mu.Unlock()
+		if starting || errors.Is(err, errRunInvalidated) {
+			e.commandMu.Unlock()
+			return err
+		}
+		message := fmt.Sprintf("motion frame rejected during %s: %v", reason, err)
+		recovery, prepareErr := e.prepareRecovery(runEpoch, message)
 		e.commandMu.Unlock()
-		return err
+		if prepareErr != nil {
+			return prepareErr
+		}
+		return e.finishRecovery(ctx, "recovery_"+reason, message, recovery)
 	}
 	commandCtx, cleanup, err := e.contextForRun(ctx, runEpoch)
 	if err != nil {
@@ -238,6 +250,7 @@ func (e *Engine) nextChunkThrough(
 		}
 		samples = append(samples, additional...)
 	}
+	e.pendingEdit = nil
 	points := make([]transport.TimedPoint, len(samples))
 	for index, sample := range samples {
 		// Emit the semantic 0..100 travel position. Reverse direction is a

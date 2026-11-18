@@ -1,3 +1,4 @@
+import { motionPhase } from "../state/motion-phase";
 // Now playing (docs/ui-design.md, ADR 0071): one status shape for every device
 // mix. It says what plays, who chose it, one pace or tempo bar, and which
 // devices take part, from the backend snapshot only. Controls live elsewhere;
@@ -42,13 +43,9 @@ export interface NowPlayingView {
   elapsed: string;
 }
 
-function playState(engine: EngineSnapshot | undefined, available: boolean): PlayState {
-  if (!available) return "unavailable";
-  if (engine?.paused) return "paused";
-  if (engine?.completing) return "stopping";
-  if (engine?.starting) return "starting";
-  if (engine?.running) return "playing";
-  return "stopped";
+function playState(engine: EngineSnapshot | undefined, available: boolean | undefined): PlayState {
+  const phase = motionPhase(engine, available);
+  return phase === "running" ? "playing" : phase === "idle" ? "stopped" : phase;
 }
 
 function stateLabel(state: PlayState): string {
@@ -58,7 +55,7 @@ function stateLabel(state: PlayState): string {
     case "starting": return t("Starting");
     case "stopping": return t("Stopping");
     case "unavailable": return t("Unavailable");
-    default: return t("Stopped");
+    default: return t("Idle");
   }
 }
 
@@ -122,7 +119,7 @@ export function useNowPlaying(): NowPlayingView {
   const motion = useMotionState();
   const engine = motion?.engine;
   const settings = state?.settings;
-  const current = playState(engine, motion?.available !== false);
+  const current = playState(engine, motion?.available);
   const running = current === "playing" || current === "stopping";
   const tempo = showsTempo(settings, motion);
   const vibration = !tempo && showsVibration(settings, motion);

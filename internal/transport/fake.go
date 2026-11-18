@@ -18,6 +18,9 @@ type Fake struct {
 	mu            sync.Mutex
 	clock         func() time.Time
 	latency       time.Duration
+	historyLimit  int
+	commandCount  int
+	resultCount   int
 	nextID        int
 	commands      []Command
 	results       []CommandResult
@@ -29,7 +32,7 @@ type Fake struct {
 // NewFake returns a fake transport with deterministic command recording.
 func NewFake(options ...FakeOption) *Fake {
 	fake := &Fake{
-		clock:         func() time.Time { return time.Now().UTC() },
+		clock:         time.Now,
 		nextID:        1,
 		playbackState: "idle",
 	}
@@ -37,6 +40,18 @@ func NewFake(options ...FakeOption) *Fake {
 		option(fake)
 	}
 	return fake
+}
+
+// NewSimulator creates a runtime fake that retains the latest 64 commands and
+// results. Lifetime counters also cover the commands evicted from either ring.
+func NewSimulator() *Fake {
+	return NewFake(WithHistoryLimit(64))
+}
+
+// WithHistoryLimit retains the most recent commands and results in bounded rings.
+// NewFake without this option keeps the complete history for deterministic tests.
+func WithHistoryLimit(limit int) FakeOption {
+	return func(fake *Fake) { fake.historyLimit = max(1, limit) }
 }
 
 // WithClock sets the fake transport clock.
@@ -85,7 +100,7 @@ func (f *Fake) SetStrokeWindow(ctx context.Context, command StrokeWindowCommand)
 func (f *Fake) AppendPoints(ctx context.Context, command AppendPointsCommand) (CommandResult, error) {
 	recorded := Command{
 		Kind:      CommandKindPointsAdd,
-		PointsAdd: cloneAppendPoints(command),
+		PointsAdd: &command,
 	}
 	return f.record(ctx, recorded, "buffered")
 }
@@ -104,7 +119,7 @@ func (f *Fake) Commands() []Command {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	return cloneCommands(f.commands)
+	return cloneCommands(orderedFakeHistory(f.commands, f.commandCount))
 }
 
 // Results returns the recorded command results.
@@ -113,7 +128,7 @@ func (f *Fake) Results() []CommandResult {
 	defer f.mu.Unlock()
 
 	results := make([]CommandResult, len(f.results))
-	copy(results, f.results)
+	copy(results, orderedFakeHistory(f.results, f.resultCount))
 	return results
 }
 
@@ -124,14 +139,14 @@ func (f *Fake) Diagnostics() TransportDiagnostics {
 
 	var lastCommand *Command
 	if len(f.commands) > 0 {
-		command := SafeCommand(f.commands[len(f.commands)-1])
+		command := SafeCommand(f.commands[(f.commandCount-1)%len(f.commands)])
 		lastCommand = &command
 	}
 
 	var lastResult *CommandResult
 	var lastLatency int64
 	if len(f.results) > 0 {
-		result := SafeCommandResult(f.results[len(f.results)-1])
+		result := SafeCommandResult(f.results[(f.resultCount-1)%len(f.results)])
 		lastLatency = result.LatencyMillis
 		lastResult = &result
 	}
@@ -140,7 +155,7 @@ func (f *Fake) Diagnostics() TransportDiagnostics {
 		Name:              fakeTransportName,
 		Connected:         true,
 		PlaybackState:     f.playbackState,
-		CommandCount:      len(f.commands),
+		CommandCount:      f.commandCount,
 		LastLatencyMillis: lastLatency,
 		LastCommand:       lastCommand,
 		LastResult:        lastResult,
@@ -157,9 +172,10 @@ func (f *Fake) record(ctx context.Context, command Command, nextPlaybackState st
 	defer f.mu.Unlock()
 
 	command.ID = fmt.Sprintf("fake-%06d", f.nextID)
-	command.IssuedAt = f.clock().Format(time.RFC3339Nano)
+	command.IssuedAt = f.clock().UTC().Format(time.RFC3339Nano)
 	f.nextID++
-	f.commands = append(f.commands, cloneCommand(command))
+	f.commands = retainFakeHistory(f.commands, f.commandCount, f.historyLimit, cloneCommand(command))
+	f.commandCount++
 	f.playbackState = nextPlaybackState
 	f.lastError = ""
 
@@ -170,9 +186,10 @@ func (f *Fake) record(ctx context.Context, command Command, nextPlaybackState st
 		OK:            true,
 		Status:        "recorded",
 		LatencyMillis: f.latency.Milliseconds(),
-		CompletedAt:   f.clock().Add(f.latency).Format(time.RFC3339Nano),
+		CompletedAt:   f.clock().Add(f.latency).UTC().Format(time.RFC3339Nano),
 	}
-	f.results = append(f.results, result)
+	f.results = retainFakeHistory(f.results, f.resultCount, f.historyLimit, result)
+	f.resultCount++
 	return result, nil
 }
 
@@ -191,9 +208,10 @@ func (f *Fake) recordFailure(kind CommandKind, err error) (CommandResult, error)
 		OK:          false,
 		Status:      "failed",
 		Error:       err.Error(),
-		CompletedAt: f.clock().Format(time.RFC3339Nano),
+		CompletedAt: f.clock().UTC().Format(time.RFC3339Nano),
 	}
-	f.results = append(f.results, result)
+	f.results = retainFakeHistory(f.results, f.resultCount, f.historyLimit, result)
+	f.resultCount++
 	return result, err
 }
 
@@ -201,6 +219,24 @@ func (f *Fake) currentPlaybackState() string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.playbackState
+}
+
+func retainFakeHistory[T any](history []T, count, limit int, value T) []T {
+	if limit == 0 || len(history) < limit {
+		return append(history, value)
+	}
+	history[count%limit] = value
+	return history
+}
+
+func orderedFakeHistory[T any](history []T, count int) []T {
+	if count <= len(history) {
+		return history
+	}
+	start := count % len(history)
+	ordered := make([]T, 0, len(history))
+	ordered = append(ordered, history[start:]...)
+	return append(ordered, history[:start]...)
 }
 
 func cloneAppendPoints(command AppendPointsCommand) *AppendPointsCommand {

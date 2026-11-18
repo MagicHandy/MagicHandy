@@ -197,7 +197,8 @@ func monotoneLayeredBridge(segment quinticSegment, distance float64, budget legB
 		return false
 	}
 	c := segment.coefficients
-	for _, u := range append([]float64{0, 1}, cubicRootsInUnitInterval(20*c[5], 12*c[4], 6*c[3], 2*c[2])...) {
+	storage := [6]float64{0, 1}
+	for _, u := range appendCubicRoots(storage[:2], 20*c[5], 12*c[4], 6*c[3], 2*c[2]) {
 		if math.Copysign(1, distance)*segment.velocity(u) < -1e-9 {
 			return false
 		}

@@ -4,11 +4,14 @@ import (
 	"net/http"
 
 	"github.com/mapledaemon/MagicHandy/internal/motion"
-	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
 func (s *Server) clientMotionState(r *http.Request) any {
-	value := s.motionState().(map[string]any)
+	return s.clientMotionObservation(r, false)
+}
+
+func (s *Server) clientMotionObservation(r *http.Request, shared bool) any {
+	value := s.motionObservation(shared)
 	if s.capabilities(r).ConfigureHost {
 		return value
 	}
@@ -42,21 +45,39 @@ func (s *Server) clientSyncStatus(r *http.Request, state mediaSyncStatus) mediaS
 // Its acknowledgement must therefore be equally safe for every caller, even
 // when the browser supplied a cookie. Never add the previous target/settings.
 func (s *Server) writePublicStopResult(w http.ResponseWriter, outcome emergencyStopResult, err error) {
-	if outcome.pending {
-		writeBoundedJSON(w, http.StatusServiceUnavailable, map[string]any{"stopped": false, "stop_pending": true,
-			"transport_stop_confirmed": false, "error": errStopConfirmationPending.Error()})
-		return
-	}
+	status, payload := stopReply(outcome, err)
+	writeBoundedJSON(w, status, payload)
+}
+
+func stopStatus(outcome emergencyStopResult, err error) string {
 	available, confirmed := stopConfirmation(outcome, err)
-	payload := map[string]any{"available": available, "stopped": true, "transport_stop_confirmed": confirmed}
-	status := http.StatusOK
-	if !confirmed {
-		payload["error"] = "Stop is unconfirmed. Check the device locally."
+	switch {
+	case outcome.pending:
+		return "pending"
+	case confirmed:
+		return "confirmed"
+	case !available && err == nil && outcome.transportResult.Status == "no_devices":
+		return "no_device"
+	default:
+		return "unconfirmed"
+	}
+}
+
+func stopReply(outcome emergencyStopResult, err error) (int, map[string]any) {
+	available, confirmed := stopConfirmation(outcome, err)
+	reply := map[string]any{"available": available, "stopped": !outcome.pending, "transport_stop_confirmed": confirmed}
+	reply["stop_status"] = stopStatus(outcome, err)
+	switch reply["stop_status"] {
+	case "pending":
+		reply["stop_pending"], reply["error"] = true, errStopConfirmationPending.Error()
+		return http.StatusServiceUnavailable, reply
+	case "unconfirmed":
+		reply["error"] = "Stop is unconfirmed. Check the device locally."
 		if available {
-			status = http.StatusBadGateway
+			return http.StatusBadGateway, reply
 		}
 	}
-	writeBoundedJSON(w, status, payload)
+	return http.StatusOK, reply
 }
 
 func stopConfirmation(outcome emergencyStopResult, err error) (bool, bool) {
@@ -65,6 +86,6 @@ func stopConfirmation(outcome emergencyStopResult, err error) (bool, bool) {
 		result = *outcome.state.LastResult
 	}
 	available := outcome.engineAvailable || outcome.transportAvailable
-	confirmed := err == nil && result.Kind == transport.CommandKindStop && result.OK
+	confirmed := err == nil && result.ConfirmsStop()
 	return available, confirmed
 }

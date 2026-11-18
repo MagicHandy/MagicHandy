@@ -50,9 +50,9 @@ func (s *Server) handleMotionPositionReset(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	defer detach()
-	s.motion.lifecycleMu.Lock()
+	releaseOwner := s.motion.life.Hold()
 	current := s.currentMotionEngine() == engine && s.stopSequence.Load() == sequence
-	s.motion.lifecycleMu.Unlock()
+	releaseOwner()
 	if !current {
 		writeError(w, http.StatusConflict, motion.ErrStartupRecoveryUnavailable)
 		return

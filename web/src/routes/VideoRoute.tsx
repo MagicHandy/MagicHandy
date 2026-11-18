@@ -1,3 +1,5 @@
+import "../styles/video-library.css";
+import "../styles/media.css";
 import { t } from "../i18n";
 import { useCallback } from "react";
 import { VideoLibrary } from "../components/VideoLibrary";

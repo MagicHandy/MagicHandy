@@ -690,7 +690,7 @@ func TestLibraryReadFailuresAreNotReportedAsEmptyState(t *testing.T) {
 		run  func() error
 	}{
 		{name: "snapshot", run: func() error { _, err := library.Snapshot(); return err }},
-		{name: "summary", run: func() error { _, err := library.Summary(); return err }},
+		{name: "summary", run: func() error { _, err := library.Summary(t.Context()); return err }},
 		{name: "patterns", run: func() error { _, err := library.ListPatterns(); return err }},
 		{name: "programs", run: func() error { _, err := library.ListPrograms(); return err }},
 		{name: "choices", run: func() error { _, err := library.EnabledChoices(); return err }},

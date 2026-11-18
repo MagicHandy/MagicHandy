@@ -395,7 +395,7 @@ func (s *Server) traceBluetoothResult(
 	if result.Transport == transport.NativeBluetoothName {
 		source = "manual_native_bluetooth"
 	}
-	s.traces.Add(diagnosticspkg.MotionTraceRow{
+	s.traces.Record(diagnosticspkg.MotionTraceRow{
 		Source:           source,
 		Reason:           reason,
 		TransportCommand: command,

@@ -278,6 +278,7 @@ control	PUT /api/modes/autopilot/preferences
 control	PUT /api/modes/freestyle/preferences
 host	PUT /api/network
 host	PUT /api/prompt-sets/{id}
+host	PATCH /api/settings
 host	PUT /api/settings
 host	PUT /api/settings/device/connection-key
 host	PUT /api/settings/device/autoblow-token

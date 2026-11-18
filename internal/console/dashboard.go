@@ -21,6 +21,8 @@ const (
 	StopUnconfirmed
 	// StopNothingConnected means no device was set up to receive a stop.
 	StopNothingConnected
+	// StopPending means another caller is still collecting the device acknowledgement.
+	StopPending
 )
 
 // Actions are what the console keys do. The dashboard only calls them.
@@ -326,6 +328,8 @@ func (d *Dashboard) stopMotion(stop func(context.Context) (StopOutcome, error)) 
 	switch {
 	case err != nil:
 		d.note(slog.LevelWarn, "Stop could not reach the device", err.Error())
+	case outcome == StopPending:
+		d.note(slog.LevelWarn, "Stop requested, device confirmation pending", "")
 	case outcome == StopConfirmed:
 		d.note(slog.LevelInfo, "Motion stopped", "")
 	case outcome == StopNothingConnected:

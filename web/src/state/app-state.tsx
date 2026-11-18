@@ -172,7 +172,7 @@ export function AppStateProvider({ children, enabled = true }: { children: React
   }, [enabled, refresh]);
 
   useEffect(() => {
-    lifecycle.current++;
+    const generation = ++lifecycle.current;
     pollingEnabled.current = enabled;
     if (!enabled) {
       stateObservation.current = null;
@@ -193,7 +193,7 @@ export function AppStateProvider({ children, enabled = true }: { children: React
     return () => {
       stopped = true;
       pollingEnabled.current = false;
-      lifecycle.current++;
+      lifecycle.current = generation + 1;
       window.clearTimeout(timer);
       const controller = activeRequest.current;
       activeRequest.current = null;

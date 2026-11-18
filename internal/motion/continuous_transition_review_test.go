@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/reviewfiles"
 )
 
 // Inert comparison of the release crossfade and the candidate turn join.
@@ -66,29 +67,7 @@ func TestContinuousTurnHandoffReview(t *testing.T) {
 						if bridge == nil {
 							bridge = newPlanTransition(old, nil, at)
 						}
-						var path [][3]float64
-						var tinyTurns int
-						var peakA, previousV float64
-						lastTurn, lastDirection, seen := old.SampleAt(at).PositionPercent, 0, false
-						for now := at - 250; now <= bridge.endMillis+750; now += 5 {
-							x := sampleMotionPath(next, bridge, now).PositionPercent
-							v := (sampleMotionPath(next, bridge, now+1).PositionPercent - sampleMotionPath(next, bridge, now-1).PositionPercent) * 500
-							path = append(path, [3]float64{float64(now-at) / 1000, x, v})
-							if now > at && now < bridge.endMillis {
-								peakA = max(peakA, math.Abs(v-previousV)*200)
-								direction := curveDirection(v)
-								if direction != 0 && lastDirection != 0 && direction != lastDirection {
-									if seen && math.Abs(x-lastTurn) < 1 {
-										tinyTurns++
-									}
-									lastTurn, seen = x, true
-								}
-								if direction != 0 {
-									lastDirection = direction
-								}
-							}
-							previousV = v
-						}
+						path, tinyTurns, peakA := sampleTurnReview(old, next, bridge, at)
 						rows = append(rows, map[string]any{"name": fmt.Sprintf("%s/%s/%d/%.2f/%s", profile, kind, speed, fraction, variant), "variant": variant, "spliced": spliced, "tiny_turns": tinyTurns, "peak_acceleration": peakA, "join_start": float64(bridge.strokeStartMillis-at) / 1000, "join_end": float64(bridge.endMillis-at) / 1000, "path": path})
 					}
 				}
@@ -99,7 +78,34 @@ func TestContinuousTurnHandoffReview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(output, b, 0600); err != nil {
+	if err = reviewfiles.Write(output, b); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func sampleTurnReview(old, next MotionPlan, bridge *planTransition, at int64) ([][3]float64, int, float64) {
+	var path [][3]float64
+	var tinyTurns int
+	var peakA, previousV float64
+	lastTurn, lastDirection, seen := old.SampleAt(at).PositionPercent, 0, false
+	for now := at - 250; now <= bridge.endMillis+750; now += 5 {
+		x := sampleMotionPath(next, bridge, now).PositionPercent
+		v := (sampleMotionPath(next, bridge, now+1).PositionPercent - sampleMotionPath(next, bridge, now-1).PositionPercent) * 500
+		path = append(path, [3]float64{float64(now-at) / 1000, x, v})
+		if now > at && now < bridge.endMillis {
+			peakA = max(peakA, math.Abs(v-previousV)*200)
+			direction := curveDirection(v)
+			if direction != 0 && lastDirection != 0 && direction != lastDirection {
+				if seen && math.Abs(x-lastTurn) < 1 {
+					tinyTurns++
+				}
+				lastTurn, seen = x, true
+			}
+			if direction != 0 {
+				lastDirection = direction
+			}
+		}
+		previousV = v
+	}
+	return path, tinyTurns, peakA
 }

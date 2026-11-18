@@ -40,32 +40,40 @@ func reviewCases(phase, method string) []string {
 	return cases
 }
 func reviewIntent(phase, method string, index int, trial chat.LLMLabTrial, current motion.FlowSpec, summary motion.PerceptualSummary) bool {
-	intent := trial.Valid
-	if phase == "screen" {
-		intent = intent && trial.After.MinPercent == 0 && trial.After.MaxPercent == 100 && trial.After.Gesture.FocusMixPercent == 0 && trial.After.Gesture.InertiaPercent == 0 && trial.After.Gesture.ReboundCount == 0 && trial.After.Gesture.FasterDirection == "even" && trial.After.SpeedPercent == current.SpeedPercent
-	} else if method == "sequence" {
-		if index < 2 {
-			want := 25 - index*5
-			expected := []motion.FlowStep{{MinPercent: 0, MaxPercent: 100, SpeedPercent: want, Cycles: 4}, {MinPercent: 75, MaxPercent: 100, SpeedPercent: want, Cycles: 2}, {MinPercent: 0, MaxPercent: 100, SpeedPercent: want, Cycles: 4}}
-			intent = intent && reflect.DeepEqual(trial.After.Steps, expected) && summary.MeanStrokePercent >= 75
-		} else {
-			intent = intent && reflect.DeepEqual(current, trial.After)
-		}
-	} else {
-		switch index {
-		case 0:
-			intent = intent && summary.PositionMinPercent >= 72 && summary.PositionMaxPercent <= 100 && trial.After.SpeedPercent == current.SpeedPercent
-		case 1:
-			intent = intent && summary.PositionMinPercent >= 72 && summary.PositionMaxPercent <= 100 && trial.After.SpeedPercent == current.SpeedPercent && summary.StrokeLengthCV > 0.03
-		case 2, 3, 7:
-			intent = intent && reflect.DeepEqual(current, trial.After)
-		case 4:
-			intent = intent && summary.PositionMinPercent >= 0 && summary.PositionMaxPercent <= 25.1 && trial.After.SpeedPercent == current.SpeedPercent
-		case 5:
-			intent = intent && summary.PositionMinPercent >= 34.9 && summary.PositionMaxPercent <= 65.1 && trial.After.SpeedPercent == current.SpeedPercent
-		case 6:
-			intent = intent && trial.After.MinPercent == 0 && trial.After.MaxPercent == 100 && trial.After.Gesture.FocusMixPercent == 0 && trial.After.Gesture.InertiaPercent == 0 && trial.After.Gesture.ReboundCount == 0 && trial.After.Gesture.FasterDirection == "even" && trial.After.SpeedPercent == current.SpeedPercent
-		}
+	if !trial.Valid {
+		return false
 	}
-	return intent
+	if phase == "screen" {
+		return evenFullReviewStroke(trial.After, current.SpeedPercent)
+	}
+	if method == "sequence" {
+		if index >= 2 {
+			return reflect.DeepEqual(current, trial.After)
+		}
+		want := 25 - index*5
+		expected := []motion.FlowStep{{MinPercent: 0, MaxPercent: 100, SpeedPercent: want, Cycles: 4}, {MinPercent: 75, MaxPercent: 100, SpeedPercent: want, Cycles: 2}, {MinPercent: 0, MaxPercent: 100, SpeedPercent: want, Cycles: 4}}
+		return reflect.DeepEqual(trial.After.Steps, expected) && summary.MeanStrokePercent >= 75
+	}
+	switch index {
+	case 0, 1:
+		return insideReviewBand(summary, 72, 100) && trial.After.SpeedPercent == current.SpeedPercent && (index == 0 || summary.StrokeLengthCV > 0.03)
+	case 2, 3, 7:
+		return reflect.DeepEqual(current, trial.After)
+	case 4:
+		return insideReviewBand(summary, 0, 25.1) && trial.After.SpeedPercent == current.SpeedPercent
+	case 5:
+		return insideReviewBand(summary, 34.9, 65.1) && trial.After.SpeedPercent == current.SpeedPercent
+	case 6:
+		return evenFullReviewStroke(trial.After, current.SpeedPercent)
+	default:
+		return true
+	}
+}
+
+func evenFullReviewStroke(after motion.FlowSpec, speed int) bool {
+	g := after.Gesture
+	return g != nil && after.MinPercent == 0 && after.MaxPercent == 100 && g.FocusMixPercent == 0 && g.InertiaPercent == 0 && g.ReboundCount == 0 && g.FasterDirection == "even" && after.SpeedPercent == speed
+}
+func insideReviewBand(summary motion.PerceptualSummary, lo, hi float64) bool {
+	return summary.PositionMinPercent >= lo && summary.PositionMaxPercent <= hi
 }

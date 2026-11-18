@@ -3,7 +3,7 @@ import { t, translateKnown } from "../i18n";
 // Compact status readouts, run timer, mini visualizer, and the shell-level
 // disclosures. Motion controls remain in their routed workspaces.
 import { NowPlayingPill } from "../components/NowPlaying";
-import { useAppState, useMotionState } from "../state/app-state";
+import { useAppState } from "../state/app-state";
 import { DevicePanel } from "./DevicePanel";
 import { NotificationCenter } from "./NotificationCenter";
 import { useTakeControl } from "./useTakeControl";
@@ -25,10 +25,8 @@ export function StatusBar({
   onSelectControlIdentity?: (accountID: string) => Promise<void>;
 }) {
   const { backendOnline, readOnly, state } = useAppState();
-  const motion = useMotionState();
   const [openMenu, setOpenMenu] = useState<ShellMenu>(null);
   const { takeControl, takingControl, handoffInProgress } = useTakeControl();
-  const engine = motion?.engine;
   const awaitingState = state == null;
 
   // Voice earns a readout only when it is enabled and unhealthy: a crashed
@@ -60,24 +58,6 @@ export function StatusBar({
       </div>
     );
   }
-  let phaseState = "idle";
-  let phaseLabel = motion?.available === false ? "unavailable" : "idle";
-  if (awaitingState) {
-    phaseState = "pending";
-    phaseLabel = "state pending";
-  } else if (engine?.paused) {
-    phaseState = "paused";
-    phaseLabel = "paused";
-  } else if (engine?.completing) {
-    phaseState = "active";
-    phaseLabel = "motion stopping";
-  } else if (engine?.starting) {
-    phaseState = "active";
-    phaseLabel = "motion starting";
-  } else if (engine?.running) {
-    phaseState = "running";
-    phaseLabel = "running";
-  }
   const coreState = awaitingState && backendOnline ? "pending" : backendOnline ? "ok" : "error";
   const coreLabel = awaitingState && backendOnline ? "core starting" : backendOnline ? "core ok" : "core offline";
 
@@ -86,8 +66,8 @@ export function StatusBar({
       <div className="status-readouts">
         {awaitingState ? (
           <span className="status-readout">
-            <span className="status-dot" data-state={phaseState} />
-            <span className="status-text">{translateKnown(phaseLabel)}</span>
+            <span className="status-dot" data-state="pending" />
+            <span className="status-text">{t("state pending")}</span>
           </span>
         ) : <NowPlayingPill />}
         <span className="status-divider" aria-hidden="true" />

@@ -65,8 +65,8 @@ func (s *Server) stopHandyOutsideEngine(ctx context.Context, engineOwner, reason
 	if err != nil {
 		return err
 	}
-	_, err = owner.Stop(ctx, transport.StopCommand{Reason: reason})
-	return err
+	result, err := owner.Stop(ctx, transport.StopCommand{Reason: reason})
+	return stopAcknowledgementError(result, err)
 }
 
 // Removing a saved connection retires its dispatch owner even when excluded

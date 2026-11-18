@@ -1,5 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { engineStateLabel } from "./diagnostics-report";
+import type { AppState } from "../api/types";
 import { NowPlayingCard, NowPlayingPill } from "./NowPlaying";
 
 const app = vi.hoisted(() => ({
@@ -56,12 +58,19 @@ describe("Now playing", () => {
     expect(within(devices).getByText("40%")).toBeInTheDocument();
   });
 
+  it.each([[true, "Idle", "idle"], [false, "Unavailable", "unavailable"]] as const)("agrees with diagnostics when readiness is %s and the engine is absent", (available, label, phase) => {
+    app.motion = { available };
+    render(<NowPlayingPill />);
+    expect(screen.getByRole("status", { name: label })).toBeInTheDocument();
+    expect(engineStateLabel({ motion: app.motion } as AppState)).toBe(phase);
+  });
+
   it("says nothing plays when stopped, and the pill names only the state", () => {
     app.motion = { available: true, engine: { running: false, paused: false } };
     render(<><NowPlayingCard /><NowPlayingPill /></>);
     expect(screen.getByText("Nothing playing")).toBeInTheDocument();
     expect(screen.queryByRole("meter")).not.toBeInTheDocument();
-    expect(screen.getByRole("status", { name: "Stopped" })).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Idle" })).toBeInTheDocument();
     expect(screen.queryByText("00:00")).not.toBeInTheDocument();
     expect(screen.queryByText("Commanded values, not measurements.")).not.toBeInTheDocument();
   });

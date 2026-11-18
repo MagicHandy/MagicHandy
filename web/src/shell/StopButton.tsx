@@ -28,7 +28,10 @@ export function StopButton({ className = "", onStopped }: { className?: string; 
     window.dispatchEvent(new Event("magichandy:emergency-stop"));
     try {
       const result = await api.stopMotion();
-      show(result?.error ? translateKnown(result.error) : t("Stopped."), result?.error ? "error" : "info");
+      if (result?.error) show(translateKnown(result.error), "error");
+      else if (result?.stop_status === "no_device") show(t("No connected device to stop."), "info");
+      else if (result?.transport_stop_confirmed === true) show(t("Stopped."), "info");
+      else show(t("Stop is unconfirmed. Check the device locally."), "error");
     } catch (error) {
       const message = error instanceof ApiError
         ? translateKnown(error.message)

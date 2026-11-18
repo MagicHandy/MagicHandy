@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"reflect"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/audit"
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/deviceapp"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 	"github.com/mapledaemon/MagicHandy/internal/voice"
@@ -28,12 +29,9 @@ const motionEventInterval = 125 * time.Millisecond
 // transport, the engine is absent and motion endpoints report unavailable
 // rather than panicking.
 type motionRuntime struct {
-	lifecycleMu sync.Mutex
-	mu          sync.Mutex
-	engine      *motion.Engine
-	owner       string
-	transport   transport.Transport
-	simulated   bool
+	life      deviceapp.Lifecycle
+	transport transport.Transport
+	simulated bool
 }
 
 // admittedMotionEngine carries the Stop epoch captured while the server still
@@ -88,18 +86,23 @@ func (r motionRequest) target(settings config.MotionSettings) (motion.MotionTarg
 
 // motionState returns a UI-facing snapshot; the "available" flag lets the
 // frontend show an honest "motion unavailable" state instead of guessing.
-func (s *Server) motionState() any {
+func (s *Server) motionObservation(shared bool) map[string]any {
 	s.observations.motionMu.Lock()
 	defer s.observations.motionMu.Unlock()
+	now, sequence := time.Now(), s.stopSequence.Load()
+	if shared && s.observations.motionValue != nil && s.observations.motionStop == sequence && now.Sub(s.observations.motionCaptured) < motionEventInterval {
+		return maps.Clone(s.observations.motionValue)
+	}
 	state := s.motionStateValue()
 	state["observation"] = s.observationStamp()
-	return state
+	s.observations.motionCaptured, s.observations.motionStop, s.observations.motionValue = now, sequence, state
+	return maps.Clone(state)
 }
 
 func (s *Server) motionStateValue() map[string]any {
 	state := map[string]any{"available": true}
 	if engine := s.currentMotionEngine(); engine != nil {
-		snapshot := engine.Snapshot()
+		snapshot := engine.Observation()
 		if snapshot.Running || snapshot.Paused || snapshot.Completing {
 			return map[string]any{
 				"available": true,
@@ -112,7 +115,7 @@ func (s *Server) motionStateValue() map[string]any {
 			state["engine"] = snapshot
 		}
 	}
-	if _, err := s.newSelectedMotionTransport(); err != nil {
+	if err := s.playbackReadiness(); err != nil {
 		state["available"] = false
 		state["error"] = err.Error()
 	}
@@ -135,13 +138,13 @@ func (s *Server) handleMotionEvents(w http.ResponseWriter, r *http.Request) {
 
 	remoteTab := remoteIdentity(r, clientIDFromRequest(r))
 	var remoteAfter uint64
-	emit := func() bool {
-		if err := writeSSE(w, "motion", s.clientMotionState(r)); err != nil {
+	emit := func(shared bool) bool {
+		if err := writeSSE(w, "motion", s.clientMotionObservation(r, shared)); err != nil {
 			return false
 		}
 		return s.deliverRemoteCommands(w, r, remoteTab, &remoteAfter)
 	}
-	if !emit() {
+	if !emit(false) {
 		return
 	}
 
@@ -154,7 +157,7 @@ func (s *Server) handleMotionEvents(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-ticker.C:
-			if !emit() {
+			if !emit(true) {
 				return
 			}
 		}
@@ -352,6 +355,7 @@ func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
 
 // ConsoleStopResult is the outcome of a Stop from the launch console.
 type ConsoleStopResult struct {
+	Status string
 	// Available reports that a motion engine or device transport received it.
 	Available bool
 	// Confirmed reports that the device acknowledged it.
@@ -363,8 +367,12 @@ type ConsoleStopResult struct {
 // stopped from the console window even with no browser open.
 func (s *Server) ConsoleStop(ctx context.Context) (ConsoleStopResult, error) {
 	outcome, err := s.emergencyStopWithAdmission(ctx, "console_stop", &s.stopAdmission)
+	return s.consoleStopFeedback(outcome, err)
+}
+
+func (s *Server) consoleStopFeedback(outcome emergencyStopResult, err error) (ConsoleStopResult, error) {
 	available, confirmed := stopConfirmation(outcome, err)
-	result := ConsoleStopResult{Available: available, Confirmed: confirmed}
+	result := ConsoleStopResult{Status: stopStatus(outcome, err), Available: available, Confirmed: confirmed}
 	if err != nil {
 		return result, errors.New(s.safeMotionErrorMessage(err))
 	}
@@ -374,32 +382,26 @@ func (s *Server) ConsoleStop(ctx context.Context) (ConsoleStopResult, error) {
 func (s *Server) handleEmergencyStop(w http.ResponseWriter, r *http.Request, reason string) {
 	finishUnreadBody(w, r)
 	outcome, err := s.emergencyStopWithAdmission(r.Context(), reason, &s.stopAdmission)
+	s.writeEmergencyStopReply(w, r, outcome, err)
+}
+
+func (s *Server) writeEmergencyStopReply(w http.ResponseWriter, r *http.Request, outcome emergencyStopResult, err error) {
 	if s.auth.authenticationRequired() || outcome.pending {
 		s.writePublicStopResult(w, outcome, err)
 		return
 	}
+	status, payload := stopReply(outcome, err)
 	if outcome.engineAvailable {
-		bounded := &contentResponseWriter{ResponseWriter: w, ctx: context.Background()}
-		s.writeMotionResult(bounded, r, outcome.state, err)
-		bounded.finish()
-		return
-	}
-
-	payload := map[string]any{
-		"available": outcome.transportAvailable,
-		"stopped":   true,
-	}
-	status := http.StatusOK
-	if outcome.transportAvailable {
+		payload["engine"] = s.clientMotionSnapshot(r, outcome.state)
+	} else if outcome.transportAvailable {
 		payload["transport_result"] = transport.SafeCommandResult(outcome.transportResult)
 	}
 	if err != nil {
-		if outcome.transportAvailable {
-			status = http.StatusBadGateway
-			payload["error"] = s.safeMotionErrorMessage(err)
-		} else {
-			payload["error"] = "stop could not reach the configured transport: " + s.safeMotionErrorMessage(err)
+		message := s.safeMotionErrorMessage(err)
+		if !outcome.engineAvailable && !outcome.transportAvailable {
+			message = "stop could not reach the configured transport: " + message
 		}
+		payload["error"] = message
 	}
 	writeBoundedJSON(w, status, payload)
 }
@@ -444,28 +446,23 @@ func (s *Server) dispatchEmergencyStop(ctx context.Context, reason string, reque
 	// The engine and the selected fallback transport are mutually exclusive.
 	// Holding lifecycleMu prevents a replacement engine from appearing between
 	// that decision and physical Stop.
-	s.motion.lifecycleMu.Lock()
-	defer s.motion.lifecycleMu.Unlock()
+	releaseOwner := s.motion.life.Hold()
+	defer releaseOwner()
 	if request != nil {
 		defer func() { request.complete(outcome, err) }()
 	}
 	// Complete shared Stop replies only after both outputs have finished, and
 	// include a failed zero in confirmation rather than only logging it.
 	defer func() { err = errors.Join(err, waitCoyote(), waitIntiface(), waitAutoblow()) }()
-	engine, engineOwner := s.currentMotionEngineWithOwner()
-	if engine != nil {
-		outside := make(chan error, 2)
-		go func() { outside <- s.stopHandyOutsideEngine(stopCtx, engineOwner, reason) }()
-		go func() { outside <- s.stopNamedHandysOutsideEngine(stopCtx, engineOwner, reason) }()
-		state, err := engine.Stop(stopCtx, reason)
-		return emergencyStopResult{state: state, engineAvailable: true}, errors.Join(err, <-outside, <-outside)
-	}
-
-	result, err := s.stopSelectedTransport(stopCtx, reason+"_no_engine")
-	return emergencyStopResult{
-		transportResult:    result,
-		transportAvailable: err == nil || strings.TrimSpace(result.Transport) != "",
-	}, err
+	stopped, err := s.motion.life.Stop(stopCtx, reason, func(owner string) error {
+		named := make(chan error, 1)
+		go func() { named <- s.stopNamedHandysOutsideEngine(stopCtx, owner, reason) }()
+		return errors.Join(s.stopHandyOutsideEngine(stopCtx, owner, reason), <-named)
+	}, func() (transport.CommandResult, error) {
+		return s.stopSelectedTransport(stopCtx, reason+"_no_engine")
+	})
+	return emergencyStopResult{state: stopped.State, engineAvailable: stopped.Engine, transportResult: stopped.Result,
+		transportAvailable: !stopped.Engine && stopped.Result.Status != "no_devices" && (err == nil || stopped.Result.Transport != "")}, err
 }
 
 func (s *Server) beginGlobalStop(reason string, origins ...context.Context) (func(), uint64) {
@@ -487,6 +484,13 @@ func (s *Server) beginGlobalStop(reason string, origins ...context.Context) (fun
 			finishInvalidation()
 		})
 	}, sequence
+}
+
+func stopAcknowledgementError(result transport.CommandResult, err error) error {
+	if err == nil && !result.ConfirmsStop() {
+		return errors.New("device did not acknowledge Stop")
+	}
+	return err
 }
 
 func (s *Server) stopSelectedTransport(ctx context.Context, reason string) (transport.CommandResult, error) {
@@ -560,6 +564,9 @@ func (s *Server) newHandyStopTransport(settings config.Settings) (transport.Tran
 	if s.motion.transport != nil {
 		return s.motion.transport, nil
 	}
+	if s.motion.simulated {
+		return nil, errors.New("motion simulator is unavailable")
+	}
 	if settings.Device.HSPDispatchOwner == config.DispatchOwnerCloudREST {
 		return s.newCloudTransportForControl()
 	}
@@ -605,7 +612,12 @@ func (s *Server) handleMotionResume(w http.ResponseWriter, r *http.Request) {
 		s.writeMotionResult(w, r, engine.Snapshot(), nil)
 		return
 	}
-	state, err := engine.Resume(r.Context(), "ui_resume")
+	// A persisted settings transition and Resume must agree on the first wire
+	// command. Stop does not take this lock and can interrupt startup.
+	state, err := s.motion.life.Resume(r.Context(), engine, func() config.MotionSettings {
+		latest, _ := s.store.Snapshot()
+		return latest.EffectiveMotion()
+	})
 	finishModeResume(err == nil && state.Running && !state.Paused)
 	s.writeMotionResult(w, r, state, err)
 }
@@ -647,23 +659,15 @@ func (s *Server) safeMotionErrorMessage(err error) string {
 // refreshActiveMotion applies saved settings to running motion immediately so
 // quick controls take effect without a stop/start (ADR 0002, Invariant 9).
 func (s *Server) refreshActiveMotion(ctx context.Context, settings config.MotionSettings) error {
-	engine := s.currentMotionEngine()
-	if engine == nil {
-		return nil
-	}
-	if !engine.Snapshot().Running {
-		return nil
-	}
-	_, err := engine.RefreshSettings(ctx, settings, "settings_saved")
-	return err
+	return s.motion.life.ApplySettings(ctx, settings)
 }
 
 func (s *Server) updateSettingsAndRuntime(
 	ctx context.Context,
 	mutate func(config.Settings) (config.Settings, error),
 ) (previous config.Settings, saved config.Settings, saveErr error, runtimeErr error) {
-	s.settingsLifecycleMu.Lock()
-	defer s.settingsLifecycleMu.Unlock()
+	releaseSettings := s.motion.life.HoldSettings()
+	defer releaseSettings()
 
 	previous, saved, saveErr = s.store.UpdateContext(ctx, mutate)
 	if saveErr != nil {
@@ -839,8 +843,8 @@ func (s *Server) stopMediaEngineIfOwned(
 	videoID string,
 	reason string,
 ) (motion.ActiveMotionState, bool, error) {
-	s.motion.lifecycleMu.Lock()
-	defer s.motion.lifecycleMu.Unlock()
+	releaseOwner := s.motion.life.Hold()
+	defer releaseOwner()
 	engine := s.currentMotionEngine()
 	if engine == nil {
 		return motion.ActiveMotionState{}, false, nil
@@ -856,8 +860,8 @@ func (s *Server) stopMediaEngineIfOwned(
 }
 
 func (s *Server) stopAndClearActiveMediaEngine(ctx context.Context, reason string) error {
-	s.motion.lifecycleMu.Lock()
-	defer s.motion.lifecycleMu.Unlock()
+	releaseOwner := s.motion.life.Hold()
+	defer releaseOwner()
 	engine := s.currentMotionEngine()
 	if engine == nil {
 		return nil
@@ -870,23 +874,13 @@ func (s *Server) stopAndClearActiveMediaEngine(ctx context.Context, reason strin
 }
 
 func (s *Server) stopAndClearMotionEngine(ctx context.Context, reason string) error {
-	s.motion.lifecycleMu.Lock()
-	defer s.motion.lifecycleMu.Unlock()
+	releaseOwner := s.motion.life.Hold()
+	defer releaseOwner()
 	return s.stopAndClearMotionEngineLocked(ctx, reason)
 }
 
 func (s *Server) stopAndClearMotionEngineLocked(ctx context.Context, reason string) error {
-	s.motion.mu.Lock()
-	engine := s.motion.engine
-	s.motion.engine = nil
-	s.motion.owner = ""
-	s.motion.mu.Unlock()
-
-	if engine == nil {
-		return nil
-	}
-	_, err := engine.Stop(ctx, reason)
-	return err
+	return s.motion.life.Retire(ctx, reason)
 }
 
 // Quiesce rejects new controller work, drains autonomous planners, and stops
@@ -981,57 +975,27 @@ func (s *Server) Close() {
 }
 
 func (s *Server) motionEngineForStart() (*motion.Engine, uint64, error) {
-	s.motion.lifecycleMu.Lock()
-	defer s.motion.lifecycleMu.Unlock()
-	if s.quiescing.Load() {
-		return nil, 0, errServerQuiescing
-	}
-
-	if s.coyote.owner.Status().ReferencePulse {
-		return nil, 0, errors.New("wait for the Coyote channel test to finish before starting playback")
-	}
-	settings, _ := s.store.Snapshot()
-	owner := s.engineOwnerKey(settings.Device)
-	engine, engineOwner := s.currentMotionEngineWithOwner()
-	failed := false
-	if engine != nil {
-		state := engine.Snapshot()
-		// Retirements belong to one run. Stop followed by an explicit new Start
-		// rechecks every selected device, even if the socket never disconnected.
-		retired := state.LinkedSession != nil && (state.LinkedSession.Status == "degraded" || state.LinkedSession.Status == "failed")
-		failed = !state.Running && !state.Starting && !state.Paused && (state.LastError != "" || retired || settings.Device.Plays(config.DeviceOutputCoyote))
-	}
-	if engine != nil && (engineOwner != owner || failed) {
-		reason := "dispatch_owner_changed"
-		if engineOwner == owner {
-			reason = "inactive_run_replaced"
+	return s.motion.life.Admit(func() (string, bool, error) {
+		if s.quiescing.Load() {
+			return "", false, errServerQuiescing
 		}
-		if err := s.stopAndClearMotionEngineLocked(context.Background(), reason); err != nil {
-			return nil, 0, fmt.Errorf("previous motion owner could not be stopped: %w", err)
+		if s.coyote.owner.Status().ReferencePulse {
+			return "", false, errors.New("wait for the Coyote channel test to finish before starting playback")
 		}
-		engine = nil
-	} else if engine != nil {
-		return engine, engine.AdmissionGeneration(), nil
-	}
-	commandTransport, err := s.newSelectedMotionTransport()
-	if err != nil {
-		return nil, 0, err
-	}
-	engine, err = motion.NewEngine(motion.EngineOptions{
-		Transport:    commandTransport,
-		Traces:       s.traces,
-		ArchiveTrace: s.persistLastMotionTrace,
+		settings, _ := s.store.Snapshot()
+		return s.engineOwnerKey(settings.Device), settings.Device.Plays(config.DeviceOutputCoyote), nil
+	}, func() (*motion.Engine, error) {
+		owner, err := s.newSelectedMotionTransport()
+		if err != nil {
+			return nil, err
+		}
+		return motion.NewEngine(motion.EngineOptions{Transport: owner, Traces: s.traces, ArchiveTrace: s.persistLastMotionTrace})
 	})
-	if err != nil {
-		return nil, 0, err
-	}
-	s.setMotionEngine(engine, owner)
-	return engine, engine.AdmissionGeneration(), nil
 }
 
 func (s *Server) motionAdmissionFor(engine *motion.Engine) (uint64, error) {
-	s.motion.lifecycleMu.Lock()
-	defer s.motion.lifecycleMu.Unlock()
+	releaseOwner := s.motion.life.Hold()
+	defer releaseOwner()
 	if s.quiescing.Load() {
 		return 0, errServerQuiescing
 	}
@@ -1057,6 +1021,9 @@ func (s *Server) stopActiveMotionForReplacement(ctx context.Context, reason stri
 func (s *Server) newHandyMotionTransport(settings config.Settings) (transport.Transport, error) {
 	if s.motion.transport != nil {
 		return s.motion.transport, nil
+	}
+	if s.motion.simulated {
+		return nil, errors.New("motion simulator is unavailable")
 	}
 	if settings.Device.HSPDispatchOwner == config.DispatchOwnerNativeBluetooth {
 		if !s.nativeBluetooth.owner.Status().Connected {
@@ -1086,41 +1053,39 @@ func (s *Server) newHandyMotionTransport(settings config.Settings) (transport.Tr
 		}
 		return bluetooth, nil
 	case config.DispatchOwnerIntiface:
-		intiface, err := s.currentIntiface()
-		if err != nil {
-			return nil, err
-		}
-		s.intiface.mu.Lock()
-		leased := s.intiface.leases[config.DeviceOutputHandy]
-		s.intiface.mu.Unlock()
-		if !leased {
-			return nil, errors.New("connect the Handy through Intiface first")
-		}
-		status := intiface.Status()
-		if status.SelectedDeviceIndex == nil || status.SelectedActuatorIndex == nil {
-			return nil, errors.New("an Intiface linear actuator must be selected")
-		}
-		return intiface, nil
+		return s.readyIntifaceHandy()
 	default:
 		return nil, errMotionUnavailable
 	}
 }
 
+func (s *Server) readyIntifaceHandy() (*transport.Intiface, error) {
+	intiface, err := s.currentIntiface()
+	if err != nil {
+		return nil, err
+	}
+	s.intiface.mu.Lock()
+	leased := s.intiface.leases[config.DeviceOutputHandy]
+	s.intiface.mu.Unlock()
+	if !leased {
+		return nil, errors.New("connect the Handy through Intiface first")
+	}
+	status := intiface.Status()
+	if status.SelectedDeviceIndex == nil || status.SelectedActuatorIndex == nil {
+		return nil, errors.New("an Intiface linear actuator must be selected")
+	}
+	return intiface, nil
+}
+
 func (s *Server) currentMotionEngine() *motion.Engine {
-	s.motion.mu.Lock()
-	defer s.motion.mu.Unlock()
-	return s.motion.engine
+	engine, _ := s.motion.life.Current()
+	return engine
 }
 
 func (s *Server) currentMotionEngineWithOwner() (*motion.Engine, string) {
-	s.motion.mu.Lock()
-	defer s.motion.mu.Unlock()
-	return s.motion.engine, s.motion.owner
+	return s.motion.life.Current()
 }
 
 func (s *Server) setMotionEngine(engine *motion.Engine, owner string) {
-	s.motion.mu.Lock()
-	defer s.motion.mu.Unlock()
-	s.motion.engine = engine
-	s.motion.owner = owner
+	s.motion.life.Install(engine, owner)
 }

@@ -259,17 +259,21 @@ func (s *Server) newCloudTransportForControl() (*transport.CloudRESTTransport, e
 	}
 
 	return transport.NewCloudRESTTransport(
-		transport.CloudPrerequisites{
-			ApplicationID: resolveCloudApplicationID(settings),
-			ConnectionKey: settings.Device.HandyConnectionKey,
-			FirmwareMajor: 4,
-			APIMajor:      3,
-			HSPAvailable:  true,
-		},
+		cloudPrerequisites(settings),
 		transport.CloudBuildOptions{ReverseDirection: settings.Motion.ReverseDirection},
 		transport.CloudEndpointConfig{BaseURL: s.cloud.baseURL},
 		s.cloud.client,
 	)
+}
+
+func cloudPrerequisites(settings config.Settings) transport.CloudPrerequisites {
+	return transport.CloudPrerequisites{
+		ApplicationID: resolveCloudApplicationID(settings),
+		ConnectionKey: settings.Device.HandyConnectionKey,
+		FirmwareMajor: 4,
+		APIMajor:      3,
+		HSPAvailable:  true,
+	}
 }
 
 func (s *Server) writeCloudSetupError(w http.ResponseWriter, err error) {
@@ -326,7 +330,7 @@ func (s *Server) traceCloudResult(
 		command = &safeCommand
 	}
 	safeResult := transport.SafeCommandResult(result)
-	s.traces.Add(diagnosticspkg.MotionTraceRow{
+	s.traces.Record(diagnosticspkg.MotionTraceRow{
 		Source:           cloudTraceSource,
 		Reason:           reason,
 		TransportCommand: command,

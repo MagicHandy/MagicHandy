@@ -44,7 +44,7 @@ func (p personalizationRuntime) Close() {
 
 // memoryState is the compact aggregate-state view (counts, not contents).
 func (s *Server) memoryState(ctx context.Context) map[string]any {
-	summary, err := s.personalization.memory.Summary(ctx)
+	summary, err := s.summaries.memory.read(ctx, s.store.Datastore(), s.personalization.memory.Summary)
 	if err != nil {
 		return map[string]any{
 			"available":     false,

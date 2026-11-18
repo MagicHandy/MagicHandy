@@ -48,21 +48,31 @@ type autoblowDeviceOwner interface {
 }
 
 type autoblowSnapshot struct {
-	Ultra     transport.AutoblowStatus `json:"autoblow"`
-	VacuGlide transport.AutoblowStatus `json:"vacuglide"`
+	Observation observationStamp         `json:"observation"`
+	Ultra       transport.AutoblowStatus `json:"autoblow"`
+	VacuGlide   transport.AutoblowStatus `json:"vacuglide"`
+}
+
+type unavailableAutoblowSimulator struct{}
+
+func (unavailableAutoblowSimulator) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, errors.New("autoblow simulator is unavailable")
 }
 
 // configureAutoblow builds both owners once. Simulation points the client at
 // the in-process imitation of Autoblow's cloud.
 func (s *Server) configureAutoblow(runtime Runtime, settings config.Settings) {
 	client := runtime.AutoblowClient
+	if runtime.MotionSimulated && (!runtime.AutoblowSimulated || client.LatencyURL == "" || client.ClusterURL == nil) {
+		client.HTTPClient = &http.Client{Transport: unavailableAutoblowSimulator{}}
+	}
 	if client.HTTPClient == nil {
 		cloud := http.DefaultTransport.(*http.Transport).Clone()
 		cloud.TLSHandshakeTimeout = 10 * time.Second
 		cloud.ResponseHeaderTimeout = 15 * time.Second
 		client.HTTPClient = &http.Client{Transport: cloud}
 	}
-	options := transport.AutoblowOptions{Client: client, Simulated: runtime.AutoblowSimulated, OnButton: s.autoblowButton}
+	options := transport.AutoblowOptions{Client: client, Simulated: runtime.MotionSimulated || runtime.AutoblowSimulated, OnButton: s.autoblowButton}
 	s.autoblow.ultra = transport.NewAutoblowUltra(options)
 	s.autoblow.vacuglide = transport.NewVacuGlide(options)
 	s.autoblow.ultra.Configure(ultraConfig(settings))
@@ -324,7 +334,10 @@ func (s *Server) handlePutAutoblowToken(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) autoblowSnapshot() autoblowSnapshot {
-	return autoblowSnapshot{Ultra: s.autoblow.ultra.Status(), VacuGlide: s.autoblow.vacuglide.Status()}
+	s.observations.devicesMu.Lock()
+	defer s.observations.devicesMu.Unlock()
+	return autoblowSnapshot{
+		Observation: s.observationStamp(), Ultra: s.autoblow.ultra.Status(), VacuGlide: s.autoblow.vacuglide.Status()}
 }
 
 // clientAutoblowSnapshot hides the cluster and error details from clients

@@ -93,6 +93,7 @@ export interface IntifaceDispatchStatus {
 }
 
 export interface IntifaceTransportSnapshot {
+  observation?: import("./types").BackendObservation;
   dispatch_owner: string;
   address: string;
   status: {

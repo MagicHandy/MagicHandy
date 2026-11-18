@@ -187,6 +187,8 @@ Nothing button-sized or status-sized is a pill.
 
 ### Status readouts
 
+A ready backend without an active engine displays **Idle** in both Now Playing and Diagnostics. The global Stop reports physical confirmation, pending confirmation, an unconfirmed result or no connected device using the backend outcome. It stays reachable while secondary routes load and when a route fails.
+
 The status bar (`--status-h` `52px`, `--bg`) uses compact readouts; the retired
 legacy `.status-pill` with a fully-round fill, border, and glowing dot must not
 return:

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/reviewfiles"
 )
 
 func TestLayeredHandoffReview(t *testing.T) {
@@ -67,32 +68,7 @@ func TestLayeredHandoffReview(t *testing.T) {
 						bridge = fitted
 					}
 				}
-				var path [][3]float64
-				var accelerationMax, previousV float64
-				var tinyTurns int
-				lastExtreme, lastDirection := sampleMotionPath(next, bridge, at).PositionPercent, 0
-				seenTurn := false
-				for offset := int64(-250); offset <= 1750; offset += 5 {
-					now := at + offset
-					x := sampleMotionPath(next, bridge, now).PositionPercent
-					v := (sampleMotionPath(next, bridge, now+1).PositionPercent - sampleMotionPath(next, bridge, now-1).PositionPercent) * 500
-					path = append(path, [3]float64{float64(offset) / 1000, x, v})
-					if offset > 0 && offset <= retargetTransitionMillis {
-						accelerationMax = math.Max(accelerationMax, math.Abs(v-previousV)*200)
-						direction := curveDirection(v)
-						if direction != 0 && lastDirection != 0 && direction != lastDirection {
-							if seenTurn && math.Abs(x-lastExtreme) < 1 {
-								tinyTurns++
-							}
-							lastExtreme = x
-							seenTurn = true
-						}
-						if direction != 0 {
-							lastDirection = direction
-						}
-					}
-					previousV = v
-				}
+				path, tinyTurns, accelerationMax := sampleLayeredHandoff(next, bridge, at)
 				engine := &Engine{plan: next, settings: settings, transition: bridge, nextSampleMillis: at,
 					chunkSize: defaultChunkSize, sampleInterval: defaultSampleInterval, preservePlanKnots: true,
 					positionResolutionPercent: 1, maximumChunkPoints: 100}
@@ -115,7 +91,7 @@ func TestLayeredHandoffReview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(output, data, 0600); err != nil {
+	if err := reviewfiles.Write(output, data); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -123,4 +99,34 @@ func TestLayeredHandoffReview(t *testing.T) {
 func handoffReviewSlot(plan MotionPlan, at int64) int {
 	clock := plan.PhaseAt(at) * float64(plan.curve.duration)
 	return max(0, sort.Search(len(plan.curve.authoredKnots), func(i int) bool { return float64(plan.curve.authoredKnots[i].TimeMillis) > clock })-1)
+}
+
+func sampleLayeredHandoff(next MotionPlan, bridge *planTransition, at int64) ([][3]float64, int, float64) {
+	var path [][3]float64
+	var accelerationMax, previousV float64
+	var tinyTurns int
+	lastExtreme, lastDirection := sampleMotionPath(next, bridge, at).PositionPercent, 0
+	seenTurn := false
+	for offset := int64(-250); offset <= 1750; offset += 5 {
+		now := at + offset
+		x := sampleMotionPath(next, bridge, now).PositionPercent
+		v := (sampleMotionPath(next, bridge, now+1).PositionPercent - sampleMotionPath(next, bridge, now-1).PositionPercent) * 500
+		path = append(path, [3]float64{float64(offset) / 1000, x, v})
+		if offset > 0 && offset <= retargetTransitionMillis {
+			accelerationMax = math.Max(accelerationMax, math.Abs(v-previousV)*200)
+			direction := curveDirection(v)
+			if direction != 0 && lastDirection != 0 && direction != lastDirection {
+				if seenTurn && math.Abs(x-lastExtreme) < 1 {
+					tinyTurns++
+				}
+				lastExtreme = x
+				seenTurn = true
+			}
+			if direction != 0 {
+				lastDirection = direction
+			}
+		}
+		previousV = v
+	}
+	return path, tinyTurns, accelerationMax
 }

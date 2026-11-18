@@ -15,7 +15,7 @@ export function LabsRoute() {
   const [chatDraft,setChatDraft]=useState("");
   const [visited,setVisited]=useState([section]);
   useEffect(()=>setVisited(current=>current.includes(section)?current:[...current,section]),[section]);
-  function useInChat(text:string) {setChatDraft(text);window.location.hash="#/labs/chat";}
+  function onUseInChat(text:string) {setChatDraft(text);window.location.hash="#/labs/chat";}
   return <div className="labs-route">
     <div className="labs-heading"><WorkspaceHead title={t("Labs")}/><span className="hint">{t("Experimental workspace")}</span></div>
     <nav className="labs-tabs" aria-label={t("Lab workspaces")}>
@@ -23,7 +23,7 @@ export function LabsRoute() {
     </nav>
     {(section==="chat"||visited.includes("chat"))&&<div className="lab-tab-panel" hidden={section!=="chat"}><LLMLab initialDraft={chatDraft} draftUsed={()=>setChatDraft("")}/></div>}
     {(section==="motion"||visited.includes("motion"))&&<div className="lab-tab-panel" hidden={section!=="motion"}><MotionLab/></div>}
-    {section==="observations"&&<ObservationsPage useInChat={useInChat}/>}
+    {section==="observations"&&<ObservationsPage onUseInChat={onUseInChat}/>}
     {section==="tests"&&<TestRuns/>}
     {section==="help"&&<LabHelp/>}
   </div>;

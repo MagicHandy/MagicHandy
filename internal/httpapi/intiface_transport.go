@@ -30,6 +30,7 @@ type intifaceRuntime struct {
 }
 
 type intifaceSnapshot struct {
+	Observation   observationStamp               `json:"observation"`
 	DispatchOwner string                         `json:"dispatch_owner"`
 	Address       string                         `json:"address"`
 	Status        transport.IntifaceStatus       `json:"status"`
@@ -155,6 +156,9 @@ func (s *Server) requireIntifaceInventory(w http.ResponseWriter, device string) 
 // openIntifaceHub replaces a stale hub with a newly connected one. The
 // caller holds opMu.
 func (s *Server) openIntifaceHub(ctx context.Context, address string) error {
+	if s.motion.simulated && s.intiface.simulatorAddress == "" {
+		return errors.New("intiface simulator is unavailable")
+	}
 	s.closeIntifaceSession()
 	if s.intiface.simulatorAddress != "" {
 		address = s.intiface.simulatorAddress
@@ -334,10 +338,13 @@ func (s *Server) currentIntiface() (*transport.Intiface, error) {
 }
 
 func (s *Server) intifaceSnapshot() intifaceSnapshot {
+	s.observations.devicesMu.Lock()
+	defer s.observations.devicesMu.Unlock()
 	settings, _ := s.store.Snapshot()
 	s.intiface.mu.Lock()
 	defer s.intiface.mu.Unlock()
 	snapshot := intifaceSnapshot{
+		Observation:   s.observationStamp(),
 		DispatchOwner: settings.Device.HSPDispatchOwner,
 		Address:       settings.Device.IntifaceServerAddress,
 		Status:        s.intiface.status,

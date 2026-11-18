@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/reviewfiles"
 )
 
 // Retain every position proposal in the finish-target experiments and compile
@@ -28,7 +29,7 @@ func TestFinishTargetVisualReview(t *testing.T) {
 	settings.SpeedMinPercent, settings.SpeedMaxPercent = 10, 100
 	var entries []Review
 	for _, path := range paths {
-		data, err := os.ReadFile(path)
+		data, err := reviewfiles.Read(path)
 		if err != nil {
 			t.Fatal(err)
 		}

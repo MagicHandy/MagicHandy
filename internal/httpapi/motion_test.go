@@ -775,7 +775,7 @@ func TestMotionRefreshAppliesToActiveLoopImmediately(t *testing.T) {
 		t.Fatalf("refreshActiveMotion: %v", err)
 	}
 
-	snapshot := server.motion.engine.Snapshot()
+	snapshot := server.currentMotionEngine().Snapshot()
 	if !snapshot.Running {
 		t.Fatalf("refresh must not stop active motion")
 	}

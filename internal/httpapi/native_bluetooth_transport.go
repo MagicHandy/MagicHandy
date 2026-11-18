@@ -11,6 +11,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/ble"
 	"github.com/mapledaemon/MagicHandy/internal/ble/workerclient"
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/handyble"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
@@ -31,6 +32,9 @@ type nativeBluetoothSnapshot struct {
 
 func (s *Server) configureNativeBluetooth(app Runtime, logger *slog.Logger) {
 	connector := app.NativeBluetoothConnector
+	if connector == nil && app.MotionSimulated {
+		connector = handyble.NewSimulatedConnector()
+	}
 	s.nativeBluetooth.supported = runtime.GOOS == "windows" || runtime.GOOS == "linux"
 	if connector == nil {
 		path := resolveWorkerBinary("", app.ExecutablePath, s.store.DataDir(), bluetoothWorkerName)
@@ -70,8 +74,8 @@ func (s *Server) handleNativeBluetoothConnect(w http.ResponseWriter, r *http.Req
 	if !s.requireNativeBluetoothHost(w, r) || !s.requireHandyConnection(w) {
 		return
 	}
-	s.settingsLifecycleMu.Lock()
-	defer s.settingsLifecycleMu.Unlock()
+	releaseSettings := s.motion.life.HoldSettings()
+	defer releaseSettings()
 	s.handys.nativeMu.Lock()
 	defer s.handys.nativeMu.Unlock()
 	settings, _ := s.store.Snapshot()
@@ -128,8 +132,8 @@ func (s *Server) handleNativeBluetoothForget(w http.ResponseWriter, r *http.Requ
 	if !s.requireNativeBluetoothHost(w, r) {
 		return
 	}
-	s.settingsLifecycleMu.Lock()
-	defer s.settingsLifecycleMu.Unlock()
+	releaseSettings := s.motion.life.HoldSettings()
+	defer releaseSettings()
 	status := s.nativeBluetooth.owner.Status()
 	if status.Connected || status.Connecting {
 		writeError(w, http.StatusConflict, errors.New("disconnect native Bluetooth before forgetting this device"))

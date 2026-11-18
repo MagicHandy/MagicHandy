@@ -35,3 +35,5 @@ require (
 	modernc.org/memory v1.11.0 // indirect
 	tinygo.org/x/espradio v0.3.1-0.20260925094528-b51c8a513407 // indirect
 )
+
+ignore ./web/node_modules

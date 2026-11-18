@@ -1,3 +1,4 @@
+import "../styles/library.css";
 import { t, translateKnown } from "../i18n";
 import { confirmThen } from "../util/confirm";
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
