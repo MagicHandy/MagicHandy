@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -8,6 +9,158 @@ import (
 
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
+
+func TestSmallLocalWindowsAdmitTheLiveLayeredContract(t *testing.T) {
+	set, _ := BuiltinPromptSetByID(DefaultPromptSetID)
+	const correction = "Cedar now means full strokes from 26 to 62 at speed 30."
+	for _, tc := range []struct {
+		name                  string
+		window, repetitions   int
+		intermediate, bounded bool
+	}{
+		{"E4B ordinary default", 32768, 5, false, false},
+		{"E4B minimum", 16384, 65, false, true},
+		{"E4B verbose default", 32768, 88, false, true},
+		{"12B verbose default", 32768, 88, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			caps := Capabilities{LocalInference: true, Motion: true, MotionMode: MotionModeLayered, SimpleMotion: !tc.intermediate, IntermediateMotion: tc.intermediate}
+			score := DefaultLayeredScore(45)
+			state := MotionContext{MotionMode: MotionModeLayered, Layered: &score, SpeedMinPercent: 20, SpeedMaxPercent: 80}
+			old := strings.Repeat("Archived display note. ", tc.repetitions)
+			var history []llm.Message
+			for i := range 7 {
+				state.UserRequests = append(state.UserRequests, old)
+				state.UserRequestSecondsAgo = append(state.UserRequestSecondsAgo, 100-i)
+				history = append(history, llm.Message{Role: "user", Content: old}, llm.Message{Role: "assistant", Content: "Noted."})
+			}
+			history = append(history, llm.Message{Role: "user", Content: correction}, llm.Message{Role: "assistant", Content: "Noted."})
+			state.UserRequests = append(state.UserRequests, correction)
+			state.UserRequestSecondsAgo = append(state.UserRequestSecondsAgo, 3)
+			tokens := 256
+			if tc.intermediate {
+				tokens = 512
+			}
+			budget := PromptBudgetSettings{ContextSize: tc.window, MaxOutputTokens: tokens}
+			for _, running := range []bool{false, true} {
+				state.Running = running
+				provider := &layeredTestProvider{raw: `{"action":"none","edits":[],"reply":"Ready."}`}
+				service := Service{Provider: provider, Prompt: set, Capabilities: &caps, MotionContext: &state, PromptBudget: budget, MaxTokens: tokens}
+				_, err := service.Complete(t.Context(), Request{Message: "Please read back my latest correction.", History: history}, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				req := provider.request
+				comp := ComposeInteractivePrompt(set, nil, nil, caps, &state, nil, budget)
+				if comp.Prompt != req.Messages[0].Content || string(req.JSONSchema) != string(InteractiveResponseSchema(nil, caps, &state, set.ID)) {
+					t.Fatal("prompt inspection and live contract differ")
+				}
+				if strings.Contains(comp.Prompt, old) == tc.bounded || !strings.Contains(comp.Prompt, correction) || !strings.Contains(comp.Prompt, `"seconds_ago":3`) {
+					t.Fatal("wrong request copies or ages in engine snapshot")
+				}
+				if strings.Contains(comp.Prompt, `"older_request_copies_omitted":7`) != tc.bounded || strings.Contains(comp.Prompt, "If a named motion's definition is missing") != (tc.bounded && !tc.intermediate) {
+					t.Fatal("incorrect reference or omitted-copy count for the selected window")
+				}
+				admitted, _, err := llm.BudgetChatRequest(req, tc.window)
+				if err != nil || !slices.Contains(admitted.Messages, llm.Message{Role: "user", Content: correction}) {
+					t.Fatalf("original latest correction did not reach the provider: %v", err)
+				}
+				if len(state.UserRequests) != 8 || len(state.UserRequestSecondsAgo) != 8 {
+					t.Fatal("mutated full engine timeline")
+				}
+			}
+		})
+	}
+}
+
+func TestBoundedRequestTimelineCountsEscapedJSON(t *testing.T) {
+	escaped := strings.Repeat("<&", 100)
+	state := MotionContext{UserRequests: []string{"earlier", escaped}, UserRequestSecondsAgo: []int{10, 3}}
+	if got := state.withBoundedRequestTimeline(1024); len(got.UserRequests) != 0 || len(got.UserRequestSecondsAgo) != 0 {
+		t.Fatal("included a partial or oversized timeline copy")
+	}
+	state.UserRequests = append(state.UserRequests, "newest")
+	state.UserRequestSecondsAgo = append(state.UserRequestSecondsAgo, 1)
+	got := state.withBoundedRequestTimeline(1024)
+	if !slices.Equal(got.UserRequests, []string{"newest"}) || !slices.Equal(got.UserRequestSecondsAgo, []int{1}) {
+		t.Fatal("lost the newest complete timeline entry or its age")
+	}
+	untimed := MotionContext{UserRequests: []string{"first", "é"}, UserRequestSecondsAgo: []int{1}}
+	encoded, _ := json.Marshal([]string{"é"})
+	got = untimed.withBoundedRequestTimeline(len(encoded))
+	if !slices.Equal(got.UserRequests, []string{"é"}) || got.UserRequestSecondsAgo != nil {
+		t.Fatal("exact JSON boundary lost a line or attached a mismatched age")
+	}
+}
+
+func TestLongLatestCorrectionSurvivesAnOmittedTimelineCopy(t *testing.T) {
+	set, _ := BuiltinPromptSetByID(DefaultPromptSetID)
+	caps := Capabilities{LocalInference: true, Motion: true, MotionMode: MotionModeLayered, SimpleMotion: true}
+	correction := strings.Repeat("Session note. ", 100) + "Replace the earlier marks with 26 and 62 at pace 30."
+	state := MotionContext{Running: true, MotionMode: MotionModeLayered, UserRequests: []string{correction}}
+	provider := &layeredTestProvider{raw: `{"action":"none","edits":[],"reply":"Ready."}`}
+	service := Service{Prompt: set, Provider: provider, Capabilities: &caps, MotionContext: &state, MaxTokens: 256,
+		PromptBudget: PromptBudgetSettings{ContextSize: 16384, MaxOutputTokens: 256}}
+	prior := llm.Message{Role: "user", Content: correction}
+	if _, err := service.Complete(t.Context(), Request{Message: "Read those settings back.", History: []llm.Message{prior}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	actual, _, err := llm.BudgetChatRequest(provider.request, 16384)
+	if err != nil || strings.Contains(actual.Messages[0].Content, correction) || !slices.Contains(actual.Messages, prior) {
+		t.Fatalf("lost or truncated the newest correction in dialogue: %v", err)
+	}
+}
+
+func TestEmptySimpleChatFitsMinimumWindow(t *testing.T) {
+	for _, set := range BuiltinPromptSets() {
+		for _, mood := range []bool{false, true} {
+			caps := Capabilities{LocalInference: true, Motion: true, MotionMode: MotionModeLayered, SimpleMotion: true, MoodTracking: mood}
+			state := MotionContext{MotionMode: MotionModeLayered}
+			budget := PromptBudgetSettings{ContextSize: 16384, MaxOutputTokens: 256}
+			comp := ComposeInteractivePrompt(set, nil, nil, caps, &state, nil, budget)
+			req := llm.ChatRequest{Messages: []llm.Message{{Role: "system", Content: comp.Prompt}, {Role: "user", Content: "Hello."}}, MaxTokens: 256, JSONSchema: InteractiveResponseSchema(nil, caps, &state, set.ID)}
+			if _, _, err := llm.BudgetChatRequest(req, budget.ContextSize); err != nil {
+				t.Fatalf("%s, mood %t: %v", set.ID, mood, err)
+			}
+		}
+	}
+}
+
+func TestCompactGroupedReferenceNamesTheSchemaOperations(t *testing.T) {
+	state := MotionContext{MotionMode: MotionModeLayered}
+	caps := (Capabilities{LocalInference: true, Motion: true, MotionMode: MotionModeLayered, SimpleMotion: true}).forInteractiveDialect(DefaultPromptSetID, &state)
+	_, limits := layeredContextScore(&state)
+	var schema struct {
+		Properties struct {
+			Edits struct {
+				Items struct {
+					AnyOf []struct {
+						Properties map[string]struct{ Enum []string }
+					}
+				}
+			}
+		}
+	}
+	if err := json.Unmarshal(continuousEditSchema(limits, caps, state), &schema); err != nil {
+		t.Fatal(err)
+	}
+	groups := schema.Properties.Edits.Items.AnyOf
+	if len(groups) == 0 {
+		t.Fatal("expected grouped edits")
+	}
+	for _, group := range groups {
+		for name, field := range group.Properties {
+			if !strings.Contains(compactGroupedLayeredContract, name) {
+				t.Errorf("missing edit group %s", name)
+			}
+			for _, value := range field.Enum {
+				if !strings.Contains(compactGroupedLayeredContract, value) {
+					t.Errorf("missing %s value %s", name, value)
+				}
+			}
+		}
+	}
+}
 
 func TestLocalTurnGuideUsesProviderAdmittedHistory(t *testing.T) {
 	const window = 16384

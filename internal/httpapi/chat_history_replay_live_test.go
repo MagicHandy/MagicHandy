@@ -80,11 +80,13 @@ func TestLiveChatHistoryReplay(t *testing.T) {
 	active := profile.settings.ConversationSettings()
 	header := map[string]any{"kind": "profile", "schema": "chat_history_replay.v2", "model": active.Model,
 		"capability": active.ModelCapabilityLevel(), "context_size": profile.window, "settings": settings.Motion,
+		"history_messages": profile.messages, "history_bytes": chat.PromptHistoryBytes,
 		"binary_sha256": historyReplayBuildDigest(t), "source_id": source.SourceID, "infer_stops": source.InferStops,
 		"provider": active.Provider, "seed_mode": "provider_default"}
 	if active.IsHosted() {
 		header["provider"] = active.ActiveConnection.Provider
 		header["reasoning_effort"] = active.ActiveConnection.ReasoningEffort
+		_, _, header["history_bytes"] = active.ActiveConnection.ConversationWindow()
 	} else {
 		header["gguf_sha256"], header["template_fix"], header["max_output_tokens"] = profile.digest, profile.template, active.MaxOutputTokens
 	}
@@ -193,7 +195,10 @@ func recordHistoryReplayTurn(t *testing.T, writer *json.Encoder, server *Server,
 		"plan_changed": before.PlanID != after.PlanID, "before": before.Target.Flow, "after": after.Target.Flow,
 	}
 	if calls > 0 {
-		record["requested_sampling"] = provider.attempts[0].Sampling
+		first := provider.attempts[0]
+		record["requested_sampling"] = first.Sampling
+		record["input_bytes"], record["input_limit_bytes"] = first.InputBytes, first.InputLimitBytes
+		record["admitted_history_messages"], record["omitted_before_provider_budget"], record["omitted_including_provider_budget"] = first.History, first.PriorOmissions, first.Dropped
 	}
 	if after.Running && after.Target.Flow != nil && before.PlanID != after.PlanID {
 		settings, _ := server.store.Snapshot()

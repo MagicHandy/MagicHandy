@@ -35,6 +35,12 @@ func layeredContextScore(state *MotionContext) (motion.FlowSpec, config.MotionSe
 }
 
 func layeredContextInstructions(state MotionContext, capabilities Capabilities) string {
+	omitted := 0
+	if capabilities.boundRequestTimeline {
+		before := len(state.UserRequests)
+		state = state.withBoundedRequestTimeline(1024)
+		omitted = before - len(state.UserRequests)
+	}
 	score, limits := layeredContextScore(&state)
 	var scoreContext any = layeredScoreContext(score, capabilities.AdvancedMotion)
 	if state.MotionMode == MotionModeCreativeV2 {
@@ -54,6 +60,9 @@ func layeredContextInstructions(state MotionContext, capabilities Capabilities) 
 		"saved_limits":                      map[string]int{"speed_min_percent": limits.SpeedMinPercent, "speed_max_percent": limits.SpeedMaxPercent},
 		"engine_envelope":                   state.Envelope,
 		"recent_user_requests_oldest_first": timedUserRequests(state),
+	}
+	if omitted > 0 {
+		context["older_request_copies_omitted"] = omitted
 	}
 	if state.Autopilot {
 		context["autopilot"] = "composing between chat turns"
@@ -154,21 +163,19 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	// The prompt and parser must share the same freshly seeded starting score.
 	state.Layered = &current
 	autoTiming := s.TrustedMotionInput && capabilities.AutoTiming
-	system, schema := s.continuousPrompt(prompt, capabilities, state, limits, autoTiming)
 	maxTokens := s.MaxTokens
 	if maxTokens <= 0 {
 		maxTokens = 1536
 	}
+	if s.PromptBudget.MaxOutputTokens <= 0 {
+		s.PromptBudget.MaxOutputTokens = maxTokens
+	}
+	system, schema := s.continuousPrompt(prompt, capabilities, state, limits, autoTiming)
 	temperature := chatTemperature
 	if s.TrustedMotionInput && s.AutonomousTemperature > 0 {
 		temperature = min(s.AutonomousTemperature, 1.2)
 	}
-	var messages []llm.Message
-	if capabilities.PreserveConversationText {
-		messages = verbatimMessages(system, request.History, request.Message, capabilities)
-	} else {
-		messages = spokenMessages(system, request.History, request.Message)
-	}
+	messages := s.continuousMessages(system, capabilities, request)
 	if !s.TrustedMotionInput {
 		messages = withLocalManualResumeState(messages, capabilities, state)
 	} else if s.localAutopilotPlan {
@@ -210,12 +217,23 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	return result, nil
 }
 
+func (s Service) continuousMessages(system string, caps Capabilities, request Request) []llm.Message {
+	if caps.PreserveConversationText {
+		return verbatimMessages(system, request.History, request.Message, caps)
+	}
+	rows := PromptHistoryLimit
+	if !s.TrustedMotionInput && caps.LocalInference && caps.HistoryMessages > 0 {
+		rows = min(caps.HistoryMessages, 512)
+	}
+	return spokenMessages(system, request.History, request.Message, rows)
+}
+
 func (s Service) continuousPrompt(prompt PromptSet, capabilities Capabilities, state MotionContext, limits config.MotionSettings, autoTiming bool) (string, json.RawMessage) {
 	var system string
 	var schema json.RawMessage
 	if !s.TrustedMotionInput {
-		system = composeInteractivePrompt(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext, s.PromptBudget).Prompt
 		schema = interactiveResponseSchema(nil, capabilities, &state)
+		system = composeInteractivePrompt(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext, schema, s.PromptBudget).Prompt
 	} else {
 		schema = continuousEditSchema(limits, capabilities, state)
 		if autoTiming {

@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
 
 // ComposeInteractivePrompt includes the lifecycle contract used by live chat.
@@ -14,10 +15,31 @@ import (
 // authority; they must not acquire interactive start permission from this path.
 func ComposeInteractivePrompt(set PromptSet, memories []string, patterns []PatternChoice, capabilities Capabilities, state *MotionContext, conversation *ConversationContext, budget ...PromptBudgetSettings) PromptComposition {
 	capabilities = capabilities.forInteractiveDialect(set.ID, state)
-	return composeInteractivePrompt(set, memories, patterns, capabilities, state, conversation, budget...)
+	return composeInteractivePrompt(set, memories, patterns, capabilities, state, conversation, nil, budget...)
 }
 
-func composeInteractivePrompt(set PromptSet, memories []string, patterns []PatternChoice, capabilities Capabilities, state *MotionContext, conversation *ConversationContext, budget ...PromptBudgetSettings) PromptComposition {
+func composeInteractivePrompt(set PromptSet, memories []string, patterns []PatternChoice, caps Capabilities, state *MotionContext, conversation *ConversationContext, schema json.RawMessage, budget ...PromptBudgetSettings) PromptComposition {
+	full := buildInteractivePrompt(set, memories, patterns, caps, state, conversation, budget...)
+	if len(budget) == 0 || !caps.LocalInference || caps.MotionMode != MotionModeLayered || !caps.usesGroupedLayeredEdits() ||
+		state == nil || !ordinaryPositionChat(*state) || !caps.Motion || promptLocaleForID(set.ID) != promptLocaleEnglish {
+		return full
+	}
+	if schema == nil {
+		schema = interactiveResponseSchema(patterns, caps, state)
+	}
+	options := budget[0]
+	limit := llm.PromptInputByteLimit(options.ContextSize, options.MaxOutputTokens, options.ReasoningBudgetTokens, len(schema))
+	// Reserve one complete user turn and the two message wrappers. The
+	// transport applies the final admission check to the actual request.
+	if full.Bytes+maxUserMessageBytes+128 <= limit {
+		return full
+	}
+	caps.boundRequestTimeline = true
+	caps.compactGroupedReference = caps.groupedSimpleLayered
+	return buildInteractivePrompt(set, memories, patterns, caps, state, conversation, budget...)
+}
+
+func buildInteractivePrompt(set PromptSet, memories []string, patterns []PatternChoice, capabilities Capabilities, state *MotionContext, conversation *ConversationContext, budget ...PromptBudgetSettings) PromptComposition {
 	composition := ComposePrompt(set, memories, patterns, capabilities, state, conversation, budget...)
 	if !capabilities.Motion || (capabilities.MotionMode != MotionModeCreativeV2 && capabilities.MotionMode != MotionModeLayered) {
 		return composition
@@ -29,18 +51,7 @@ func composeInteractivePrompt(set PromptSet, memories []string, patterns []Patte
 	sections := make([]PromptSection, 0, len(composition.Sections)+1)
 	for _, section := range composition.Sections {
 		if section.ID == "response_contract" {
-			section.Text = continuousInteractiveContract(section.Text, current)
-			if capabilities.MotionMode == MotionModeLayered && capabilities.usesGroupedLayeredEdits() {
-				section.Text = intermediateLayeredContract(section.Text)
-			}
-			if capabilities.MotionMode == MotionModeLayered && capabilities.AdvancedMotion {
-				// Include the state-specific examples generated above. Only this
-				// code-owned contract is translated, never conversation text.
-				section.Text = hostedLayeredContract(section.Text)
-				if capabilities.compactHostedPace {
-					section.Text += "\n" + hostedInteractivePaceGuide(current)
-				}
-			}
+			section.Text = interactiveContractText(section.Text, capabilities, current)
 			section.Characters = utf8.RuneCountInString(section.Text)
 			section.Bytes = len(section.Text)
 		}
@@ -64,6 +75,25 @@ func composeInteractivePrompt(set PromptSet, memories []string, patterns []Patte
 	composition.Characters = utf8.RuneCountInString(composition.Prompt)
 	composition.Bytes = len(composition.Prompt)
 	return composition
+}
+
+func interactiveContractText(contract string, caps Capabilities, state MotionContext) string {
+	if caps.compactGroupedReference {
+		// The compact contract already describes live grouped edits. Ordinary
+		// chat adds the bounded-range example beside the user's request.
+		return contract
+	}
+	contract = continuousInteractiveContract(contract, state)
+	if caps.MotionMode == MotionModeLayered && caps.usesGroupedLayeredEdits() {
+		return intermediateLayeredContract(contract)
+	}
+	if caps.MotionMode == MotionModeLayered && caps.AdvancedMotion {
+		contract = hostedLayeredContract(contract)
+		if caps.compactHostedPace {
+			contract += "\n" + hostedInteractivePaceGuide(state)
+		}
+	}
+	return contract
 }
 
 // Local stopped chat needs an explicit distinction between a performance

@@ -96,7 +96,7 @@ their Advanced contract" above.
   start Simple, like an unknown local model; ChatGPT, OpenAI and OpenRouter
   start Advanced. No level is inferred from a model name.
 - A connection's request budget uses the same floors: 16K, 32K and 64K, then
-  128K and 256K. Below 64K it keeps the local prompt history of 64 messages /
+  128K and 256K. Below 64K a named connection keeps 64 messages /
   24 KB. Raising a level raises an insufficient budget, lowering it keeps a
   larger saved one, and a saved 32K Advanced connection still moves to 64K.
 - Features, prompts and history follow the resolved level, not the transport.
@@ -168,3 +168,21 @@ Local chat compares optional guidance with the dialogue that its provider
 actually admits under the selected context limit. The omission count includes
 both retrieval and provider truncation. Full and compact guidance can use
 available space only while preserving those same turns.
+
+For ordinary English local Layered chat, composition also reserves room for
+a complete user message alongside the actual schema, output and reasoning
+allowance. If the full reference exceeds that budget, the composer caps the
+second copy of recent human lines in the engine snapshot at 1 KiB of encoded
+JSON. Complete original turns remain available for normal dialogue admission.
+Simple can then use a shorter description of the same grouped edit schema.
+The prompt inspector identifies the compact reference. This handles the
+16K Simple minimum and unusually verbose history at the 32K setup default.
+[Admission and model measurements](../opus-motion-review-2026-11-18.md)
+
+Managed llama.cpp Layered conversations at Simple and Intermediate retain
+up to 96 complete dialogue messages within the existing 24,000-byte window
+when at least 32K is allocated. This raises the 64-message default that
+dropped short definitions from otherwise admissible dialogue. The 16K
+minimum uses 64 messages. Named connection history choices and the private
+planning context keep their existing behavior. The setup-selected model and
+its capability continue to determine the native context and output budgets.

@@ -90,13 +90,13 @@ class HistoryReplayTests(unittest.TestCase):
 
     def test_comparisons_require_matching_sources_geometry_and_sampling(self):
         a = {"schema": "chat_history_replay.v2", "source_id": "source", "labels_bound": True, "model": "gemma-e4b",
-             "provider": "llama_cpp", "capability": "simple", "context_size": 16384,
+             "provider": "llama_cpp", "capability": "simple", "context_size": 16384, "history_messages": 64, "history_bytes": 24000,
              "gguf_sha256": "weights", "template_fix": "gemma4", "max_output_tokens": 256,
              "settings": {"stroke_min_percent": 19}, "infer_stops": False, "seed_mode": "provider_default",
              "requested_sampling": [{"temperature": .6}], "binary_sha256": "baseline"}
         self.assertEqual(scorer.compare_profiles(a, {**a, "binary_sha256": "candidate"}, False), [])
         for key, changed in [("settings", {}), ("infer_stops", True), ("context_size", 32768),
-                             ("requested_sampling", [{"temperature": .8}]), ("gguf_sha256", "other")]:
+                             ("history_messages", 128), ("requested_sampling", [{"temperature": .8}]), ("gguf_sha256", "other")]:
             b = {**a, key: changed}
             with self.assertRaisesRegex(ValueError, key):
                 scorer.compare_profiles(a, b, False)

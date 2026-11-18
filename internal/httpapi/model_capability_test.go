@@ -160,10 +160,10 @@ func TestAdvancedLocalResponseRepairAndDowngradeRetirement(t *testing.T) {
 	}
 }
 
-func TestAdvancedLocalHistoryUsesBoundedExternalWindow(t *testing.T) {
+func TestLocalHistoryUsesTheSelectedCapabilityWindow(t *testing.T) {
 	s := newTestServerWithRuntime(t, Runtime{})
 	t.Cleanup(s.Close)
-	for i := 0; i < 90; i++ {
+	for i := 0; i < 110; i++ {
 		role := "user"
 		if i%2 == 1 {
 			role = "assistant"
@@ -182,12 +182,35 @@ func TestAdvancedLocalHistoryUsesBoundedExternalWindow(t *testing.T) {
 			t.Fatal(err)
 		}
 		want := chat.PromptHistoryLimit
-		if level == config.ModelCapabilityAdvanced || level == config.ModelCapabilityAdvancedNoReasoning {
-			want = 64
+		if level == config.ModelCapabilityIntermediate {
+			want = chat.ManagedLayeredHistoryLimit
 		}
 		if len(context.History) != want {
 			t.Fatalf("%s history=%d want=%d", level, len(context.History), want)
 		}
+	}
+}
+
+func TestManagedLayeredHistoryRespectsProviderAndMode(t *testing.T) {
+	base := config.DefaultSettings().LLM
+	base.LocalCapabilityLevel = config.ModelCapabilityIntermediate
+	for _, tc := range []struct {
+		name, provider, runtime, mode string
+		want                          int
+	}{
+		{"managed Layered", config.LLMProviderLlamaCPP, config.LlamaCPPModeManaged, config.LLMMotionModeLayered, chat.ManagedLayeredHistoryLimit},
+		{"external server", config.LLMProviderLlamaCPP, config.LlamaCPPModeExternal, config.LLMMotionModeLayered, 0},
+		{"Ollama", config.LLMProviderOllama, config.LlamaCPPModeManaged, config.LLMMotionModeLayered, 0},
+		{"other mode", config.LLMProviderLlamaCPP, config.LlamaCPPModeManaged, config.LLMMotionModeCreativeV2, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := base
+			s.Provider, s.LlamaCPPMode, s.MotionGenerationMode = tc.provider, tc.runtime, tc.mode
+			got := chatCapabilities(s, nil)
+			if got.HistoryMessages != tc.want || (tc.want != 0 && got.HistoryBytes != chat.PromptHistoryBytes) {
+				t.Fatalf("history window %d/%d", got.HistoryMessages, got.HistoryBytes)
+			}
+		})
 	}
 }
 

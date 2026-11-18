@@ -3,10 +3,21 @@
 ## 2026-11-18 — Review of prompt admission and retained-history replay
 
 The stripped Windows amd64 core grew from 25,425,920 bytes on `9a4c36cf` to
-25,426,944 bytes (+1,024). Both used Go 1.26.11, `CGO_ENABLED=0`, `-trimpath`
+25,437,184 bytes (+11,264). Both used Go 1.26.11, `CGO_ENABLED=0`, `-trimpath`
 and `-ldflags "-s -w"`. The review added no dependencies or shipped browser assets.
-On fresh replays of the same 339 turns, first-pass pace intent with the rest
-of the score preserved was 116/136 on E4B, 132/136 on 12B and 136/136 on Terra.
+Managed Simple and Intermediate Layered chat at 32K or above now retains
+96 messages within 24,000 bytes. Both models applied the corrected cue
+72 messages back on 2/2 wordings, up from 0/2 at 64 rows.
+
+| Final 339-turn replay | First pass / completed | Pace intent and preservation /136 | Median / p95 |
+| --- | ---: | ---: | ---: |
+| E4B Simple | 324 / 336 | 122 | 968 / 1,763 ms |
+| 12B Intermediate | 332 / 338 | 132 | 2,019 / 3,131 ms |
+| Signed-in Terra Advanced Low | 337 / 338 | 136 | 3,574 / 7,360 ms |
+
+The final local captures admitted up to 96 history messages and recorded
+zero essential-input overflows. At the 16K Simple minimum, a compact
+reference recovered the six cold starts that previously failed admission.
 [Per-profile latency, paired E4B repeats and calibration checks](opus-motion-review-2026-11-18.md)
 
 ## 2026-11-18 — Replay of installed conversations

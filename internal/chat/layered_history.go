@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -12,6 +13,40 @@ import (
 // turns receive separately from the conversation. Autonomous check-ins can
 // crowd a long history window; these lines stay visible regardless.
 const recentUserRequestLimit = 8
+
+// A crowded interactive prompt needs room for the primary dialogue. Bound
+// only the second copy in the engine snapshot, keeping complete recent lines
+// and their matching ages. Planning uses its full timeline.
+func (s MotionContext) withBoundedRequestTimeline(bytes int) MotionContext {
+	n := len(s.UserRequests)
+	first := n
+	timed := len(s.UserRequestSecondsAgo) == n
+	bytes -= 2 // JSON array delimiters
+	for first > 0 {
+		i := first - 1
+		var entry any = s.UserRequests[i]
+		if timed {
+			entry = timedUserRequest{Said: s.UserRequests[i], SecondsAgo: s.UserRequestSecondsAgo[i]}
+		}
+		encoded, _ := json.Marshal(entry)
+		size := len(encoded)
+		if first < n {
+			size++ // comma
+		}
+		if size > bytes {
+			break
+		}
+		bytes -= size
+		first--
+	}
+	s.UserRequests = s.UserRequests[first:]
+	if timed {
+		s.UserRequestSecondsAgo = s.UserRequestSecondsAgo[first:]
+	} else {
+		s.UserRequestSecondsAgo = nil
+	}
+	return s
+}
 
 // RecentUserRequest is one recent human line and when it was committed.
 type RecentUserRequest struct {

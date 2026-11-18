@@ -136,7 +136,8 @@ func qualityGemmaDefault(t *testing.T, entry llm.CatalogModel) *qualityDefaultPr
 	if status := provider.Load(t.Context()); !status.Available {
 		t.Fatal(status.Message)
 	}
-	return &qualityDefaultProfile{settings: settings, provider: provider, window: settings.LocalContextSize(), messages: chat.PromptHistoryLimit, digest: record.SHA256, template: record.TemplateFix}
+	messages := max(chat.PromptHistoryLimit, chatCapabilities(settings, nil).HistoryMessages)
+	return &qualityDefaultProfile{settings: settings, provider: provider, window: settings.LocalContextSize(), messages: messages, digest: record.SHA256, template: record.TemplateFix}
 }
 
 // Put a corrected reference near the end of the default local history, and

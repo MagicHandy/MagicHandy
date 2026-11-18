@@ -371,7 +371,7 @@ func TestServicePropagatesRepairProviderFailure(t *testing.T) {
 
 func TestSanitizeHistoryPreservesUTF8AtByteLimit(t *testing.T) {
 	content := strings.Repeat("a", maxUserMessageBytes-1) + "é"
-	messages := sanitizeHistory([]llm.Message{{Role: "user", Content: content}})
+	messages := sanitizeHistory([]llm.Message{{Role: "user", Content: content}}, PromptHistoryLimit)
 	if len(messages) != 1 {
 		t.Fatalf("messages = %+v, want one history item", messages)
 	}

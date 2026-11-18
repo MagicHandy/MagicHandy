@@ -10,20 +10,25 @@ import (
 // PromptHistoryLimit retains up to 32 exchanges from the canonical session.
 // A separate byte bound keeps verbose sessions from consuming the context.
 const PromptHistoryLimit = 64
-const maxPromptHistoryBytes = 24000
+
+// ManagedLayeredHistoryLimit retains short definitions across up to 48 exchanges.
+const ManagedLayeredHistoryLimit = 96
+
+// PromptHistoryBytes bounds compact local dialogue independently of its row count.
+const PromptHistoryBytes = 24000
 
 func capabilityMessages(system string, history []llm.Message, message string, capabilities Capabilities) []llm.Message {
 	if capabilities.PreserveConversationText {
 		return verbatimMessages(system, history, message, capabilities)
 	}
 	if !capabilities.Motion {
-		return spokenMessages(system, history, message)
+		return spokenMessages(system, history, message, PromptHistoryLimit)
 	}
-	return buildMessages(system, history, message)
+	return buildMessages(system, history, message, PromptHistoryLimit)
 }
 
 func verbatimMessages(system string, history []llm.Message, message string, options ...Capabilities) []llm.Message {
-	messageLimit, byteLimit := PromptHistoryLimit, maxPromptHistoryBytes
+	messageLimit, byteLimit := PromptHistoryLimit, PromptHistoryBytes
 	if len(options) > 0 && options[0].PreserveConversationText {
 		if options[0].HistoryMessages > 0 {
 			messageLimit = min(options[0].HistoryMessages, 512)
@@ -71,13 +76,12 @@ func includedDialogueHistory(messages []llm.Message) int {
 // motion.action envelopes would also teach a conflicting control vocabulary.
 // Chat-only turns use this same history: a previous mode's command must not
 // become an example of authority that this turn does not have.
-func spokenMessages(system string, history []llm.Message, message string) []llm.Message {
-	// Apply the existing local turn cap before copying/unwrapping. A larger
-	// retained transcript must not add work to this path.
-	if len(history) > PromptHistoryLimit {
-		history = history[len(history)-PromptHistoryLimit:]
+func spokenMessages(system string, history []llm.Message, message string, rowLimit int) []llm.Message {
+	// Apply the selected local cap before copying or unwrapping old replies.
+	if len(history) > rowLimit {
+		history = history[len(history)-rowLimit:]
 	}
-	messages := buildMessages(system, spokenHistory(history), message)
+	messages := buildMessages(system, spokenHistory(history), message, rowLimit)
 	// buildMessages re-serializes assistant speech in the catalog contract;
 	// unwrap it again so only the words remain.
 	for i := 1; i < len(messages)-1; i++ {

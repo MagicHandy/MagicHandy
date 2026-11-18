@@ -5,7 +5,11 @@ import "strings"
 // appendContractSections composes the response contract and, when the device
 // can move, the depth frame beside it and the enabled pattern catalog.
 func appendContractSections(sections []PromptSection, capabilities Capabilities, context *MotionContext, patterns []PatternChoice) []PromptSection {
-	sections = appendPromptSection(sections, "response_contract", "Response contract",
+	title := "Response contract"
+	if capabilities.compactGroupedReference {
+		title = "Response contract (compact)"
+	}
+	sections = appendPromptSection(sections, "response_contract", title,
 		contractForMotionState(capabilities, context))
 	if !capabilities.Motion {
 		return sections

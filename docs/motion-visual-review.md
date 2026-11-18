@@ -43,7 +43,7 @@ python scripts/render-motion-atlas.py .scratch/replay-atlas.json .scratch/replay
 ```
 
 The v2 header records the effective motion settings, provider, model, capability,
-context allocation and replay binary SHA-256. Local runs record the GGUF digest,
+context allocation, dialogue row and byte limits, and replay binary SHA-256. Local runs record the GGUF digest,
 template fix and output limit. Hosted runs record the reasoning effort.
 Each generated turn records the first call's requested sampling parameters.
 The provider chooses the seed and may apply its own sampling policy.
@@ -54,7 +54,10 @@ captures using the calibration in their headers.
 
 Each turn records whether a reply was emitted and whether the request
 completed on the first call, after a retry or repair, through fallback, or
-failed. Deterministic Stop expects zero provider calls. A later start proposal
+failed. Generated turns also record the input byte allowance, measured input,
+retained dialogue rows, and omissions before and after provider admission.
+These are conservative byte counts, distinct from the provider's token counters.
+Deterministic Stop expects zero provider calls. A later start proposal
 can suggest an intervening Stop. The capture marks the inference and whether
 the replay actually inserted one. Use `--no-infer-stops` to replay the same
 wording without those boundaries. The selected inference profile supplies

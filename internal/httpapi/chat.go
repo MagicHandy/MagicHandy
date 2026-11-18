@@ -1200,6 +1200,9 @@ func chatCapabilities(settings config.LLMSettings, active *persona.Persona) chat
 		// Storage and prompt composition must agree on the saved local window.
 		window := config.ModelConnection{ContextWindow: settings.LocalContextSize()}
 		_, capabilities.HistoryMessages, capabilities.HistoryBytes = window.ConversationWindow()
+	} else if (capabilities.SimpleMotion || capabilities.IntermediateMotion) && mode == chat.MotionModeLayered && settings.Provider == config.LLMProviderLlamaCPP &&
+		settings.LlamaCPPMode == config.LlamaCPPModeManaged && settings.LocalContextSize() >= config.MinimumLocalContext(config.ModelCapabilityIntermediate) {
+		capabilities.HistoryMessages, capabilities.HistoryBytes = chat.ManagedLayeredHistoryLimit, chat.PromptHistoryBytes
 	}
 	if active != nil {
 		capabilities.Voice = chatVoiceLevel(active.ChatVoice)

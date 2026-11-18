@@ -171,6 +171,8 @@ func contractInstructions(capabilities Capabilities) string {
 		text := layeredContract
 		if capabilities.AdvancedMotion {
 			text = hostedLayeredContract(text) + "\n" + hostedPaceGuide + "\n" + hostedLayeredCoordinationGuide + "\n" + hostedLayeredPhraseGuide + "\n" + hostedLayeredRegionGuide + "\n" + hostedDirectionalPaceGuide
+		} else if capabilities.compactGroupedReference {
+			text = compactGroupedLayeredContract
 		} else if capabilities.usesGroupedLayeredEdits() {
 			text = intermediateLayeredContract(text)
 		}
@@ -230,8 +232,10 @@ type Capabilities struct {
 	IntermediateMotion bool
 	// Some Simple interactive turns use the paired-range wire format. This
 	// affects the prompt, schema and parser only. All features keep their tier.
-	groupedSimpleLayered bool
-	compactHostedPace    bool
+	groupedSimpleLayered    bool
+	compactGroupedReference bool
+	boundRequestTimeline    bool
+	compactHostedPace       bool
 	// ChatPlanNote adds a private planning note before Advanced chat edits in
 	// the same generation (ADR 0065). It requires AdvancedMotion.
 	ChatPlanNote bool

@@ -27,6 +27,8 @@ type qualityAttempt struct {
 	Raw               string          `json:"raw"`
 	History           int             `json:"history_messages"`
 	InputBytes        int             `json:"input_bytes"`
+	InputLimitBytes   int             `json:"input_limit_bytes"`
+	PriorOmissions    int             `json:"omitted_before_provider_budget"`
 	MaxTokens         int             `json:"request_max_tokens"`
 	Dropped           int             `json:"history_dropped"`
 	CorrectionPresent bool            `json:"correction_present"`
@@ -49,7 +51,8 @@ type qualityProvider struct {
 
 func (p *qualityProvider) StreamChat(ctx context.Context, req llm.ChatRequest, delta func(string) error) (string, error) {
 	bounded, budget, admissionErr := llm.BudgetChatRequest(req, p.window)
-	review := qualityAttempt{InputBytes: budget.InputBytes, Dropped: budget.HistoryMessagesDropped, MaxTokens: req.MaxTokens}
+	review := qualityAttempt{InputBytes: budget.InputBytes, InputLimitBytes: budget.LimitBytes,
+		PriorOmissions: req.HistoryMessagesDropped, Dropped: budget.HistoryMessagesDropped, MaxTokens: req.MaxTokens}
 	review.Sampling = qualitySampling{Temperature: req.Temperature, TopP: req.TopP, RepeatPenalty: req.RepeatPenalty, RepeatLastN: req.RepeatLastN}
 	if admissionErr == nil {
 		for i, m := range bounded.Messages {

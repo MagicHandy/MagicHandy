@@ -8,7 +8,7 @@ import statistics
 
 
 PACE = {"up", "down", "max", "hold", "set", "adjust"}
-PROFILE_FIELDS = ("schema", "source_id", "labels_bound", "model", "provider", "capability", "context_size",
+PROFILE_FIELDS = ("schema", "source_id", "labels_bound", "model", "provider", "capability", "context_size", "history_messages", "history_bytes",
                   "settings", "infer_stops", "seed_mode", "requested_sampling")
 MODEL_FIELDS = ("gguf_sha256", "template_fix", "max_output_tokens", "reasoning_effort")
 
