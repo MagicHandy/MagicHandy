@@ -94,6 +94,17 @@ def contact_sheets(entries, destination):
 
 def captured_sessions(paths):
     for path in paths:
+        if path.suffix.lower() == ".jsonl":
+            with path.open(encoding="utf-8-sig") as stream:
+                header = json.loads(next(stream))
+                if header.get("schema") != "chat_history_replay.v1":
+                    raise ValueError(f"Unrecognized replay schema in {path}")
+                for line in stream:
+                    row = json.loads(line)
+                    if row["kind"] == "stop":
+                        yield {"scenario": f"{path.stem} · session {row['session']}",
+                               "model": header["model"], "commands": row["commands"]}
+            continue
         source = json.loads(path.read_text(encoding="utf-8-sig"))
         if source.get("schema") != "motion_quality.v1":
             yield source

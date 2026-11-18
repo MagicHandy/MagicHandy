@@ -239,7 +239,8 @@ func TestNaturalMotionConversationLive(t *testing.T) {
 					for n := range state.UserRequests {
 						state.UserRequestSecondsAgo = append(state.UserRequestSecondsAgo, (len(state.UserRequests)-n)*20)
 					}
-					caps := Capabilities{Motion: true, MotionMode: mode, SimpleMotion: naturalSimple(), AdvancedMotion: hosted, IntermediateMotion: naturalIntermediate(), PreserveConversationText: hosted}
+					caps := Capabilities{Motion: true, MotionMode: mode, SimpleMotion: naturalSimple(), AdvancedMotion: hosted,
+						IntermediateMotion: naturalIntermediate(), PreserveConversationText: hosted, LocalInference: os.Getenv("MAGICHANDY_LOCAL_MODEL") != ""}
 					svc := Service{Provider: provider, Model: model, Capabilities: &caps, MotionContext: &state, ReasoningMode: "off", MaxTokens: naturalMaxTokens(), PromptBudget: naturalPromptBudget()}
 					started, calls := time.Now(), provider.calls
 					result, err := svc.Complete(t.Context(), Request{Message: message, History: history}, nil)

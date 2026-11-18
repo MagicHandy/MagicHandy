@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -109,6 +110,9 @@ func renderExperiments(speeds []int, settings config.MotionSettings) []motion.Re
 }
 
 func readTrials(path string, settings config.MotionSettings) []motion.Review {
+	if strings.EqualFold(filepath.Ext(path), ".jsonl") {
+		return readHistoryReplay(path)
+	}
 	data, err := os.ReadFile(path) // #nosec G304 -- explicit local CLI input; this development tool has no server or device access.
 	must(err)
 	data, captured := unwrapTrials(data, path)
