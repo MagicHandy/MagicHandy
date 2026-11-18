@@ -15,7 +15,6 @@ import (
 
 const (
 	maxUserMessageBytes = 4096
-	maxHistoryMessages  = PromptHistoryLimit
 	emptyRepairContext  = `{"_malformed":"empty_or_truncated_output"}`
 )
 
@@ -205,7 +204,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	messages := capabilityMessages(systemPrompt, request.History, userMessage, capabilities)
 	input := llm.ChatRequest{
 		Messages:               messages,
-		HistoryMessagesDropped: request.HistoryMessagesDropped + hostedHistoryDropped(request.History, messages, capabilities),
+		HistoryMessagesDropped: request.HistoryMessagesDropped + composedHistoryDropped(request.History, messages),
 		Model:                  s.Model,
 		Temperature:            chatTemperature,
 		TopP:                   chatTopP,
@@ -1233,16 +1232,16 @@ func containsAnyExact(value string, candidates ...string) bool {
 	return false
 }
 
-func buildMessages(systemPrompt string, history []llm.Message, userMessage string) []llm.Message {
+func buildMessages(systemPrompt string, history []llm.Message, userMessage string, rowLimit int) []llm.Message {
 	messages := []llm.Message{{Role: "system", Content: systemPrompt}}
-	messages = append(messages, sanitizeHistory(history)...)
+	messages = append(messages, sanitizeHistory(history, rowLimit)...)
 	messages = append(messages, llm.Message{Role: "user", Content: userMessage})
 	return messages
 }
 
-func sanitizeHistory(history []llm.Message) []llm.Message {
-	if len(history) > maxHistoryMessages {
-		history = history[len(history)-maxHistoryMessages:]
+func sanitizeHistory(history []llm.Message, rowLimit int) []llm.Message {
+	if len(history) > rowLimit {
+		history = history[len(history)-rowLimit:]
 	}
 	messages := make([]llm.Message, 0, len(history))
 	for _, message := range history {
@@ -1265,7 +1264,7 @@ func sanitizeHistory(history []llm.Message) []llm.Message {
 	// Bound bytes as well as turns. Keep complete recent messages; truncating a
 	// serialized assistant reply here could teach the model malformed JSON.
 	bytes, start := 0, len(messages)
-	for start > 0 && bytes+len(messages[start-1].Content) <= maxPromptHistoryBytes {
+	for start > 0 && bytes+len(messages[start-1].Content) <= PromptHistoryBytes {
 		start--
 		bytes += len(messages[start].Content)
 	}

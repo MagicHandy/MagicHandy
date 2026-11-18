@@ -210,7 +210,7 @@ func TestSimpleRepairRetainsContractWithoutRedundantReminder(t *testing.T) {
 	}
 	first, repair := provider.requests[0], provider.requests[1]
 	want := strings.TrimSuffix(first.Messages[0].Content, "\n\n"+simplePatchGuide+"\n"+simpleReachGuide)
-	if repair.Messages[0].Content != want || !strings.Contains(first.Messages[0].Content, simplePatchGuide) || first.Messages[1] != repair.Messages[1] || string(first.JSONSchema) != string(repair.JSONSchema) {
+	if repair.Messages[0].Content != want || !strings.Contains(first.Messages[0].Content, simplePatchGuide) || first.Messages[len(first.Messages)-1] != repair.Messages[len(repair.Messages)-2] || string(first.JSONSchema) != string(repair.JSONSchema) {
 		t.Fatal("repair modified the full contract, original request, or initial capture")
 	}
 	if _, _, err := llm.BudgetChatRequest(repair, 16384); err != nil {

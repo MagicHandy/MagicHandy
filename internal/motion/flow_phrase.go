@@ -46,7 +46,7 @@ func (s FlowSpec) validatePhrase() error {
 	if p == nil {
 		return nil
 	}
-	if s.Gesture != nil || s.Strokes != nil || s.Freestyle != nil || len(s.Steps) != 0 {
+	if !s.IsLayered() {
 		return errors.New("a counted Layered phrase replaces other stroke grammars")
 	}
 	for _, layer := range s.Layers {
@@ -103,7 +103,9 @@ func (s PhraseStroke) validateWithin(bottom, top, previousTop, index, groups int
 		if index == 0 {
 			previousGroup, join = groups, "loop seam"
 		}
-		return fmt.Errorf("phrase %s from group %d to group %d is not a downward leg: previous top_percent (%d) must be at least 10 points above the next bottom_percent (%d); every group join, including last-to-first, must alternate lower and upper turns", join, previousGroup, group, previousTop, s.BottomPercent)
+		return fmt.Errorf("phrase %s from group %d to group %d is not a downward leg: previous top_percent (%d) must be at least 10 points above the next bottom_percent (%d). "+
+			"Every group join, including last-to-first, must alternate lower and upper turns. For complete strokes in separated bands, use phrase.regions and set each group's cycle to up_down or down_up. "+
+			"The engine supplies travel between regions. Preserve the requested counts, bands and overall pace without adding a bridge stroke", join, previousGroup, group, previousTop, s.BottomPercent)
 	}
 	return nil
 }

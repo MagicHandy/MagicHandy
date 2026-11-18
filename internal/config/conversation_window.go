@@ -15,7 +15,7 @@ var ConnectionContextSizes = []int{16384, 32768, MinimumExternalContext, 131072,
 // history settings preserve existing connections' behavior. Neither setting
 // changes local-model defaults. Byte budgets assume one input token per byte.
 // The budget never falls below the connection's capability floor; below 64K it
-// keeps the local prompt history of 64 messages / 24 KB.
+// keeps the named connection's recent window of 64 messages / 24 KB.
 func (c ModelConnection) ConversationWindow() (contextSize, messages, historyBytes int) {
 	switch budget := max(c.ContextWindow, MinimumLocalContext(c.ModelCapabilityLevel())); budget {
 	case 131072:

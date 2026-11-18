@@ -16,7 +16,7 @@ import (
 // Recall, lifecycle authority, atomic validation and the shared engine stay on
 // the same path used by local Layered replies.
 func parseHostedLayeredReply(raw string, current motion.FlowSpec, limits config.MotionSettings) (AssistantResponse, motion.FlowSpec, []string, error) {
-	normalized, err := normalizeLayeredOperations(raw)
+	normalized, err := normalizeLayeredOperations(raw, false)
 	if err != nil {
 		return AssistantResponse{}, current, nil, err
 	}
@@ -24,7 +24,7 @@ func parseHostedLayeredReply(raw string, current motion.FlowSpec, limits config.
 	return response, next, changed, hostedStrokeLengthError(err)
 }
 
-func normalizeLayeredOperations(raw string) (string, error) {
+func normalizeLayeredOperations(raw string, compactPace bool) (string, error) {
 	root, err := uniqueLayeredObject(json.RawMessage(raw))
 	if err != nil {
 		return "", err
@@ -35,6 +35,15 @@ func normalizeLayeredOperations(raw string) (string, error) {
 	edits, err := uniqueLayeredObject(root["edits"])
 	if err != nil {
 		return "", err
+	}
+	if string(edits["composition"]) == `"speed_only"` {
+		speed, ok := edits["speed_percent"]
+		if !compactPace || !ok || len(edits) != 2 {
+			return "", errors.New("speed_only requires an active speed-only contract and one overall speed operation")
+		}
+		edits["controls"], _ = json.Marshal(map[string]json.RawMessage{"speed_percent": speed})
+		delete(edits, "speed_percent")
+		delete(edits, "composition")
 	}
 	if _, legacy := edits["change_by"]; legacy {
 		return "", errors.New("hosted Layered edits require one set or adjust operation per control; change_by is not allowed")

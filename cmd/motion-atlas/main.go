@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -109,6 +110,9 @@ func renderExperiments(speeds []int, settings config.MotionSettings) []motion.Re
 }
 
 func readTrials(path string, settings config.MotionSettings) []motion.Review {
+	if strings.EqualFold(filepath.Ext(path), ".jsonl") {
+		return readHistoryReplay(path)
+	}
 	data, err := os.ReadFile(path) // #nosec G304 -- explicit local CLI input; this development tool has no server or device access.
 	must(err)
 	data, captured := unwrapTrials(data, path)
@@ -121,13 +125,17 @@ func readTrials(path string, settings config.MotionSettings) []motion.Review {
 func unwrapTrials(data []byte, path string) ([]byte, []motion.Review) {
 	if strings.HasPrefix(strings.TrimSpace(string(data)), "{") {
 		var report struct {
-			Model string
-			Turns json.RawMessage
-			Inert bool
+			Schema string
+			Model  string
+			Turns  json.RawMessage
+			Inert  bool
 		}
 		must(json.Unmarshal(data, &report))
 		if len(report.Turns) == 0 {
 			must(fmt.Errorf("%s: expected a trial array or an exported object containing turns", path))
+		}
+		if report.Schema == "motion_quality.v1" {
+			return nil, qualityEntries(report.Turns, report.Model, path)
 		}
 		var turns []struct {
 			Request, Response string

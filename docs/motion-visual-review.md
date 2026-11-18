@@ -5,7 +5,100 @@ or model contract whose output needs assessment. Render the final motion that
 the shared engine actually compiles. A graph of source control points alone
 can hide timing distortion, additional reversals and quantization artifacts.
 
+## Multi-turn interactive requests
+
+Run `python scripts/evaluate-default-motion.py` for the setup-selected models.
+Set `MAGICHANDY_QUALITY_MODEL_DIR` to the data directory containing the two
+catalog models, `MAGICHANDY_QUALITY_RUNNER` to the managed llama-server
+executable and `MAGICHANDY_HOSTED_DATA_DIR` to the signed-in ChatGPT profile.
+The driver writes separate A/B captures under `.scratch` and continues after
+semantic misses. Its per-profile summary counts unexpected motion on holds and
+retried turns. The capture records capability, reasoning, context allocation
+and the catalog digest or hosted model as applicable. Use `--profiles` or
+`--cases` to select a subset. [Default profile measurements](default-model-motion-review-2026-11-18.md)
+
+`TestLiveMotionRequestSequence` drives the normal streaming chat handler with a
+local Ollama or signed-in ChatGPT model and a fake transport. Its capture
+records the original requests, admitted history counts, raw proposals, applied
+actions, commanded paths, transport appends and acknowledged Stops. It retains
+failed edits, read-backs and holds. Pass the capture to the atlas with `-llm`
+and to the renderer with `--captured`. Each independent session has its own
+transport timeline. Compare both the shape and the overall speed when checking
+a delayed correction. [Matched runs and reproduction commands](motion-request-quality-2026-11-17.md)
+
 ## Reproduce an atlas
+
+For retained chat, run the installed-history replay against a database snapshot
+or the live database opened read-only. Select a Gemma profile for local
+inference. Selecting `terra` sends the original user turns and retained
+Autopilot remarks to the signed-in ChatGPT provider. The replay starts each
+conversation in a fresh simulator and records numerical targets, timing and
+transport commands. Use the same model environment variables as the default
+profile matrix.
+
+```powershell
+python scripts/evaluate-chat-history.py --database "$env:APPDATA/MagicHandy/magichandy.db" --profile gemma-12b --output .scratch/replay.jsonl
+go run -tags magichandy_labs ./cmd/motion-atlas -catalog=false -llm .scratch/replay.jsonl -output .scratch/replay-atlas.json
+python scripts/render-motion-atlas.py .scratch/replay-atlas.json .scratch/replay-atlas --captured .scratch/replay.jsonl
+```
+
+The v2 header records the effective motion settings, provider, model, capability,
+context allocation, dialogue row and byte limits, and replay binary SHA-256. Local runs record the GGUF digest,
+template fix and output limit. Hosted runs record the reasoning effort.
+Each generated turn records the first call's requested sampling parameters.
+The provider chooses the seed and may apply its own sampling policy.
+Calibration uses the current saved
+stroke window, reversal, style and participating Handy models. Every session
+checks those settings against its own simulator. The atlas also reads v1
+captures using the calibration in their headers.
+
+Each turn records whether a reply was emitted and whether the request
+completed on the first call, after a retry or repair, through fallback, or
+failed. Generated turns also record the input byte allowance, measured input,
+retained dialogue rows, and omissions before and after provider admission.
+These are conservative byte counts, distinct from the provider's token counters.
+Deterministic Stop expects zero provider calls. A later start proposal
+can suggest an intervening Stop. The capture marks the inference and whether
+the replay actually inserted one. Use `--no-infer-stops` to replay the same
+wording without those boundaries. The selected inference profile supplies
+the language, persona and generation settings.
+
+Score a replay with local annotations. Each annotation gives the session,
+step and kind. For example, `{"session":1,"step":2,"kind":"adjust","value":4}`
+checks a four-point increase inside the saved limits. `up` and `down`
+check direction, `set` checks a number, `max` checks the saved ceiling, and
+`hold` requires the same plan. Each requires a first-pass response and checks
+every other flow field. `set` requires a target inside the saved speed limits.
+The target for `adjust` is the previous speed plus the specified number of
+points, clamped to the limits. `restore`
+compares against the speed before the preceding turn and reports cases with
+no distinct prior speed as unscorable. `end_group` takes `end` (`base` or
+`tip`) and `count`. It requires that many strokes at the named end plus a
+distinct full-span group. `full_reach` and `full_pass` use the compiled
+trajectory. A full reach spans the logical 0–100 range inside the saved device
+window, including a reversed window. Review sampled reversals alongside the
+counted groups.
+
+```powershell
+python scripts/score-chat-history.py .scratch/replay.jsonl --against .scratch/baseline.jsonl --labels .scratch/local-labels.json
+```
+
+The scorer reports matched gains and losses, early and late pace results, and
+median timing and token counters for pace and other requests. Keep private
+annotations as `{"source_id":"<capture source_id>","labels":[...]}` to catch
+reordered sessions or changed message membership. The opaque ID derives from
+the selected session and message identities. It excludes conversation text.
+Single-capture scoring also accepts a bare array and reports
+`labels_bound: false`. A paired comparison using such annotations requires
+the same explicit override as missing legacy provenance.
+
+Paired scoring checks the selected source, model settings, calibration, stop
+inference and sampling. A different replay binary is expected in a code
+comparison. For an intentional comparison across profiles or an older v1
+capture with missing provenance, pass `--allow-profile-differences`. The
+report names each differing or unverified field. Two known, unequal source
+IDs always fail the comparison.
+A zero counter in an older capture can mean that the provider omitted it.
 
 Production captures from `scripts/evaluate-app-autopilot.py` use
 `-sessions .scratch/autopilot.json` (comma-separated paths supported). The

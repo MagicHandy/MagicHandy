@@ -2,6 +2,7 @@ package chat
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -43,28 +44,56 @@ func TestPromptHistoryRetainsLongSessionWithinByteBudget(t *testing.T) {
 	for range 46 {
 		history = append(history, llm.Message{Role: "assistant", Content: "The conversation continues."})
 	}
-	got := sanitizeHistory(history)
+	got := sanitizeHistory(history, PromptHistoryLimit)
 	if len(got) != len(history) || got[0].Content != history[0].Content {
 		t.Fatal("a short 24-turn session lost its beginning")
 	}
 	for range 80 {
 		history = append(history, llm.Message{Role: "user", Content: strings.Repeat("x", 2000)})
 	}
-	got = sanitizeHistory(history)
+	got = sanitizeHistory(history, PromptHistoryLimit)
 	bytes := 0
 	for _, m := range got {
 		bytes += len(m.Content)
 	}
-	if bytes > maxPromptHistoryBytes || len(got) > PromptHistoryLimit || len(got) == 0 {
+	if bytes > PromptHistoryBytes || len(got) > PromptHistoryLimit || len(got) == 0 {
 		t.Fatal("history was not bounded", bytes, len(got))
 	}
 }
 
 func TestContinuousHistoryAcceptsStructuredPriorRepliesWithoutReplayingEdits(t *testing.T) {
 	history := []llm.Message{{Role: "assistant", Content: `{"edits":[{"speed_percent":99}],"reply":"A prior reply."}`}}
-	got := spokenMessages("system", history, "What happened?")
+	got := spokenMessages("system", history, "What happened?", PromptHistoryLimit)
 	if got[1].Content != "A prior reply." || !strings.Contains(history[0].Content, "speed_percent") {
 		t.Fatal("structured history was replayed, double quoted or mutated", got)
+	}
+}
+
+func TestLocalLayeredHistoryReachesBothComposerAndProvider(t *testing.T) {
+	const correction = "The corrected Cedar definition now uses 26 to 62 at speed 30."
+	history := []llm.Message{{Role: "user", Content: correction}}
+	for i := range 78 {
+		role := "assistant"
+		if i%2 == 1 {
+			role = "user"
+		}
+		history = append(history, llm.Message{Role: role, Content: "Recorded."})
+	}
+	for _, tc := range []struct {
+		rows    int
+		visible bool
+	}{{PromptHistoryLimit, false}, {ManagedLayeredHistoryLimit, true}} {
+		caps := Capabilities{Motion: true, LocalInference: true, MotionMode: MotionModeLayered, IntermediateMotion: true, HistoryMessages: tc.rows, HistoryBytes: PromptHistoryBytes}
+		provider := &layeredTestProvider{raw: `{"action":"none","edits":[],"reply":"Ready."}`}
+		state := MotionContext{MotionMode: MotionModeLayered, Running: true}
+		service := Service{Provider: provider, Capabilities: &caps, MotionContext: &state, MaxTokens: 512, PromptBudget: PromptBudgetSettings{ContextSize: 32768, MaxOutputTokens: 512}}
+		if _, err := service.Complete(t.Context(), Request{Message: "What did I call Cedar?", History: history}, nil); err != nil {
+			t.Fatal(err)
+		}
+		admitted, _, err := llm.BudgetChatRequest(provider.request, 32768)
+		if err != nil || slices.Contains(admitted.Messages, history[0]) != tc.visible {
+			t.Fatalf("%d-row window did not reach native admission: %v", tc.rows, err)
+		}
 	}
 }
 

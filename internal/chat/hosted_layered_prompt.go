@@ -2,8 +2,25 @@ package chat
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 )
+
+const hostedSinglePaceGuide = "Only overall speed changes: choose composition speed_only with speed_percent {op:set or adjust,value:number}. The rest of the current pattern keeps playing. Use the full compositions for any other edit. An earlier speed alone can be set on the current pattern. A speed-only request preserves the seed, travel, layers and variation, including at maximum speed. If the requested direction is already at its saved limit, use action none with empty edits. Change another feature only when the latest request asks for it."
+
+const hostedMaximumPaceGuide = "The current overall speed is already at its saved maximum."
+
+func hostedInteractivePaceGuide(state MotionContext) string {
+	if state.Layered == nil || state.SpeedMaxPercent <= 0 || state.Layered.SpeedPercent < state.SpeedMaxPercent {
+		return hostedSinglePaceGuide
+	}
+	example := `{"action":"none","edits":{},"reply":"Already at the maximum speed."`
+	if state.Autopilot {
+		example += `,"stay_unchanged":` + strconv.FormatBool(state.StandingHold)
+	}
+	return hostedSinglePaceGuide + " " + hostedMaximumPaceGuide + " For another request for more overall speed alone, return " + example +
+		"}. Preserve any slower phases and counted groups. A new request for specific changes to the pattern, or a lower speed, still applies."
+}
 
 // Translate only code-owned examples added by the live lifecycle contract.
 // Persona text, history and requests never pass through this function.

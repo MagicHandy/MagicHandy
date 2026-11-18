@@ -14,7 +14,7 @@ func TestPhraseValidationIdentifiesBrokenJoinWithoutMutating(t *testing.T) {
 		groups []PhraseStroke
 		want   []string
 	}{
-		{"loop", []PhraseStroke{{78, 100, 4, 100}, {0, 35, 2, 35}}, []string{"loop seam", "group 2 to group 1", "(35)", "(78)"}},
+		{"loop", []PhraseStroke{{78, 100, 4, 100}, {0, 35, 2, 35}}, []string{"loop seam", "group 2 to group 1", "(35)", "(78)", "phrase.regions"}},
 		{"internal", []PhraseStroke{{0, 35, 2, 35}, {78, 100, 4, 100}}, []string{"join", "group 1 to group 2", "(35)", "(78)"}},
 		{"within_group", []PhraseStroke{{95, 100, 4, 100}, {0, 100, 1, 100}}, []string{"group 1 top_percent (100)", "bottom_percent (95)"}},
 		{"count", []PhraseStroke{{78, 100, 9, 100}, {0, 100, 1, 100}}, []string{"group 1 count", "got 9"}},

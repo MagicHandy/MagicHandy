@@ -446,7 +446,7 @@ func (s Service) completeTempo(ctx context.Context, request Request, emit func(S
 	schema := tempoResponseSchema(tier, s.MotionContext)
 	input := llm.ChatRequest{
 		Messages:               messages,
-		HistoryMessagesDropped: request.HistoryMessagesDropped + hostedHistoryDropped(request.History, messages, caps),
+		HistoryMessagesDropped: request.HistoryMessagesDropped + composedHistoryDropped(request.History, messages),
 		Model:                  s.Model,
 		Temperature:            chatTemperature,
 		TopP:                   chatTopP,

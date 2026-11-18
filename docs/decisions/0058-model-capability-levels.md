@@ -96,7 +96,7 @@ their Advanced contract" above.
   start Simple, like an unknown local model; ChatGPT, OpenAI and OpenRouter
   start Advanced. No level is inferred from a model name.
 - A connection's request budget uses the same floors: 16K, 32K and 64K, then
-  128K and 256K. Below 64K it keeps the local prompt history of 64 messages /
+  128K and 256K. Below 64K a named connection keeps 64 messages /
   24 KB. Raising a level raises an insufficient budget, lowering it keeps a
   larger saved one, and a saved 32K Advanced connection still moves to 64K.
 - Features, prompts and history follow the resolved level, not the transport.
@@ -119,3 +119,70 @@ connection, reviewer eligibility and the motion card's Pattern library options.
 A Simple compatible connection to Ollama's OpenAI endpoint completed the
 readiness probe and a text-only chat in one provider call (9,956 of 11,633
 prompt bytes), without repair, fallback or motion.
+
+## Local conversation history follow-up (2026-11-17)
+
+Interactive chat resolves the message and byte limits once for both storage
+and final prompt composition. Advanced local models given a larger window can
+therefore receive earlier corrections. Compact reads count omitted committed
+messages in the same snapshot as the visible dialogue. The current request and
+system guidance are excluded from the count of prior dialogue.
+
+For English interactive Layered motion, a local Simple model receives the
+current band and pace when earlier dialogue is missing. A running local
+Advanced model receiving more than 64 prior messages gets examples of reading
+back a definition and applying it. The examples must fit alongside all the
+selected dialogue. The matched local and hosted results explain the scope.
+[Multi-turn request evaluation](../motion-request-quality-2026-11-17.md)
+
+## Paired range edits for local Simple chat (2026-11-18)
+
+In ordinary English interactive Layered chat, local Simple and Intermediate
+can use the same list of edit groups. Each range group requires both numeric
+endpoints. Local Simple retains its own capability, model budget, output
+controls and validation. Existing Simple object-form replies still parse. The
+interactive schema, prompt inspector and parser resolve the same format from
+the current prompt set and playback state. Simple autonomous planning, paused
+playback, manual restart, tempo-only outputs and other prompt languages use
+their existing formats. [Comparison on the three setup defaults](../default-model-motion-review-2026-11-18.md)
+
+## Overall-speed edits in active hosted chat (2026-11-18)
+
+Advanced English Layered chat offers a short `speed_only` composition while a
+Layered field or counted phrase is running on a positional output. Chat
+resolves that contract from the actual engine target before seeding a score
+for a new composition. The model chooses between it and the existing
+compositions. Its single numeric set or adjustment goes through the same
+saved limits, lifecycle checks and shared engine as an ordinary control
+edit. The parser rejects additional fields, including whole-score recall.
+The strict provider can therefore produce a speed edit without generating
+nullable fields for stroke geometry and layers.
+
+A running flow also supplies its previous distinct commanded speed to live
+chat. It comes from the plan at the accepted handoff, so a replacement at
+the same uncommitted cursor cannot become an earlier speed. A new run starts
+with empty pace history. The Autopilot planner uses its own existing timeline.
+[Installed-history and runtime measurements](../installed-chat-replay-2026-11-18.md)
+
+Local chat compares optional guidance with the dialogue that its provider
+actually admits under the selected context limit. The omission count includes
+both retrieval and provider truncation. Full and compact guidance can use
+available space only while preserving those same turns.
+
+For ordinary English local Layered chat, composition also reserves room for
+a complete user message alongside the actual schema, output and reasoning
+allowance. If the full reference exceeds that budget, the composer caps the
+second copy of recent human lines in the engine snapshot at 1 KiB of encoded
+JSON. Complete original turns remain available for normal dialogue admission.
+Simple can then use a shorter description of the same grouped edit schema.
+The prompt inspector identifies the compact reference. This handles the
+16K Simple minimum and unusually verbose history at the 32K setup default.
+[Admission and model measurements](../opus-motion-review-2026-11-18.md)
+
+Managed llama.cpp Layered conversations at Simple and Intermediate retain
+up to 96 complete dialogue messages within the existing 24,000-byte window
+when at least 32K is allocated. This raises the 64-message default that
+dropped short definitions from otherwise admissible dialogue. The 16K
+minimum uses 64 messages. Named connection history choices and the private
+planning context keep their existing behavior. The setup-selected model and
+its capability continue to determine the native context and output budgets.

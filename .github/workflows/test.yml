@@ -144,6 +144,10 @@ jobs:
           go-version-file: go.mod
       - name: Compile tagged review commands
         run: go build -tags magichandy_labs ./cmd/motion-atlas ./cmd/cloud-motion-review ./cmd/motion-second-opinion-review
+      - name: Test chat replay calibration, outcomes and scoring
+        run: |
+          go test -tags 'liveeval magichandy_labs' ./cmd/motion-atlas ./internal/httpapi -run '^TestHistoryReplay'
+          python3 -m unittest discover -s scripts/tests
       - name: Tagged Go lint
         uses: golangci/golangci-lint-action@v9
         with:

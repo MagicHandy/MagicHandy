@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/mapledaemon/MagicHandy/internal/llm"
@@ -50,6 +51,14 @@ func simpleRepairInput(input llm.ChatRequest) llm.ChatRequest {
 	input.Messages = append([]llm.Message(nil), input.Messages...)
 	for _, reminder := range []string{simplePatchGuide + "\n" + simpleReachGuide, simplePatchGuide} {
 		input.Messages[0].Content = strings.TrimSuffix(input.Messages[0].Content, "\n\n"+reminder)
+	}
+	// The original request and validator feedback are the final two messages.
+	// Remove only the optional system example inserted immediately before them.
+	if i := len(input.Messages) - 3; i > 0 && input.Messages[i].Role == "system" {
+		guide := input.Messages[i].Content
+		if strings.HasPrefix(guide, bandGuidePrefix) || strings.HasPrefix(guide, localBandExamplePrefix) || guide == compactBandGuide {
+			input.Messages = slices.Delete(input.Messages, i, i+1)
+		}
 	}
 	return input
 }

@@ -141,7 +141,7 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 	}
 	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{
 		Messages:               messages,
-		HistoryMessagesDropped: request.HistoryMessagesDropped + hostedHistoryDropped(request.History, messages, s.Capabilities),
+		HistoryMessagesDropped: request.HistoryMessagesDropped + composedHistoryDropped(request.History, messages),
 		Model:                  s.Model,
 		Temperature:            temperature,
 		TopP:                   chatTopP,

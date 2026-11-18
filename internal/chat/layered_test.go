@@ -12,6 +12,15 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 )
 
+// Focused parser tests use the same capability resolution as a live request.
+func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state MotionContext, limits config.MotionSettings, autoTiming bool) (AssistantResponse, error) {
+	caps := s.capabilities()
+	if !s.TrustedMotionInput {
+		caps = caps.forInteractiveDialect(s.Prompt.ID, &state)
+	}
+	return s.parseLayeredProposal(caps, raw, current, state, limits, autoTiming)
+}
+
 func TestLayeredPartialEditsPreserveOtherAxesAndEvolveGeometry(t *testing.T) {
 	limits := config.DefaultSettings().Motion
 	before := DefaultLayeredScore(25)

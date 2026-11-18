@@ -1,5 +1,93 @@
 # Goal Scorecard
 
+## 2026-11-18 — Review of prompt admission and retained-history replay
+
+The stripped Windows amd64 core grew from 25,425,920 bytes on `9a4c36cf` to
+25,437,184 bytes (+11,264). Both used Go 1.26.11, `CGO_ENABLED=0`, `-trimpath`
+and `-ldflags "-s -w"`. The review added no dependencies or shipped browser assets.
+Managed Simple and Intermediate Layered chat at 32K or above now retains
+96 messages within 24,000 bytes. Both models applied the corrected cue
+72 messages back on 2/2 wordings, up from 0/2 at 64 rows.
+
+| Final 339-turn replay | First pass / completed | Pace intent and preservation /136 | Median / p95 |
+| --- | ---: | ---: | ---: |
+| E4B Simple | 324 / 336 | 122 | 968 / 1,763 ms |
+| 12B Intermediate | 332 / 338 | 132 | 2,019 / 3,131 ms |
+| Signed-in Terra Advanced Low | 337 / 338 | 136 | 3,574 / 7,360 ms |
+
+The final local captures admitted up to 96 history messages and recorded
+zero essential-input overflows. At the 16K Simple minimum, a compact
+reference recovered the six cold starts that previously failed admission.
+[Per-profile latency, paired E4B repeats and calibration checks](opus-motion-review-2026-11-18.md)
+
+## 2026-11-18 — Replay of installed conversations
+
+Seven retained conversations supplied 339 requests for each full replay. The
+baseline was `bcbd7358`. Both local builds used CUDA b11533 on the same
+RTX 5070 Ti. The hosted runs used the same signed-in Terra Low connection.
+Times include inference, any repair, and admission by the shared engine.
+
+| Measurement | Before | Selected |
+| --- | ---: | ---: |
+| Signed-in Terra, median / p95 (339 requests) | 4,900 / 7,739 ms | 3,435 / 7,010 ms |
+| Terra, pace intent with the rest of the score preserved | 107/136 | 136/136 |
+| Terra, median generated tokens on those pace requests | 126.5 | 51 |
+| Gemma E4B Simple, median / p95 (339 requests) | 908 / 2,214 ms | 903 / 1,674 ms |
+| E4B, pace intent with the rest of the score preserved | 122/136 | 128/136 |
+| Gemma 12B Intermediate, median / p95 (339 requests) | 2,058 / 3,235 ms | 2,089 / 3,389 ms |
+| 12B, pace intent with the rest of the score preserved | 131/136 | 131/136 |
+| Interactive schema and prompt preparation, Intermediate | 283 µs, 297,190 B/op | 211 µs, 230,502 B/op |
+| Interactive schema and prompt preparation, Advanced | 1.114 ms, 493,096 B/op | 0.844 ms, 317,145 B/op |
+| Stripped Windows amd64 pure-Go core | 25,409,536 B | 25,425,920 B (+16,384 B) |
+
+The preparation benchmark compared identical schema and prompt bytes. It
+measures CPU work outside inference. The binary comparison used Go 1.26.11,
+`CGO_ENABLED=0`, `-trimpath` and `-ldflags "-s -w"`. The chat-history
+replay and trajectory exporter run as development tools. [Per-profile
+outcomes, conversation lengths and runner comparisons](installed-chat-replay-2026-11-18.md)
+
+## 2026-11-18 — Setup-selected model motion
+
+Windows amd64, Go 1.26.11, RTX 5070 Ti. Both stripped cores used
+`CGO_ENABLED=0`, `-trimpath` and `-ldflags "-s -w"`. The baseline runtime
+was `72faf347`. Browser assets and dependency manifests have no changes in
+this follow-up.
+
+| Measurement | Baseline | Selected |
+| --- | ---: | ---: |
+| Pure-Go core | 25,401,344 B | 25,409,536 B (+8,192 B) |
+| Gemma E4B Simple, median model-backed turn | 970 ms | 1,030 ms |
+| Gemma 12B Intermediate, median model-backed turn | 1,869 ms | 2,166 ms |
+| Terra Advanced Low, median model-backed turn | 3,623 ms | 3,652 ms |
+| E4B calls for 112 model-backed requests | 142 | 116 |
+| 12B calls for 112 model-backed requests | 119 | 112 |
+| Terra calls for 122 model-backed requests | 122 | 122 |
+
+The medians cover model generation, retries and backend admission in the
+simulator. The two local configurations used 32,768 context tokens. The
+signed-in Terra connection used 131,072. Timing includes provider load
+variation and concurrent host activity. [First-pass scores and failed cases](default-model-motion-review-2026-11-18.md)
+
+## 2026-11-17 — Multi-turn motion and conversation history
+
+The comparison uses the architecture branch at `d8188233` plus the evaluation
+fixture at `16397a58`. The Windows amd64 core used Go 1.26.11,
+`CGO_ENABLED=0`, `-trimpath` and `-ldflags "-s -w"`.
+
+| Measurement | Baseline | Final |
+| --- | ---: | ---: |
+| Stripped core | 25,393,152 B | 25,401,344 B (+8,192 B) |
+| Granite 3B median model-backed turn, local Ollama | 400 ms | 421 ms |
+| ChatGPT Terra Low median model-backed turn | 3,793 ms | 3,786 ms |
+| Granite 3B input on the 230-message read-back | 7,196 tokens | 14,612 tokens |
+| ChatGPT input on the same read-back | 18,422 tokens | 18,444 tokens |
+
+The latency samples include retries and exclude deterministic Stop. Each
+provider and build ran 110 matched turns against a simulated transport. The
+selected local Advanced long window was 131,072 tokens. The implementation
+adds no dependencies or embedded browser assets.
+[Request-level results and conditions](motion-request-quality-2026-11-17.md)
+
 ## 2026-11-17 — Architecture review
 
 The comparison uses the fresh release base `bafc7ec4`, Windows amd64, Go 1.26.11 and a Ryzen 9 9950X3D. Sizes are bytes. Memory is decimal MB for the Go process alone. [Implementation and regression coverage for all 19 items](architecture-review-implementation-2026-11-17.md)

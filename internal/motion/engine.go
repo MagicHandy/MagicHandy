@@ -117,6 +117,7 @@ type Engine struct {
 // CurrentSample follows the playback clock; LastSample is the accepted
 // transport-buffer tail and may be ahead of playback.
 type ActiveMotionState struct {
+	PreviousFlowSpeedPercent   int                            `json:"-"`
 	LinkedSession              *transport.LinkedSessionStatus `json:"linked_session,omitempty"`
 	Running                    bool                           `json:"running"`
 	Starting                   bool                           `json:"starting"`

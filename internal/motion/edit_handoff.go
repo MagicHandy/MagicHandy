@@ -33,6 +33,12 @@ func (e *Engine) installEditLocked(previous MotionPlan, previousTransition *plan
 		e.transition = nil
 	}
 	e.pendingEdit = &editHandoff{at: handoff, plan: previous, transition: previousTransition}
+	if previous.Target.Flow != nil && next.Target.Flow != nil {
+		next.previousFlowSpeed = previous.previousFlowSpeed
+		if previous.Target.SpeedPercent != next.Target.SpeedPercent {
+			next.previousFlowSpeed = previous.Target.SpeedPercent
+		}
+	}
 	e.plan = *next
 	return bridgeInserted
 }

@@ -186,6 +186,30 @@ not establish physical carriage reach. Acceptance covers the tested Original
 Handy Cloud fixtures, not every count/order change. See [ADR 0052](decisions/0052-counted-layered-phrases.md)
 and [the evaluation](layered-range-review-2026-10-23.md).
 
+On November 17, a short local Granite 8B chat started simulated motion when
+asked to acknowledge a future pattern and stay idle. Its reply also described
+the simulator as idle. The explicit text-only path issued zero commands. The
+multi-turn harness records both the admitted motion action and the reply, and
+scores a start on an acknowledgement request as a failure. Longer-history
+recall improved, while prospective definitions remain a distinct intent risk.
+[Local and hosted motion request review](motion-request-quality-2026-11-17.md)
+
+In the November 18 default-model comparison, local E4B and 12B each went
+from zero to two exact applications of delayed corrected cues in two cases.
+E4B still changed a Creative loop on one exact-hold request and could read a
+newly restated definition without reliably applying it under context pressure.
+Both Gemmas missed a single-endpoint edit after translating a band. Terra
+once reapplied a previously described range during a speed-only update.
+[Measured defaults and context limits](default-model-motion-review-2026-11-18.md)
+
+In a retained-history replay, a short request for more pace at the saved
+ceiling sometimes changed the active layers or counted phrase. The hosted
+speed-only grammar accepts one control and uses the ordinary saved-limit
+validator. Live chat also gets the last distinct commanded pace in this run
+when asked to restore it. The release comparisons exercise both the original
+E4B regression fixture and the setup-selected GGUFs. [Installed-history
+measurements and remaining errors](installed-chat-replay-2026-11-18.md)
+
 ## R36: Local port denial and ambiguous startup ownership
 
 Level: Medium
