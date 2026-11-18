@@ -33,6 +33,9 @@ func ComposeInteractivePrompt(set PromptSet, memories []string, patterns []Patte
 				// Include the state-specific examples generated above. Only this
 				// code-owned contract is translated, never conversation text.
 				section.Text = hostedLayeredContract(section.Text)
+				if capabilities.compactHostedPace {
+					section.Text += "\n" + hostedSinglePaceGuide
+				}
 			}
 			section.Characters = utf8.RuneCountInString(section.Text)
 			section.Bytes = len(section.Text)
@@ -184,9 +187,11 @@ func InteractiveResponseSchema(patterns []PatternChoice, capabilities Capabiliti
 // Both interactive and autonomous requests use the same tier's edit grammar;
 // their lifecycle and timing envelopes remain independently constrained.
 func continuousEditSchema(limits config.MotionSettings, capabilities Capabilities, state MotionContext) json.RawMessage {
-	schema := layeredResponseSchema(limits, capabilities.MoodTracking, capabilities.AdvancedMotion)
+	var schema json.RawMessage
 	if capabilities.MotionMode == MotionModeCreativeV2 {
 		schema = CreativeV2ResponseSchema(limits, capabilities.MoodTracking)
+	} else {
+		schema = buildLayeredSchema(limits, capabilities)
 	}
 	schema = withRecallSchema(schema, capabilities.MotionMode, len(recallableScores(state)))
 	if capabilities.MotionMode == MotionModeLayered && capabilities.usesGroupedLayeredEdits() {
@@ -202,5 +207,8 @@ func (c Capabilities) usesGroupedLayeredEdits() bool {
 func (c Capabilities) forInteractiveDialect(promptID string, state *MotionContext) Capabilities {
 	c.groupedSimpleLayered = c.Motion && c.MotionMode == MotionModeLayered && c.LocalInference && c.SimpleMotion &&
 		promptLocaleForID(promptID) == promptLocaleEnglish && (state == nil || ordinaryPositionChat(*state))
+	c.compactHostedPace = c.Motion && c.MotionMode == MotionModeLayered && c.AdvancedMotion && c.PreserveConversationText && !c.LocalInference &&
+		promptLocaleForID(promptID) == promptLocaleEnglish && state != nil && state.Running && !state.Paused && !state.ManualRestartAvailable &&
+		(state.Outputs == nil || (state.Outputs.Strokers > 0 && !paceOnlyOnly(state.Outputs)))
 	return c
 }

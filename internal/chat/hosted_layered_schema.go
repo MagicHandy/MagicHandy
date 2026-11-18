@@ -6,7 +6,7 @@ import "maps"
 // The hosted wire makes that choice exclusive instead of offering fields whose
 // values could contradict the geometry. The manual branch retains every degree
 // of freedom; named operations keep independent pace and outer-band controls.
-func hostedLayeredEditSchema(fields map[string]any) map[string]any {
+func hostedLayeredEditSchema(fields map[string]any, compactPace bool) map[string]any {
 	object := func(properties map[string]any, required ...string) map[string]any {
 		if required == nil {
 			required = []string{}
@@ -58,14 +58,21 @@ func hostedLayeredEditSchema(fields map[string]any) map[string]any {
 	// envelopes remain ordinary independent layers; new follow edits are absent.
 	phrasePace := map[string]any{"oneOf": paceLayer.(map[string]any)["oneOf"].([]any)[:2]}
 	phrase := object(map[string]any{"composition": map[string]any{"const": "phrase"}, "phrase": hostedPhraseSchema(), "controls": object(paceControls), "layers": object(map[string]any{"pace": phrasePace}), "evolve": fields["evolve"], "directional_pace": hostedDirectionalPaceSchema()}, "composition", "phrase")
-	return map[string]any{"oneOf": []any{
+	branches := []any{
 		map[string]any{"const": map[string]any{}},
 		object(manual, "composition"),
 		object(geometry, "composition", "geometry"),
 		fullSlider,
 		object(fullBandFields, "composition"),
 		phrase,
-	}}
+	}
+	if compactPace {
+		pace := object(map[string]any{
+			"composition": map[string]any{"const": "speed_only"}, "speed_percent": controls["speed_percent"],
+		}, "composition", "speed_percent")
+		branches = append([]any{pace}, branches...)
+	}
+	return map[string]any{"oneOf": branches}
 }
 
 func hostedLayeredLayersSchema(layer map[string]any) map[string]any {

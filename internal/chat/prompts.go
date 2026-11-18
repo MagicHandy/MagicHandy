@@ -231,6 +231,7 @@ type Capabilities struct {
 	// Some Simple interactive turns use the paired-range wire format. This
 	// affects the prompt, schema and parser only. All features keep their tier.
 	groupedSimpleLayered bool
+	compactHostedPace    bool
 	// ChatPlanNote adds a private planning note before Advanced chat edits in
 	// the same generation (ADR 0065). It requires AdvancedMotion.
 	ChatPlanNote bool

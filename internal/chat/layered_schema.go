@@ -12,6 +12,10 @@ func LayeredResponseSchema(limits config.MotionSettings, mood bool) json.RawMess
 }
 
 func layeredResponseSchema(limits config.MotionSettings, mood, operations bool) json.RawMessage {
+	return buildLayeredSchema(limits, Capabilities{MoodTracking: mood, AdvancedMotion: operations})
+}
+
+func buildLayeredSchema(limits config.MotionSettings, capabilities Capabilities) json.RawMessage {
 	integer := func(lo, hi int) map[string]any {
 		return map[string]any{"type": "integer", "minimum": lo, "maximum": hi}
 	}
@@ -32,7 +36,7 @@ func layeredResponseSchema(limits config.MotionSettings, mood, operations bool) 
 	}
 	layer := object(map[string]any{"axis": axis, "amount_percent": integer(0, 100), "period_cycles": integer(2, 32), "phase_percent": integer(0, 100), "shape": map[string]any{"type": "string", "enum": []string{"drift", "alternate", "wave"}}}, []string{"axis"})
 	layer["properties"].(map[string]any)["period_change_cycles"] = integer(-30, 30)
-	if operations {
+	if capabilities.AdvancedMotion {
 		for name, absolute := range controls {
 			controls[name] = layeredOperationSchema(absolute, deltas[name])
 		}
@@ -41,19 +45,19 @@ func layeredResponseSchema(limits config.MotionSettings, mood, operations bool) 
 		delete(periods, "period_change_cycles")
 	}
 	edits := map[string]any{"controls": object(controls, []string{}), "change_by": object(deltas, []string{}), "layers": map[string]any{"type": "array", "items": layer, "maxItems": 3}, "remove_layers": map[string]any{"type": "array", "items": axis, "maxItems": 3}, "evolve": map[string]any{"type": "boolean"}}
-	if operations {
+	if capabilities.AdvancedMotion {
 		delete(edits, "change_by")
 	}
 	edits["stroke_width"] = object(map[string]any{"min_percent": integer(10, 100), "max_percent": integer(10, 100)}, []string{"min_percent", "max_percent"})
 	edits["geometry"] = map[string]any{"type": "string", "enum": layeredGeometries}
 	properties := map[string]any{"edits": object(edits, []string{}), "reply": map[string]any{"type": "string"}}
-	if operations {
+	if capabilities.AdvancedMotion {
 		edits["stroke_width"] = object(map[string]any{"shortest_percent": integer(10, 100), "widest_percent": integer(10, 100)}, []string{"shortest_percent", "widest_percent"})
 		edits["layers"] = hostedLayeredLayersSchema(layer)
 		delete(edits, "remove_layers")
-		properties["edits"] = hostedLayeredEditSchema(edits)
+		properties["edits"] = hostedLayeredEditSchema(edits, capabilities.compactHostedPace)
 	}
-	if mood {
+	if capabilities.MoodTracking {
 		properties["new_mood"] = map[string]any{"type": "string", "enum": Moods()}
 	}
 	encoded, _ := json.Marshal(object(properties, []string{"edits", "reply"}))

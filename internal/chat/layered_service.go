@@ -62,6 +62,9 @@ func layeredContextInstructions(state MotionContext, capabilities Capabilities) 
 		}
 	}
 	recall := ""
+	if state.Running && state.PreviousFlowSpeedPercent > 0 {
+		context["previous_distinct_overall_speed_percent"] = state.PreviousFlowSpeedPercent
+	}
 	if earlier := recallableScores(state); len(earlier) > 0 {
 		context["earlier_scores"] = earlierScoresContext(earlier, state, capabilities.AdvancedMotion)
 		recall = earlierScoresGuide + "\n"
@@ -139,6 +142,7 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 		// A person asks for an earlier score through chat. Planning turns re-read
 		// an old "go back" and recalled again after chat had answered it.
 		state.EarlierScores = nil
+		state.PreviousFlowSpeedPercent = 0
 	}
 	state.MotionMode = capabilities.MotionMode
 	current, limits := layeredContextScore(&state)
@@ -205,14 +209,16 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 
 func (s Service) continuousPrompt(prompt PromptSet, capabilities Capabilities, state MotionContext, limits config.MotionSettings, autoTiming bool) (string, json.RawMessage) {
 	var system string
-	schema := continuousEditSchema(limits, capabilities, state)
-	if autoTiming {
-		schema = withNextCheckSchema(schema, capabilities.AutoTimingFloor)
-	}
+	var schema json.RawMessage
 	if !s.TrustedMotionInput {
 		system = ComposeInteractivePrompt(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext, s.PromptBudget).Prompt
 		schema = InteractiveResponseSchema(nil, capabilities, &state, prompt.ID)
 	} else {
+		schema = continuousEditSchema(limits, capabilities, state)
+		if autoTiming {
+			schema = withNextCheckSchema(schema, capabilities.AutoTimingFloor)
+		}
+		schema = withVibrationSchema(schema, capabilities, &state)
 		promptState := state
 		if s.localAutopilotPlan && capabilities.SimpleMotion {
 			// Move the bounded human timeline beside the decision; do not send
@@ -220,11 +226,6 @@ func (s Service) continuousPrompt(prompt PromptSet, capabilities Capabilities, s
 			promptState.UserRequests, promptState.UserRequestSecondsAgo = nil, nil
 		}
 		system = composeSystem(prompt, s.Memories, nil, capabilities, &promptState, s.ConversationContext, s.PromptBudget)
-	}
-	schema = withVibrationSchema(schema, capabilities, &state)
-	if !s.TrustedMotionInput {
-		// The local level is a live-chat choice; Autopilot keeps it as set.
-		schema = withVibrationLevelSchema(schema, capabilities, &state)
 	}
 	if !capabilities.Motion {
 		schema = nil
@@ -283,7 +284,7 @@ func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state
 	if capabilities.MotionMode == MotionModeLayered && capabilities.AdvancedMotion {
 		// Validate the original object before metadata/recall extraction can
 		// re-encode it and conceal duplicate fields from an unconstrained model.
-		raw, err = normalizeLayeredOperations(raw)
+		raw, err = normalizeLayeredOperations(raw, capabilities.compactHostedPace)
 		if err != nil {
 			return AssistantResponse{}, err
 		}

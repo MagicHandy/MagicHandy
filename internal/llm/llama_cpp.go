@@ -268,8 +268,13 @@ type openAIChatChunk struct {
 	Usage struct {
 		PromptTokens     int `json:"prompt_tokens"`
 		CompletionTokens int `json:"completion_tokens"`
+		PromptDetails    *struct {
+			CachedTokens int `json:"cached_tokens"`
+		} `json:"prompt_tokens_details"`
 	} `json:"usage"`
 	Timings struct {
+		ProcessedTokens int     `json:"prompt_n"`
+		CachedTokens    int     `json:"cache_n"`
 		PromptMillis    float64 `json:"prompt_ms"`
 		PredictedMillis float64 `json:"predicted_ms"`
 		PredictedTokens int     `json:"predicted_n"`
@@ -363,9 +368,21 @@ func (chunk openAIChatChunk) progress() ProviderProgress {
 		activity = activity || choice.Delta.Content != "" || choice.Delta.ReasoningContent != "" || choice.Message.Content != ""
 		reasoning += utf8.RuneCountInString(choice.Delta.ReasoningContent)
 	}
+	// llama-server can finish a streamed request with timings alone. Its
+	// prompt_n counts newly evaluated tokens and cache_n counts reused ones.
+	prompt, generated, cached := chunk.Usage.PromptTokens, chunk.Usage.CompletionTokens, chunk.Timings.CachedTokens
+	if prompt == 0 {
+		prompt = chunk.Timings.ProcessedTokens + chunk.Timings.CachedTokens
+	}
+	if generated == 0 {
+		generated = chunk.Timings.PredictedTokens
+	}
+	if chunk.Usage.PromptDetails != nil {
+		cached = chunk.Usage.PromptDetails.CachedTokens
+	}
 	return ProviderProgress{
 		Activity: activity, PromptEvalMillis: int64(chunk.Timings.PromptMillis),
-		PromptTokens: chunk.Usage.PromptTokens, GeneratedTokens: chunk.Usage.CompletionTokens,
+		PromptTokens: prompt, GeneratedTokens: generated, CachedPromptTokens: cached,
 		ReasoningChars: reasoning,
 		DecodeMillis:   int64(chunk.Timings.PredictedMillis), DecodeTokens: chunk.Timings.PredictedTokens,
 	}

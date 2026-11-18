@@ -40,6 +40,8 @@ type MotionContext struct {
 	Envelope               motion.PlanningEnvelope
 	// Reuse the active engine plan's summary; no extra compilation/model call.
 	CommandedSummary *motion.PerceptualSummary
+	// The last distinct commanded flow speed in this running stream.
+	PreviousFlowSpeedPercent int `json:"-"`
 	// Autopilot reports that continuous Autopilot composes the motion between
 	// chat turns, and StandingHold that it is holding it because the human
 	// asked. Only then can live chat declare or release that wish.

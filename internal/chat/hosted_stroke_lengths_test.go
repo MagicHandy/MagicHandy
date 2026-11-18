@@ -104,7 +104,7 @@ func TestHostedStrokeLengthErrorsUseAdvertisedFields(t *testing.T) {
 			}
 			// The domain diagnostics remain unchanged for Simple/Intermediate,
 			// and the Advanced wrapper preserves the typed underlying conflict.
-			normalized, normalizeErr := normalizeLayeredOperations(raw)
+			normalized, normalizeErr := normalizeLayeredOperations(raw, false)
 			if normalizeErr != nil {
 				t.Fatal(normalizeErr)
 			}

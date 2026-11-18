@@ -37,8 +37,11 @@ type MotionPlan struct {
 	CreatedAt      string            `json:"created_at"`
 	Perceptual     PerceptualSummary `json:"perceptual"`
 
-	curve Curve
-	focus focusProjection
+	// The previous distinct commanded flow pace on this stream. A fresh plan
+	// starts with no history. Only an accepted edit inherits it at handoff.
+	previousFlowSpeed int
+	curve             Curve
+	focus             focusProjection
 	// compileErr is never serialized. The engine rejects a plan carrying it;
 	// the safe stationary curve only keeps diagnostic/preview sampling total so
 	// malformed semantic content cannot panic the whole process.

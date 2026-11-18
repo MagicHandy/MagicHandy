@@ -1,9 +1,30 @@
 package llm
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
+
+func TestLlamaStreamTokenCountsFromTimings(t *testing.T) {
+	for _, tc := range []struct {
+		chunk                     string
+		prompt, cached, generated int
+	}{
+		{`{"timings":{"prompt_n":17,"cache_n":230,"predicted_n":41}}`, 247, 230, 41},
+		{`{"usage":{"prompt_tokens":250,"completion_tokens":43,"prompt_tokens_details":{"cached_tokens":0}},"timings":{"prompt_n":17,"cache_n":230,"predicted_n":41}}`, 250, 0, 43},
+		{`{"choices":[{"delta":{"content":"a"}}]}`, 0, 0, 0},
+	} {
+		var chunk openAIChatChunk
+		if err := json.Unmarshal([]byte(tc.chunk), &chunk); err != nil {
+			t.Fatal(err)
+		}
+		got := chunk.progress()
+		if got.PromptTokens != tc.prompt || got.CachedPromptTokens != tc.cached || got.GeneratedTokens != tc.generated {
+			t.Fatalf("unexpected usage for %s: %+v", tc.chunk, got)
+		}
+	}
+}
 
 func TestProviderProgressSeparatesThinkingFromVisibleText(t *testing.T) {
 	for _, test := range []struct {

@@ -108,6 +108,10 @@ func withRecallSchema(schema json.RawMessage, mode MotionMode, count int) json.R
 
 func addLayeredRecallSchema(edits, recall map[string]any) {
 	if fields, ok := edits["properties"].(map[string]any); ok {
+		composition, _ := fields["composition"].(map[string]any)
+		if composition["const"] == "speed_only" {
+			return
+		}
 		fields["recall"] = recall
 	}
 	if branches, ok := edits["oneOf"].([]any); ok {

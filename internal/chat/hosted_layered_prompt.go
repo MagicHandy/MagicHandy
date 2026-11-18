@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+const hostedSinglePaceGuide = "Only overall speed changes: choose composition speed_only with speed_percent {op:set or adjust,value:number}. The rest of the current pattern keeps playing. Use the full compositions for any other edit. An earlier speed alone can be set on the current pattern. A speed-only request preserves the seed, travel, layers and variation, including at maximum speed. If the requested direction is already at its saved limit, use action none with empty edits. Change another feature only when the latest request asks for it."
+
 // Translate only code-owned examples added by the live lifecycle contract.
 // Persona text, history and requests never pass through this function.
 func hostedLayeredContract(contract string) string {

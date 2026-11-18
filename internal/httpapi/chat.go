@@ -1065,6 +1065,7 @@ func (s *Server) chatMotionContext(settings config.MotionSettings, llmSettings c
 	context.RecentPatternIDs = s.recentChatPatternIDs(4)
 	context.SpeedPercent = snapshot.Target.SpeedPercent
 	context.Area = chatAreaZone(snapshot.Target.AreaFocus)
+	context.PreviousFlowSpeedPercent = snapshot.PreviousFlowSpeedPercent
 	context.Layered = motion.CloneFlowSpec(snapshot.Target.Flow)
 	context.CommandedSummary = &snapshot.Perceptual
 	if context.MotionMode == chat.MotionModeDynamic {

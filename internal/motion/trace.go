@@ -10,13 +10,12 @@ import (
 
 func (e *Engine) snapshotLocked(target MotionTarget) ActiveMotionState {
 	now := e.now()
-	playbackMillis := int64(0)
+	var playbackMillis, runningMillis int64
+	var previousFlowSpeed int
 	if e.running {
 		playbackMillis = e.estimatedPlaybackMillisLocked(now)
-	}
-	runningMillis := int64(0)
-	if e.running {
 		runningMillis = e.runMillisAccum + playbackMillis
+		previousFlowSpeed = e.plan.previousFlowSpeed
 	} else if e.paused {
 		runningMillis = e.runMillisAccum
 	}
@@ -35,6 +34,7 @@ func (e *Engine) snapshotLocked(target MotionTarget) ActiveMotionState {
 		RecentCommandLatencyMillis: e.recentCommandLatencyMillisLocked(),
 		LastError:                  redactedError(e.lastError),
 		Perceptual:                 e.plan.Perceptual,
+		PreviousFlowSpeedPercent:   previousFlowSpeed,
 	}
 	if e.startupRecovery != nil {
 		recovery := *e.startupRecovery
