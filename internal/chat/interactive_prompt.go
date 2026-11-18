@@ -13,6 +13,7 @@ import (
 // Autonomous planning and experimental Lab prompts intentionally use their own
 // authority; they must not acquire interactive start permission from this path.
 func ComposeInteractivePrompt(set PromptSet, memories []string, patterns []PatternChoice, capabilities Capabilities, state *MotionContext, conversation *ConversationContext, budget ...PromptBudgetSettings) PromptComposition {
+	capabilities = capabilities.forInteractiveDialect(set.ID, state)
 	composition := ComposePrompt(set, memories, patterns, capabilities, state, conversation, budget...)
 	if !capabilities.Motion || (capabilities.MotionMode != MotionModeCreativeV2 && capabilities.MotionMode != MotionModeLayered) {
 		return composition
@@ -25,7 +26,7 @@ func ComposeInteractivePrompt(set PromptSet, memories []string, patterns []Patte
 	for _, section := range composition.Sections {
 		if section.ID == "response_contract" {
 			section.Text = continuousInteractiveContract(section.Text, current)
-			if capabilities.MotionMode == MotionModeLayered && capabilities.IntermediateMotion && !capabilities.AdvancedMotion {
+			if capabilities.MotionMode == MotionModeLayered && capabilities.usesGroupedLayeredEdits() {
 				section.Text = intermediateLayeredContract(section.Text)
 			}
 			if capabilities.MotionMode == MotionModeLayered && capabilities.AdvancedMotion {
@@ -160,7 +161,9 @@ Apply requested edits with start. A fresh motion request can start after an earl
 }
 
 // InteractiveResponseSchema is shared by production and prompt inspection.
-func InteractiveResponseSchema(patterns []PatternChoice, capabilities Capabilities, state *MotionContext) json.RawMessage {
+// A supplied prompt set selects the localized wire format. Callers without
+// a prompt set use the default English contract.
+func InteractiveResponseSchema(patterns []PatternChoice, capabilities Capabilities, state *MotionContext, promptID ...string) json.RawMessage {
 	if !capabilities.Motion || (capabilities.MotionMode != MotionModeCreativeV2 && capabilities.MotionMode != MotionModeLayered) {
 		return PatternResponseSchema(patterns, capabilities, state)
 	}
@@ -168,6 +171,11 @@ func InteractiveResponseSchema(patterns []PatternChoice, capabilities Capabiliti
 	if state != nil {
 		current = *state
 	}
+	id := DefaultPromptSetID
+	if len(promptID) > 0 {
+		id = promptID[0]
+	}
+	capabilities = capabilities.forInteractiveDialect(id, &current)
 	_, limits := layeredContextScore(&current)
 	schema := continuousEditSchema(limits, capabilities, current)
 	return withVibrationLevelSchema(withVibrationSchema(continuousActionSchema(schema, current, capabilities.AdvancedMotion), capabilities, &current), capabilities, &current)
@@ -181,8 +189,18 @@ func continuousEditSchema(limits config.MotionSettings, capabilities Capabilitie
 		schema = CreativeV2ResponseSchema(limits, capabilities.MoodTracking)
 	}
 	schema = withRecallSchema(schema, capabilities.MotionMode, len(recallableScores(state)))
-	if capabilities.MotionMode == MotionModeLayered && capabilities.IntermediateMotion && !capabilities.AdvancedMotion {
+	if capabilities.MotionMode == MotionModeLayered && capabilities.usesGroupedLayeredEdits() {
 		schema = intermediateLayeredSchema(schema)
 	}
 	return schema
+}
+
+func (c Capabilities) usesGroupedLayeredEdits() bool {
+	return !c.AdvancedMotion && (c.IntermediateMotion || c.groupedSimpleLayered)
+}
+
+func (c Capabilities) forInteractiveDialect(promptID string, state *MotionContext) Capabilities {
+	c.groupedSimpleLayered = c.Motion && c.MotionMode == MotionModeLayered && c.LocalInference && c.SimpleMotion &&
+		promptLocaleForID(promptID) == promptLocaleEnglish && (state == nil || ordinaryPositionChat(*state))
+	return c
 }

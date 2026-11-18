@@ -13,7 +13,7 @@ func TestBandGuidePreservesDialogueAndBudget(t *testing.T) {
 	score := DefaultLayeredScore(22)
 	score.MinPercent, score.MaxPercent = 14, 72
 	state := MotionContext{Layered: &score, SpeedMinPercent: 10, SpeedMaxPercent: 24}
-	got := (Service{PromptBudget: PromptBudgetSettings{ContextSize: 16384}}).withMotionHistoryGuide(req, state, Capabilities{LocalInference: true, SimpleMotion: true, Motion: true, MotionMode: MotionModeLayered}, DefaultPromptSetID)
+	got := (Service{PromptBudget: PromptBudgetSettings{ContextSize: 16384}}).withLocalMotionGuide(req, state, Capabilities{LocalInference: true, SimpleMotion: true, Motion: true, MotionMode: MotionModeLayered}, DefaultPromptSetID)
 	if len(got.Messages) != len(req.Messages)+1 {
 		t.Fatal("missing request-specific band example")
 	}
@@ -33,7 +33,7 @@ func TestBandGuidePreservesDialogueAndBudget(t *testing.T) {
 	if _, budget, err := llm.BudgetChatRequest(req, 16384); err != nil || budget.HistoryMessagesDropped != req.HistoryMessagesDropped {
 		t.Fatal("fixture does not fit without the guide")
 	}
-	if got := (Service{PromptBudget: PromptBudgetSettings{ContextSize: 16384}}).withMotionHistoryGuide(req, state, Capabilities{LocalInference: true, SimpleMotion: true, Motion: true, MotionMode: MotionModeLayered}, DefaultPromptSetID); !slices.Equal(got.Messages, req.Messages) {
+	if got := (Service{PromptBudget: PromptBudgetSettings{ContextSize: 16384}}).withLocalMotionGuide(req, state, Capabilities{LocalInference: true, SimpleMotion: true, Motion: true, MotionMode: MotionModeLayered}, DefaultPromptSetID); !slices.Equal(got.Messages, req.Messages) {
 		t.Fatal("optional example displaced conversation history")
 	}
 }
@@ -46,7 +46,7 @@ func TestBandGuideRespectsPlaybackAuthority(t *testing.T) {
 		{Layered: &score, Outputs: &OutputContext{Strokers: 0}},
 		{Layered: &score, Outputs: &OutputContext{Strokers: 1, PaceOnly: 1}},
 	} {
-		if got := (Service{}).withMotionHistoryGuide(req, state, Capabilities{LocalInference: true, SimpleMotion: true, Motion: true, MotionMode: MotionModeLayered}, DefaultPromptSetID); !slices.Equal(got.Messages, req.Messages) {
+		if got := (Service{}).withLocalMotionGuide(req, state, Capabilities{LocalInference: true, SimpleMotion: true, Motion: true, MotionMode: MotionModeLayered}, DefaultPromptSetID); !slices.Equal(got.Messages, req.Messages) {
 			t.Fatal("linear guide appeared without ordinary position control")
 		}
 	}
@@ -66,21 +66,21 @@ func TestLongLocalReadbackGuideRespectsRouteAndSession(t *testing.T) {
 	}
 	req.Messages = append(req.Messages, llm.Message{Role: "user", Content: "Read back the corrected settings."})
 	service := Service{PromptBudget: PromptBudgetSettings{ContextSize: 131072}}
-	got := service.withMotionHistoryGuide(req, state, caps, DefaultPromptSetID)
+	got := service.withLocalMotionGuide(req, state, caps, DefaultPromptSetID)
 	if len(got.Messages) != len(req.Messages)+1 || got.Messages[len(got.Messages)-1] != req.Messages[len(req.Messages)-1] ||
 		!strings.Contains(got.Messages[len(got.Messages)-2].Content, `"action":"none"`) || !strings.Contains(got.Messages[len(got.Messages)-2].Content, `"action":"update"`) {
 		t.Fatal("long conversation lost the read-back/apply distinction or the original request")
 	}
 	hosted := caps
 	hosted.LocalInference = false
-	if h := service.withMotionHistoryGuide(req, state, hosted, DefaultPromptSetID); !slices.Equal(h.Messages, req.Messages) {
+	if h := service.withLocalMotionGuide(req, state, hosted, DefaultPromptSetID); !slices.Equal(h.Messages, req.Messages) {
 		t.Fatal("local guide changed a hosted request")
 	}
-	if translated := service.withMotionHistoryGuide(req, state, caps, PromptSetIDJapanese); !slices.Equal(translated.Messages, req.Messages) {
+	if translated := service.withLocalMotionGuide(req, state, caps, PromptSetIDJapanese); !slices.Equal(translated.Messages, req.Messages) {
 		t.Fatal("English guide changed the Japanese prompt")
 	}
 	service.TrustedMotionInput = true
-	if auto := service.withMotionHistoryGuide(req, state, caps, DefaultPromptSetID); !slices.Equal(auto.Messages, req.Messages) {
+	if auto := service.withLocalMotionGuide(req, state, caps, DefaultPromptSetID); !slices.Equal(auto.Messages, req.Messages) {
 		t.Fatal("conversation guide leaked into an autonomous planner")
 	}
 	if composedHistoryDropped(req.Messages[1:len(req.Messages)-1], got.Messages) != 0 {

@@ -52,7 +52,7 @@ func (s *Server) handlePromptComposition(w http.ResponseWriter, r *http.Request)
 		"global_prompt_set": settings.LLM.PromptSet,
 		"prompt_set_source": "global",
 		"composition":       composition,
-		"response_schema":   chat.InteractiveResponseSchema(patterns, promptContext.Capabilities, &motionContext),
+		"response_schema":   chat.InteractiveResponseSchema(patterns, promptContext.Capabilities, &motionContext, prompt.ID),
 		"reasoning_mode":    settings.LLM.ReasoningMode,
 		"max_tokens":        settings.LLM.ChatMaxOutputTokens(effectiveReplyLength(settings.LLM, promptContext.Persona)),
 		"lore":              promptContext.Lore,

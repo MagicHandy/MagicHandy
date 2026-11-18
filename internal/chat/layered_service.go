@@ -39,7 +39,7 @@ func layeredContextInstructions(state MotionContext, capabilities Capabilities) 
 	var scoreContext any = layeredScoreContext(score, capabilities.AdvancedMotion)
 	if state.MotionMode == MotionModeCreativeV2 {
 		scoreContext = creativeV2ScoreContext(score)
-	} else if capabilities.IntermediateMotion && !capabilities.AdvancedMotion {
+	} else if capabilities.usesGroupedLayeredEdits() {
 		scoreContext = intermediateLayeredScoreContext(score)
 	}
 	if state.MotionMode == MotionModeLayered && !capabilities.AdvancedMotion && !capabilities.DirectionalPace && score.DirectionalPace != nil {
@@ -173,7 +173,7 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 		Model:                  s.Model, Temperature: temperature, TopP: chatTopP, RepeatPenalty: chatRepeatPenalty, RepeatLastN: chatRepeatLastN,
 		MaxTokens: maxTokens, ReasoningMode: s.ReasoningMode,
 		ReasoningBudgetTokens: s.ReasoningBudgetTokens, JSONSchema: schema}
-	input = s.withMotionHistoryGuide(input, state, capabilities, prompt.ID)
+	input = s.withLocalMotionGuide(input, state, capabilities, prompt.ID)
 	raw, err := s.Provider.StreamChat(ctx, input, func(delta string) error {
 		return emitEvent(emit, StreamEvent{Type: "delta", Phase: "initial", Text: delta})
 	})
@@ -211,7 +211,7 @@ func (s Service) continuousPrompt(prompt PromptSet, capabilities Capabilities, s
 	}
 	if !s.TrustedMotionInput {
 		system = ComposeInteractivePrompt(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext, s.PromptBudget).Prompt
-		schema = InteractiveResponseSchema(nil, capabilities, &state)
+		schema = InteractiveResponseSchema(nil, capabilities, &state, prompt.ID)
 	} else {
 		promptState := state
 		if s.localAutopilotPlan && capabilities.SimpleMotion {
@@ -267,11 +267,14 @@ func (s Service) takePlanNotes(raw string, capabilities Capabilities) (string, e
 
 func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state MotionContext, limits config.MotionSettings, autoTiming bool) (AssistantResponse, error) {
 	capabilities := s.capabilities()
+	if !s.TrustedMotionInput {
+		capabilities = capabilities.forInteractiveDialect(s.Prompt.ID, &state)
+	}
 	raw, err := s.takePlanNotes(raw, capabilities)
 	if err != nil {
 		return AssistantResponse{}, err
 	}
-	if capabilities.MotionMode == MotionModeLayered && capabilities.IntermediateMotion && !capabilities.AdvancedMotion {
+	if capabilities.MotionMode == MotionModeLayered && capabilities.usesGroupedLayeredEdits() {
 		raw, err = normalizeIntermediateLayeredReply(raw)
 		if err != nil {
 			return AssistantResponse{}, err
@@ -301,7 +304,7 @@ func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state
 	parser := ParseLayeredReply
 	if capabilities.MotionMode == MotionModeCreativeV2 {
 		parser = ParseCreativeV2Reply
-	} else if capabilities.IntermediateMotion && !capabilities.AdvancedMotion {
+	} else if capabilities.usesGroupedLayeredEdits() {
 		parser = parseIntermediateLayeredReply
 	}
 	response, next, changed, err := parseContinuousReply(raw, current, state, limits, parser)
