@@ -22,7 +22,7 @@ func (s FlowSpec) validateDirectionalPace() error {
 	if p.UpRatePercent < 1 || p.UpRatePercent > 100 || p.DownRatePercent < 1 || p.DownRatePercent > 100 {
 		return errors.New("directional_pace requires up_rate_percent and down_rate_percent within 1..100")
 	}
-	if s.Gesture != nil || s.Strokes != nil || s.Freestyle != nil || len(s.Steps) != 0 {
+	if !s.IsLayered() {
 		return errors.New("directional_pace is supported by Layered field and phrase motion only")
 	}
 	return nil

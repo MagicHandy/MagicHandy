@@ -1,6 +1,6 @@
 # Retained chat replay and llama.cpp comparison
 
-On the 339 retained requests, Terra's median response fell from 4.90 to 3.44 s and exact pace edits rose
+On the 339 retained requests, Terra's median response fell from 4.90 to 3.44 s and first-pass pace requests preserving the rest of the score rose
 from 107/136 to 136/136. The two local models showed different tradeoffs. The Windows release comparison
 identified a major E4B regression on the stock b12503 CUDA runner when Flash Attention was selected
 automatically.
@@ -18,7 +18,8 @@ We read a single SQLite transaction opened read-only. Each replay used the origi
 with its own SQLite session, the live app's streaming handler, a real model, the shared engine and a
 simulated transport. Each subsequent user turn saw the newly generated replies. Stored Autopilot remarks
 were inserted at their original positions. The installed speed limits were 1–100% with the Original Handy
-calibration. Fifteen later recorded starts supplied evidence of an intervening playback stop. The stored
+calibration. Fifteen later start proposals suggested an intervening stop. These diagnostics precede
+dispatch. The replay inferred the boundaries and stopped the simulator when it was running. The stored
 evidence contains dialogue and diagnostic failures. The complete live scheduler timeline and physical
 carriage trajectory were unavailable. The interactive replay compressed idle time and started the seven
 conversations independently. A separate, paired two-conversation run activated the real Autopilot mode at
@@ -26,8 +27,9 @@ recorded remarks with a holding planner to exercise interactive edits during Aut
 the signed-in ChatGPT replay. Published results contain aggregated measurements and synthetic examples.
 
 The first-pass count requires an accepted response and an expected provider call count with no repair or
-fallback. A separate sample of 136 short, unambiguous pace or continuation turns checks direction or the
-requested maximum, every other field in the accepted flow, and plan identity when already at a limit. Turns
+fallback. A separate sample of 136 short pace or continuation turns requires first-pass success,
+the requested direction, hold or maximum, and preservation of every other field in the accepted flow.
+A hold or saturated change must retain the same plan. A relative direction label gives no numerical step size. Turns
 at reconstructed restart boundaries are excluded from this subset. The source included five explicit returns
 to the speed of the immediately preceding faster stretch and six requests specifying two or three strokes at
 one end of the travel. Each turn retains the previous and resulting scores, including misses. Estimates and
@@ -35,10 +37,12 @@ plots come from the shared sampler.
 
 ## Results on original wording
 
-Each column pairs the PR baseline at `bcbd7358` with the selected application path. The first two counts
-include all 339 requests. The exact-pace column covers the same 136 turns for every model.
+The baseline here is the earlier default-profile selection at `bcbd7358`. The local selected runs used
+the pace-history and stream-diagnostics build, and Terra used the later counted-repair wording at
+`0a6af591`. The table reports the original experiments. The follow-up gives their executable identities,
+fresh replays of all three selections and repeated, interleaved E4B results. [Review and replications](opus-motion-review-2026-11-18.md)
 
-| Setup-selected model | First pass /339 | Delivered after repairs /339 | Exact pace and preservation /136 | Median | p95 |
+| Setup-selected model | First pass /339 | Completed /339 | Pace intent and score preservation /136 | Median | p95 |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Gemma 4 E4B · Simple | 329 → 323 | 338 → 335 | 122 → 128 | 908 ms → 903 ms | 2,214 ms → 1,674 ms |
 | Gemma 4 12B · Intermediate | 329 → 327 | 337 → 338 | 131 → 131 | 2,058 ms → 2,089 ms | 3,235 ms → 3,389 ms |
@@ -51,7 +55,9 @@ and Intermediate express variations with the controls and layers allowed by thei
 express counted phrases explicitly.
 
 Terra’s median completion on the 136 pace turns fell from 4,613 to 2,983 ms, and median generated tokens
-fell from 126.5 to 51. Each replay ended every conversation with a newly acknowledged Stop. One compound
+fell from 126.5 to 51. On the other 203 requests, median completion fell from 5,074 to 4,516 ms and
+median generated tokens from 161 to 135. The hosted runs took place at different times. Each replay
+ended every conversation with a newly acknowledged Stop. One compound
 request to recall and vary a multi-region figure produced no accepted Terra update after repair on the final
 run. Overall delivered responses were 338/339 there and 339/339 on the baseline. An independent run with the
 same speed-limit cue, before the repair feedback edit, also scored 136/136 on pace, with a 3,247 ms overall
@@ -67,11 +73,11 @@ extra reminder was dropped.
 
 ### Later turns
 
-The longest retained conversation had 73 user turns. Across all seven sessions, 122 requests came after turn 32. Terra completed 120/122 of those on the first pass before and 121/122 after. Exact pace and preservation went from 50/60 to 60/60 there, and from 57/76 to 76/76 in turns 1–32. The 12B runs each scored 120/122 first pass and 57/60 exact after turn 32. In the independent 230-message tests, 12B and Terra could apply an explicitly restated correction. E4B could read the new values back but still applied the wrong band. [Long-context fixture and commanded trajectories](default-model-motion-review-2026-11-18.md)
+The longest retained conversation had 73 user turns. Across all seven sessions, 122 requests came after turn 32. Terra completed 120/122 of those on the first pass before and 121/122 after. Pace intent with score preservation went from 50/60 to 60/60 there, and from 57/76 to 76/76 in turns 1–32. The 12B runs each scored 120/122 first pass and 57/60 on pace after turn 32. In the separate 230-message tests, 12B and Terra could apply an explicitly restated correction. E4B could read the new values back but still applied the wrong band. [Long-context fixture and commanded trajectories](default-model-motion-review-2026-11-18.md)
 
 A separate 111-turn run included 74 interactive turns while the real Autopilot scheduler was active in each
 version. Its holding planner preserved controlled comparisons. This run gave the speed grammar and
-previous-pace fact 52/52 exact pace turns, up from 35/52. Both versions completed 110/111 first-pass turns.
+previous-pace fact 52/52 pace turns with the score preserved, up from 35/52. Both versions completed 110/111 first-pass turns.
 Median completion fell from 5.38 to 3.33 s. In six frozen-state counterfactuals, the earlier speed came
 entirely from the engine and was absent from dialogue. Terra restored 6/6, up from 0/6. For six requests at
 the ceiling, adding the explicit current-limit cue preserved 6/6 active patterns versus 4/6 without the cue.
@@ -85,14 +91,14 @@ load. The simulator measures the commanded score. Physical carriage feedback and
 turns were unavailable.
 
 The full E4B comparison combined the same two independent session batches on each build (57 and 282 user
-turns). Exact pace went from 122/136 to 128/136. E4B delivered three fewer replies after retries and lost
+turns). Pace intent with score preservation went from 122/136 to 128/136. E4B delivered three fewer replies after retries and lost
 one of the five full-device reach requests. It still passed all five full-pass requests. Of the 60 scored
 later pace turns it got 57, up from 56. Only four previous-pace follow-ups were scorable on E4B because a
 prerequisite slowdown did not change the commanded speed in the fifth. Exact restores went from 0/4 to 1/4.
 
 ### Local latency trials
 
-| 12B variant on the same 339 original turns | First pass | Exact pace and preservation | Exact previous-pace restorations | Median all turns | Median prefill |
+| 12B variant on the same 339 original turns | First pass | Pace intent and score preservation | Exact previous-pace restorations | Median all turns | Median prefill |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | PR baseline | 329/339 | 131/136 | 1/5 | 2.06 s | 1.10 s |
 | Selected, original message order | 327/339 | 131/136 | 1/5 | 2.09 s | 1.13 s |
@@ -101,7 +107,7 @@ prerequisite slowdown did not change the commanded speed in the fifth. Exact res
 | Move state only with intact history | 326/339 | 131/136 | 5/5 | 1.65 s | 0.57 s |
 
 Moving the volatile state let llama-server reuse a larger input prefix. The variants lowered latency but
-produced more first-pass misses on these conversations. The merged version also lost exact pace edits. The
+produced more first-pass misses on these conversations. The merged version also missed more pace requests. The
 selected local path keeps its original message order. On a matched 57-turn subset, enabling native KV chunk
 reuse at 128 tokens took 2.27 s versus 2.05 s for the same selected binary. The two model packages and their
 output and context budgets were held fixed within each comparison.
@@ -113,7 +119,8 @@ where the request specifies it.
 In the public two-wording synthetic suite, the current E4B, 12B and Terra paths scored 126/140, 139/140 and
 152/152 on first-pass intent. The preceding default-profile study scored 127/140, 138/140 and 151/152
 respectively. None of the three new runs issued an unrequested change on an exact hold. These suites include
-motion-free acknowledgements, delayed corrections, geometry edits and Stop.
+motion-free acknowledgements, delayed corrections, geometry edits and Stop. These are regression cases
+used during prompt selection. Neither they nor the retained conversations provide an independent holdout.
 
 ### Correcting invalid counted movements
 
@@ -176,7 +183,7 @@ inference and any repair. The table uses the original prompt baseline at `bcbd73
 
 The stable bundle was faster and more accurate on the current E4B subset. It took longer on 12B and scored
 lower on the frozen October prompt. Over all 339 retained turns the stock b12503 12B path completed 326
-first pass, versus 329 on b11533. Both scored 131/136 for exact pace. The median / p95 moved from 2,058 /
+first pass, versus 329 on b11533. Both scored 131/136 for pace intent and score preservation. The median / p95 moved from 2,058 /
 3,235 ms to 2,204 / 4,526 ms.
 
 ### Isolating the runtime change

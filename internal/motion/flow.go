@@ -39,6 +39,11 @@ type FlowSpec struct {
 	Layers               []FlowLayer    `json:"layers,omitempty"`
 }
 
+// IsLayered reports whether the active score uses a layered field or counted phrase.
+func (s *FlowSpec) IsLayered() bool {
+	return s != nil && s.Gesture == nil && s.Strokes == nil && s.Freestyle == nil && len(s.Steps) == 0
+}
+
 // FlowStep is a section of one continuous score, not a separate motion run.
 type FlowStep struct {
 	MinPercent   int `json:"min_percent"`

@@ -1,5 +1,14 @@
 # Goal Scorecard
 
+## 2026-11-18 — Review of prompt admission and retained-history replay
+
+The stripped Windows amd64 core grew from 25,425,920 bytes on `9a4c36cf` to
+25,426,944 bytes (+1,024). Both used Go 1.26.11, `CGO_ENABLED=0`, `-trimpath`
+and `-ldflags "-s -w"`. The review added no dependencies or shipped browser assets.
+On fresh replays of the same 339 turns, first-pass pace intent with the rest
+of the score preserved was 116/136 on E4B, 132/136 on 12B and 136/136 on Terra.
+[Per-profile latency, paired E4B repeats and calibration checks](opus-motion-review-2026-11-18.md)
+
 ## 2026-11-18 — Replay of installed conversations
 
 Seven retained conversations supplied 339 requests for each full replay. The
@@ -10,12 +19,12 @@ Times include inference, any repair, and admission by the shared engine.
 | Measurement | Before | Selected |
 | --- | ---: | ---: |
 | Signed-in Terra, median / p95 (339 requests) | 4,900 / 7,739 ms | 3,435 / 7,010 ms |
-| Terra, exact pace with the rest of the score preserved | 107/136 | 136/136 |
+| Terra, pace intent with the rest of the score preserved | 107/136 | 136/136 |
 | Terra, median generated tokens on those pace requests | 126.5 | 51 |
 | Gemma E4B Simple, median / p95 (339 requests) | 908 / 2,214 ms | 903 / 1,674 ms |
-| E4B, exact pace with the rest of the score preserved | 122/136 | 128/136 |
+| E4B, pace intent with the rest of the score preserved | 122/136 | 128/136 |
 | Gemma 12B Intermediate, median / p95 (339 requests) | 2,058 / 3,235 ms | 2,089 / 3,389 ms |
-| 12B, exact pace with the rest of the score preserved | 131/136 | 131/136 |
+| 12B, pace intent with the rest of the score preserved | 131/136 | 131/136 |
 | Interactive schema and prompt preparation, Intermediate | 283 µs, 297,190 B/op | 211 µs, 230,502 B/op |
 | Interactive schema and prompt preparation, Advanced | 1.114 ms, 493,096 B/op | 0.844 ms, 317,145 B/op |
 | Stripped Windows amd64 pure-Go core | 25,409,536 B | 25,425,920 B (+16,384 B) |

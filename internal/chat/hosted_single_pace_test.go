@@ -3,11 +3,13 @@ package chat
 import (
 	"encoding/json"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
+	"github.com/mapledaemon/MagicHandy/internal/motion"
 )
 
 func TestHostedSinglePaceUsesExistingControlValidation(t *testing.T) {
@@ -58,6 +60,10 @@ func TestHostedSinglePaceSchemaMatchesInteractivePrompt(t *testing.T) {
 	base := Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: true, PreserveConversationText: true}
 	local, creative := base, base
 	local.LocalInference, creative.MotionMode = true, MotionModeCreativeV2
+	score := DefaultLayeredScore(56)
+	creativeScore := FreshCreativeV2Score(56)
+	sectioned := score
+	sectioned.Steps = []motion.FlowStep{{MinPercent: 8, MaxPercent: 88, SpeedPercent: 56, Cycles: 3}}
 	for _, tc := range []struct {
 		name  string
 		caps  Capabilities
@@ -65,14 +71,17 @@ func TestHostedSinglePaceSchemaMatchesInteractivePrompt(t *testing.T) {
 		id    string
 		want  bool
 	}{
-		{"running", base, MotionContext{Running: true}, DefaultPromptSetID, true},
-		{"live chat during autopilot", base, MotionContext{Running: true, Autopilot: true}, DefaultPromptSetID, true},
-		{"stopped", base, MotionContext{}, DefaultPromptSetID, false},
-		{"paused", base, MotionContext{Paused: true}, DefaultPromptSetID, false},
-		{"other output", base, MotionContext{Running: true, Outputs: &OutputContext{}}, DefaultPromptSetID, false},
-		{"local", local, MotionContext{Running: true}, DefaultPromptSetID, false},
-		{"creative", creative, MotionContext{Running: true}, DefaultPromptSetID, false},
-		{"localized", base, MotionContext{Running: true}, PromptSetIDJapanese, false},
+		{"running", base, MotionContext{Running: true, Layered: &score}, DefaultPromptSetID, true},
+		{"live chat during autopilot", base, MotionContext{Running: true, Layered: &score, Autopilot: true}, DefaultPromptSetID, true},
+		{"stopped", base, MotionContext{Layered: &score}, DefaultPromptSetID, false},
+		{"paused", base, MotionContext{Paused: true, Layered: &score}, DefaultPromptSetID, false},
+		{"other output", base, MotionContext{Running: true, Layered: &score, Outputs: &OutputContext{}}, DefaultPromptSetID, false},
+		{"local", local, MotionContext{Running: true, Layered: &score}, DefaultPromptSetID, false},
+		{"creative mode", creative, MotionContext{Running: true, Layered: &creativeScore}, DefaultPromptSetID, false},
+		{"localized", base, MotionContext{Running: true, Layered: &score}, PromptSetIDJapanese, false},
+		{"playing library pattern", base, MotionContext{Running: true, PatternID: "library"}, DefaultPromptSetID, false},
+		{"playing Creative after mode switch", base, MotionContext{Running: true, Layered: &creativeScore}, DefaultPromptSetID, false},
+		{"playing ordered sections", base, MotionContext{Running: true, Layered: &sectioned}, DefaultPromptSetID, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.state.MotionMode = tc.caps.MotionMode
@@ -83,6 +92,50 @@ func TestHostedSinglePaceSchemaMatchesInteractivePrompt(t *testing.T) {
 			if err != nil || !json.Valid(strict) || strings.Contains(string(strict), `"speed_only"`) != tc.want ||
 				strings.Contains(prompt.Prompt, hostedSinglePaceGuide) != tc.want {
 				t.Fatalf("speed-only guidance/schema availability mismatch: %v", err)
+			}
+			provider := &layeredTestProvider{raw: `{"action":"update","edits":{"composition":"speed_only","speed_percent":{"op":"adjust","value":-7}},"reply":"Slowing down.","stay_unchanged":false}`}
+			service := Service{Provider: provider, Prompt: set, Capabilities: &tc.caps, MotionContext: &tc.state, SingleAttempt: true}
+			result, err := service.Complete(t.Context(), Request{Message: "Just a little slower."}, nil)
+			if (err == nil) != tc.want || string(provider.request.JSONSchema) != string(schema) {
+				t.Fatalf("live parser or schema disagrees with inspector: %v", err)
+			}
+			if tc.want && (result.Response.Motion == nil || result.Response.Motion.Layered == nil || result.Response.Motion.Layered.SpeedPercent != 49) {
+				t.Fatal("requested pace was not applied to the active score")
+			}
+		})
+	}
+}
+
+func TestHostedPaceEditPreservesTheCompletePlayingScore(t *testing.T) {
+	base := DefaultLayeredScore(56)
+	base.Seed, base.MinPercent, base.MaxPercent = 479, 5, 95
+	base.RangeCeilingPercent = 70
+	base.DirectionalPace = &motion.DirectionalPace{UpRatePercent: 55, DownRatePercent: 100}
+	counted := base
+	counted.Layers = nil
+	full := motion.PhraseStroke{BottomPercent: 5, TopPercent: 95, Count: 1, RatePercent: 100}
+	tip := motion.PhraseStroke{BottomPercent: 65, TopPercent: 95, Count: 3, RatePercent: 60}
+	counted.Phrase = &motion.FlowPhrase{Strokes: []motion.PhraseStroke{full, tip}}
+	regional := counted
+	regional.Phrase = &motion.FlowPhrase{Regions: []motion.PhraseRegion{
+		{PhraseStroke: full, Cycle: "up_down"}, {PhraseStroke: tip, Cycle: "down_up"},
+	}}
+	caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: true, PreserveConversationText: true}
+	for name, current := range map[string]motion.FlowSpec{"layered": base, "counted": counted, "regional": regional} {
+		t.Run(name, func(t *testing.T) {
+			state := MotionContext{Running: true, Layered: &current, SpeedMinPercent: 20, SpeedMaxPercent: 80}
+			for _, tc := range []struct {
+				operation string
+				speed     int
+			}{{`{"op":"adjust","value":-7}`, 49}, {`{"op":"set","value":80}`, 80}} {
+				provider := &layeredTestProvider{raw: `{"action":"update","edits":{"composition":"speed_only","speed_percent":` + tc.operation + `},"reply":"Changing only the pace."}`}
+				svc := Service{Capabilities: &caps, MotionContext: &state, Provider: provider, SingleAttempt: true}
+				got, err := svc.Complete(t.Context(), Request{Message: "Adjust only the overall speed."}, nil)
+				want := *motion.CloneFlowSpec(&current)
+				want.SpeedPercent = tc.speed
+				if err != nil || got.Response.Motion == nil || !reflect.DeepEqual(got.Response.Motion.Layered, &want) {
+					t.Fatalf("pace edit %s changed the score incorrectly: %v", tc.operation, err)
+				}
 			}
 		})
 	}
@@ -97,5 +150,12 @@ func TestHostedPaceLimitUsesTheCurrentSavedCeiling(t *testing.T) {
 	state.SpeedMaxPercent = 56
 	if !strings.Contains(hostedInteractivePaceGuide(state), hostedMaximumPaceGuide) {
 		t.Fatal("missed a configured ceiling other than 100")
+	}
+	state.Autopilot = true
+	for _, hold := range []bool{false, true} {
+		state.StandingHold = hold
+		if !strings.Contains(hostedInteractivePaceGuide(state), `"stay_unchanged":`+strconv.FormatBool(hold)) {
+			t.Fatal("the ceiling example lost the existing Autopilot hold setting")
+		}
 	}
 }

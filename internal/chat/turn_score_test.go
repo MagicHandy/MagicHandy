@@ -1,12 +1,77 @@
 package chat
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
+
+func TestLocalTurnGuideUsesProviderAdmittedHistory(t *testing.T) {
+	const window = 16384
+	for _, tc := range []struct {
+		name           string
+		advanced       bool
+		storageOmitted int
+		roomAfterTrim  int
+		wantGuide      bool
+	}{
+		{"Simple byte pressure", false, 0, 1200, true},
+		{"Simple row and byte pressure", false, 19, 1200, true},
+		{"Advanced full guide fits after trimming", true, 0, 1200, true},
+		{"Advanced full guide would displace dialogue", true, 0, 32, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := llm.ChatRequest{HistoryMessagesDropped: tc.storageOmitted, MaxTokens: 256,
+				Messages: []llm.Message{{Role: "system", Content: "Contract."}}}
+			for i := range 68 {
+				role := "user"
+				if i%2 != 0 {
+					role = "assistant"
+				}
+				req.Messages = append(req.Messages, llm.Message{Role: role, Content: fmt.Sprintf("Retained line %d.", i)})
+			}
+			req.Messages = append(req.Messages, llm.Message{Role: "user", Content: "Read the settings back."})
+			_, measured, err := llm.BudgetChatRequest(req, window)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Messages[0].Content += strings.Repeat("x", measured.LimitBytes-measured.InputBytes-tc.roomAfterTrim)
+			req.Messages = slices.Insert(req.Messages, 1, llm.Message{Role: "user", Content: "Old request."},
+				llm.Message{Role: "assistant", Content: strings.Repeat("x", 2500)})
+			before, base, err := llm.BudgetChatRequest(req, window)
+			if err != nil || base.HistoryMessagesDropped != tc.storageOmitted+2 {
+				t.Fatalf("invalid fixture: %+v, %v", base, err)
+			}
+			score := DefaultLayeredScore(30)
+			state := MotionContext{Running: true, Layered: &score}
+			caps := Capabilities{Motion: true, LocalInference: true, MotionMode: MotionModeLayered,
+				SimpleMotion: !tc.advanced, AdvancedMotion: tc.advanced}
+			got := (Service{PromptBudget: PromptBudgetSettings{ContextSize: window}}).withLocalMotionGuide(req, state, caps, DefaultPromptSetID)
+			after, budget, err := llm.BudgetChatRequest(got, window)
+			if err != nil || budget.HistoryMessagesDropped != base.HistoryMessagesDropped {
+				t.Fatalf("guide changed admitted history: %+v, %v", budget, err)
+			}
+			messages := after.Messages
+			if tc.wantGuide {
+				i := len(messages) - 2
+				want := "read-back"
+				if !tc.advanced {
+					want = fmt.Sprintf("%d earlier messages", base.HistoryMessagesDropped)
+				}
+				if messages[i].Role != "system" || !strings.Contains(messages[i].Content, want) {
+					t.Fatalf("missing guide for admitted dialogue: wanted %q", want)
+				}
+				messages = slices.Delete(slices.Clone(messages), i, i+1)
+			}
+			if !slices.Equal(messages, before.Messages) {
+				t.Fatal("guide displaced a retained role, turn or the current request")
+			}
+		})
+	}
+}
 
 func TestBandGuidePreservesDialogueAndBudget(t *testing.T) {
 	req := llm.ChatRequest{HistoryMessagesDropped: 4, Messages: []llm.Message{{Role: "system", Content: "Contract."}, {Role: "assistant", Content: "Earlier reply."}, {Role: "user", Content: "Move the lower end five points higher."}}, MaxTokens: 256}
@@ -42,7 +107,8 @@ func TestBandGuideRespectsPlaybackAuthority(t *testing.T) {
 	score := DefaultLayeredScore(33)
 	req := llm.ChatRequest{HistoryMessagesDropped: 4, Messages: []llm.Message{{Role: "system", Content: "Contract."}, {Role: "user", Content: "Move an endpoint."}}}
 	for _, state := range []MotionContext{
-		{Layered: &score, Paused: true}, {Layered: &score, ManualRestartAvailable: true},
+		{Layered: &score, Paused: true}, {Layered: &score, Autopilot: true},
+		{Layered: &score, ManualRestartAvailable: true},
 		{Layered: &score, Outputs: &OutputContext{Strokers: 0}},
 		{Layered: &score, Outputs: &OutputContext{Strokers: 1, PaceOnly: 1}},
 	} {

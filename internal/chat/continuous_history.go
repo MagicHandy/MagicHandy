@@ -112,7 +112,7 @@ func spokenReply(content string) string {
 
 // continuousEmptyEdits is this mode's "no linear change" edits value.
 func continuousEmptyEdits(capabilities Capabilities) string {
-	if capabilities.MotionMode == MotionModeCreativeV2 || (capabilities.MotionMode == MotionModeLayered && capabilities.IntermediateMotion && !capabilities.AdvancedMotion) {
+	if capabilities.MotionMode == MotionModeCreativeV2 || (capabilities.MotionMode == MotionModeLayered && capabilities.usesGroupedLayeredEdits()) {
 		return "[]"
 	}
 	return "{}"

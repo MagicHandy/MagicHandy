@@ -24,12 +24,20 @@ import (
 )
 
 type qualityAttempt struct {
-	Raw               string `json:"raw"`
-	History           int    `json:"history_messages"`
-	InputBytes        int    `json:"input_bytes"`
-	MaxTokens         int    `json:"request_max_tokens"`
-	Dropped           int    `json:"history_dropped"`
-	CorrectionPresent bool   `json:"correction_present"`
+	Raw               string          `json:"raw"`
+	History           int             `json:"history_messages"`
+	InputBytes        int             `json:"input_bytes"`
+	MaxTokens         int             `json:"request_max_tokens"`
+	Dropped           int             `json:"history_dropped"`
+	CorrectionPresent bool            `json:"correction_present"`
+	Sampling          qualitySampling `json:"requested_sampling"`
+}
+
+type qualitySampling struct {
+	Temperature   float64 `json:"temperature"`
+	TopP          float64 `json:"top_p"`
+	RepeatPenalty float64 `json:"repeat_penalty"`
+	RepeatLastN   int     `json:"repeat_last_n"`
 }
 
 type qualityProvider struct {
@@ -42,6 +50,7 @@ type qualityProvider struct {
 func (p *qualityProvider) StreamChat(ctx context.Context, req llm.ChatRequest, delta func(string) error) (string, error) {
 	bounded, budget, admissionErr := llm.BudgetChatRequest(req, p.window)
 	review := qualityAttempt{InputBytes: budget.InputBytes, Dropped: budget.HistoryMessagesDropped, MaxTokens: req.MaxTokens}
+	review.Sampling = qualitySampling{Temperature: req.Temperature, TopP: req.TopP, RepeatPenalty: req.RepeatPenalty, RepeatLastN: req.RepeatLastN}
 	if admissionErr == nil {
 		for i, m := range bounded.Messages {
 			if i < len(bounded.Messages)-1 && (m.Role == "user" || m.Role == "assistant") {

@@ -89,7 +89,7 @@ func TestCompactBandGuidePreservesTheProviderWindow(t *testing.T) {
 	if err != nil || b.HistoryMessagesDropped != 3 {
 		t.Fatalf("invalid pressure fixture: %+v %v", b, err)
 	}
-	got := withOptionalTurnGuide(req, strings.Repeat("full example ", 80), compactBandGuide, window)
+	got := withOptionalTurnGuide(req, strings.Repeat("full example ", 80), compactBandGuide, window, b.HistoryMessagesDropped)
 	after, a, err := llm.BudgetChatRequest(got, window)
 	if err != nil || a.HistoryMessagesDropped != b.HistoryMessagesDropped || len(after.Messages) != len(before.Messages)+1 {
 		t.Fatalf("guide displaced admitted history: %+v %v", a, err)
@@ -110,7 +110,8 @@ func TestSimpleGroupedDialectMatchesLiveSchemaAndKeepsAuthority(t *testing.T) {
 		state        MotionContext
 		grouped      bool
 	}{
-		{"local", DefaultPromptSetID, local, MotionContext{}, true},
+		{"local stopped", DefaultPromptSetID, local, MotionContext{}, true},
+		{"local running", DefaultPromptSetID, local, MotionContext{Running: true}, true},
 		{"translated", PromptSetIDJapanese, local, MotionContext{}, false},
 		{"connection", DefaultPromptSetID, remote, MotionContext{}, false},
 		{"paused", DefaultPromptSetID, local, MotionContext{Paused: true}, false},
@@ -129,12 +130,18 @@ func TestSimpleGroupedDialectMatchesLiveSchemaAndKeepsAuthority(t *testing.T) {
 			if strings.Contains(composed.Prompt, intermediateLayeredListGuide) != tc.grouped {
 				t.Fatal("prompt and tier disagree")
 			}
-			empty := `"const":{}`
+			emptyEdits := "{}"
 			if tc.grouped {
-				empty = `"const":[]`
+				emptyEdits = "[]"
+				if strings.Contains(composed.Prompt, `"edits":{}`) {
+					t.Fatal("grouped prompt demonstrates object-shaped empty edits")
+				}
+			}
+			if tc.prompt == DefaultPromptSetID && !strings.Contains(composed.Prompt, `Conversation requires "edits":`+emptyEdits) {
+				t.Fatal("final output guard disagrees with the no-motion schema")
 			}
 			schema := string(InteractiveResponseSchema(nil, tc.caps, &tc.state, tc.prompt))
-			if !strings.Contains(schema, empty) || strings.Contains(schema, `"phrase"`) {
+			if !strings.Contains(schema, `"const":`+emptyEdits) || strings.Contains(schema, `"phrase"`) {
 				t.Fatal("unexpected live actions or Advanced vocabulary")
 			}
 		})

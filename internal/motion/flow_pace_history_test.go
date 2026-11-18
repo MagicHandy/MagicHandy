@@ -37,6 +37,14 @@ func TestPreviousFlowPaceOnlyDescribesTheCurrentRun(t *testing.T) {
 	if state := engine.Snapshot(); state.PreviousFlowSpeedPercent != 48 || state.Target.SpeedPercent != 25 {
 		t.Fatal("a rejected edit entered pace history")
 	}
+	paused, err := engine.Pause(t.Context(), "pause")
+	if err != nil || paused.PreviousFlowSpeedPercent != 0 {
+		t.Fatalf("paused run exposed a previous pace: %d, %v", paused.PreviousFlowSpeedPercent, err)
+	}
+	resumed, err := engine.Resume(t.Context(), "resume")
+	if err != nil || resumed.StreamID == changed.StreamID || resumed.PreviousFlowSpeedPercent != 0 {
+		t.Fatalf("resumed stream inherited a previous pace: %d, %v", resumed.PreviousFlowSpeedPercent, err)
+	}
 	stopped, err := engine.Stop(t.Context(), "end run")
 	if err != nil || stopped.PreviousFlowSpeedPercent != 0 {
 		t.Fatalf("stopped run exposed a prior pace: %d, %v", stopped.PreviousFlowSpeedPercent, err)

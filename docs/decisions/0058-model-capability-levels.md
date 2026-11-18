@@ -149,7 +149,9 @@ their existing formats. [Comparison on the three setup defaults](../default-mode
 ## Overall-speed edits in active hosted chat (2026-11-18)
 
 Advanced English Layered chat offers a short `speed_only` composition while a
-positional flow is running. The model chooses between it and the existing
+Layered field or counted phrase is running on a positional output. Chat
+resolves that contract from the actual engine target before seeding a score
+for a new composition. The model chooses between it and the existing
 compositions. Its single numeric set or adjustment goes through the same
 saved limits, lifecycle checks and shared engine as an ordinary control
 edit. The parser rejects additional fields, including whole-score recall.
@@ -161,3 +163,8 @@ chat. It comes from the plan at the accepted handoff, so a replacement at
 the same uncommitted cursor cannot become an earlier speed. A new run starts
 with empty pace history. The Autopilot planner uses its own existing timeline.
 [Installed-history and runtime measurements](../installed-chat-replay-2026-11-18.md)
+
+Local chat compares optional guidance with the dialogue that its provider
+actually admits under the selected context limit. The omission count includes
+both retrieval and provider truncation. Full and compact guidance can use
+available space only while preserving those same turns.

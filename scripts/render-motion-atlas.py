@@ -97,7 +97,7 @@ def captured_sessions(paths):
         if path.suffix.lower() == ".jsonl":
             with path.open(encoding="utf-8-sig") as stream:
                 header = json.loads(next(stream))
-                if header.get("schema") != "chat_history_replay.v1":
+                if header.get("schema") not in {"chat_history_replay.v1", "chat_history_replay.v2"}:
                     raise ValueError(f"Unrecognized replay schema in {path}")
                 for line in stream:
                     row = json.loads(line)

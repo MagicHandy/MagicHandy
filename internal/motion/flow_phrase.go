@@ -46,7 +46,7 @@ func (s FlowSpec) validatePhrase() error {
 	if p == nil {
 		return nil
 	}
-	if s.Gesture != nil || s.Strokes != nil || s.Freestyle != nil || len(s.Steps) != 0 {
+	if !s.IsLayered() {
 		return errors.New("a counted Layered phrase replaces other stroke grammars")
 	}
 	for _, layer := range s.Layers {

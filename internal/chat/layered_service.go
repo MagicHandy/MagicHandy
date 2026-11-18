@@ -145,6 +145,11 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 		state.PreviousFlowSpeedPercent = 0
 	}
 	state.MotionMode = capabilities.MotionMode
+	if !s.TrustedMotionInput {
+		// Bind the wire format to the actual playing target. The fallback score
+		// below is a starting point for new edits, never proof of a playing flow.
+		capabilities = capabilities.forInteractiveDialect(prompt.ID, &state)
+	}
 	current, limits := layeredContextScore(&state)
 	// The prompt and parser must share the same freshly seeded starting score.
 	state.Layered = &current
@@ -185,25 +190,23 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	if err != nil {
 		return result, err
 	}
-	response, err := s.parseLayeredResponse(raw, current, state, limits, autoTiming)
+	parse := func(value string) (AssistantResponse, error) {
+		response, err := s.parseLayeredProposal(capabilities, value, current, state, limits, autoTiming)
+		return s.finalizeLayeredResponse(response, state), err
+	}
+	response, err := parse(raw)
 	if err != nil {
 		if capabilities.PreserveConversationText && !s.TrustedMotionInput && !s.SingleAttempt {
-			return s.rejectHostedResponse(ctx, input, raw, err, func(value string) (AssistantResponse, error) {
-				response, validationErr := s.parseLayeredResponse(value, current, state, limits, autoTiming)
-				return s.finalizeLayeredResponse(response, state), validationErr
-			}, emit)
+			return s.rejectHostedResponse(ctx, input, raw, err, parse, emit)
 		}
 		if s.canRepairLocalContinuous(raw) {
-			return s.repairLocalContinuous(ctx, input, raw, err, func(value string) (AssistantResponse, error) {
-				response, validationErr := s.parseLayeredResponse(value, current, state, limits, autoTiming)
-				return s.finalizeLayeredResponse(response, state), validationErr
-			}, emit)
+			return s.repairLocalContinuous(ctx, input, raw, err, parse, emit)
 		}
 		result.Malformed, result.InitialMalformed, result.MalformedError = true, true, err.Error()
 		_ = emitEvent(emit, StreamEvent{Type: "malformed", Phase: "initial", Error: err.Error()})
 		return result, fmt.Errorf("%s response rejected: %w", capabilities.MotionMode, err)
 	}
-	result.Response = s.finalizeLayeredResponse(response, state)
+	result.Response = response
 	return result, nil
 }
 
@@ -211,8 +214,8 @@ func (s Service) continuousPrompt(prompt PromptSet, capabilities Capabilities, s
 	var system string
 	var schema json.RawMessage
 	if !s.TrustedMotionInput {
-		system = ComposeInteractivePrompt(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext, s.PromptBudget).Prompt
-		schema = InteractiveResponseSchema(nil, capabilities, &state, prompt.ID)
+		system = composeInteractivePrompt(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext, s.PromptBudget).Prompt
+		schema = interactiveResponseSchema(nil, capabilities, &state)
 	} else {
 		schema = continuousEditSchema(limits, capabilities, state)
 		if autoTiming {
@@ -266,11 +269,7 @@ func (s Service) takePlanNotes(raw string, capabilities Capabilities) (string, e
 	return raw, err
 }
 
-func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state MotionContext, limits config.MotionSettings, autoTiming bool) (AssistantResponse, error) {
-	capabilities := s.capabilities()
-	if !s.TrustedMotionInput {
-		capabilities = capabilities.forInteractiveDialect(s.Prompt.ID, &state)
-	}
+func (s Service) parseLayeredProposal(capabilities Capabilities, raw string, current motion.FlowSpec, state MotionContext, limits config.MotionSettings, autoTiming bool) (AssistantResponse, error) {
 	raw, err := s.takePlanNotes(raw, capabilities)
 	if err != nil {
 		return AssistantResponse{}, err

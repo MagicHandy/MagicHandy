@@ -187,21 +187,28 @@ func validateHandyConnections(d DeviceSettings) error {
 // Standard (125mm/400mm/s), Pro (125mm/450mm/s), Original (110mm/400mm/s).
 // This ordering also holds at the profiles' minimum speeds.
 func (s Settings) EffectiveMotion() MotionSettings {
-	result := s.Motion
-	rank := map[string]int{HandyModel2Standard: 0, HandyModel2Pro: 1, HandyModelOriginal: 2}
-	selected := 3
+	var active [MaxHandys]string
+	models := active[:0]
 	for _, id := range s.Device.PlaybackSet() {
-		model := ""
 		if id == DeviceOutputHandy {
-			model = s.Motion.HandyModel
+			models = append(models, s.Motion.HandyModel)
 		} else if c, ok := s.Device.HandyConnection(id); ok {
-			model = c.HandyModel
-		}
-		if value, ok := rank[model]; ok && value < selected {
-			selected, result.HandyModel = value, model
+			models = append(models, c.HandyModel)
 		}
 	}
-	return result
+	return s.Motion.WithHandyCalibration(models)
+}
+
+// WithHandyCalibration selects the shared timeline's calibration using only
+// participating model names. Offline replays need no connection settings.
+func (s MotionSettings) WithHandyCalibration(models []string) MotionSettings {
+	for _, model := range []string{HandyModel2Standard, HandyModel2Pro, HandyModelOriginal} {
+		if slices.Contains(models, model) {
+			s.HandyModel = model
+			break
+		}
+	}
+	return s
 }
 
 // PrivateDeviceValues provides credentials and hardware IDs to redactors.
