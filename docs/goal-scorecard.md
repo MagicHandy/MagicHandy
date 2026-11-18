@@ -1,5 +1,31 @@
 # Goal Scorecard
 
+## 2026-11-18 — Replay of installed conversations
+
+Seven retained conversations supplied 339 requests for each full replay. The
+baseline was `bcbd7358`. Both local builds used CUDA b11533 on the same
+RTX 5070 Ti. The hosted runs used the same signed-in Terra Low connection.
+Times include inference, any repair, and admission by the shared engine.
+
+| Measurement | Before | Selected |
+| --- | ---: | ---: |
+| Signed-in Terra, median / p95 (339 requests) | 4,900 / 7,739 ms | 3,435 / 7,010 ms |
+| Terra, exact pace with the rest of the score preserved | 107/136 | 136/136 |
+| Terra, median generated tokens on those pace requests | 126.5 | 51 |
+| Gemma E4B Simple, median / p95 (339 requests) | 908 / 2,214 ms | 903 / 1,674 ms |
+| E4B, exact pace with the rest of the score preserved | 122/136 | 128/136 |
+| Gemma 12B Intermediate, median / p95 (339 requests) | 2,058 / 3,235 ms | 2,089 / 3,389 ms |
+| 12B, exact pace with the rest of the score preserved | 131/136 | 131/136 |
+| Interactive schema and prompt preparation, Intermediate | 283 µs, 297,190 B/op | 211 µs, 230,502 B/op |
+| Interactive schema and prompt preparation, Advanced | 1.114 ms, 493,096 B/op | 0.844 ms, 317,145 B/op |
+| Stripped Windows amd64 pure-Go core | 25,409,536 B | 25,425,920 B (+16,384 B) |
+
+The preparation benchmark compared identical schema and prompt bytes. It
+measures CPU work outside inference. The binary comparison used Go 1.26.11,
+`CGO_ENABLED=0`, `-trimpath` and `-ldflags "-s -w"`. The chat-history
+replay and trajectory exporter run as development tools. [Per-profile
+outcomes, conversation lengths and runner comparisons](installed-chat-replay-2026-11-18.md)
+
 ## 2026-11-18 — Setup-selected model motion
 
 Windows amd64, Go 1.26.11, RTX 5070 Ti. Both stripped cores used

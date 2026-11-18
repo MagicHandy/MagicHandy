@@ -28,6 +28,25 @@ a delayed correction. [Matched runs and reproduction commands](motion-request-qu
 
 ## Reproduce an atlas
 
+For retained chat, run the installed-history replay against a database snapshot
+or the live database opened read-only. Select a Gemma profile for local
+inference. Selecting `terra` sends the original user turns and retained
+Autopilot remarks to the signed-in ChatGPT provider. The replay starts each
+conversation in a fresh simulator and records numerical targets, timing and
+transport commands. Use the same model environment variables as the default
+profile matrix.
+
+```powershell
+python scripts/evaluate-chat-history.py --database "$env:APPDATA/MagicHandy/magichandy.db" --profile gemma-12b --output .scratch/replay.jsonl
+go run -tags magichandy_labs ./cmd/motion-atlas -catalog=false -llm .scratch/replay.jsonl -output .scratch/replay-atlas.json
+python scripts/render-motion-atlas.py .scratch/replay-atlas.json .scratch/replay-atlas --captured .scratch/replay.jsonl
+```
+
+The JSONL has session and turn ordinals. The first-pass flag measures an
+unrepaired completion. For an overall-speed request, compare the preceding
+and resulting scores field by field. For a counted request, check the
+sequence of sampled reversals as well as the model's selected groups.
+
 Production captures from `scripts/evaluate-app-autopilot.py` use
 `-sessions .scratch/autopilot.json` (comma-separated paths supported). The
 exporter recompiles every captured semantic target under its captured limits

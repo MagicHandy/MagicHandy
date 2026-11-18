@@ -1,5 +1,8 @@
 # Motion requests on the default model profiles
 
+The [installed-history follow-up](installed-chat-replay-2026-11-18.md) replays
+retained conversations on these profiles and compares llama.cpp releases.
+
 The baseline uses the application code at `72faf347` and the default-profile evaluation added at `0042748c`. Every measured turn used a real model, the ordinary streaming chat handler, SQLite dialogue, the production parser and the shared motion engine. The transport was an in-memory simulator. Scores measure the first response, the action the backend accepted and the trajectory it compiled.
 
 | Setup selection | Provider and motion capability | Application context | Output and reasoning |

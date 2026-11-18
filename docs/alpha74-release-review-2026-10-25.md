@@ -82,6 +82,11 @@ runs; loading errors are not silently relabeled as intent passes. All runtime
 captures, including failed selections and the rejected build, remain under
 `.scratch/intermediate-planning-toggle/`.
 
+The November repeat reproduced the b11533 and b11874 scores with the original
+GGUF and five seeds. It also tested the Windows builds distributed with
+v1.0.0 and b12503, and the current setup-selected models on retained chat.
+[Follow-up runtime comparison](installed-chat-replay-2026-11-18.md#upstream-runtime)
+
 ## Validation and budgets
 
 Full Go and Windows race suites, vet, lint (0 issues), import boundaries,

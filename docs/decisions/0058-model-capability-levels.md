@@ -145,3 +145,19 @@ interactive schema, prompt inspector and parser resolve the same format from
 the current prompt set and playback state. Simple autonomous planning, paused
 playback, manual restart, tempo-only outputs and other prompt languages use
 their existing formats. [Comparison on the three setup defaults](../default-model-motion-review-2026-11-18.md)
+
+## Overall-speed edits in active hosted chat (2026-11-18)
+
+Advanced English Layered chat offers a short `speed_only` composition while a
+positional flow is running. The model chooses between it and the existing
+compositions. Its single numeric set or adjustment goes through the same
+saved limits, lifecycle checks and shared engine as an ordinary control
+edit. The parser rejects additional fields, including whole-score recall.
+The strict provider can therefore produce a speed edit without generating
+nullable fields for stroke geometry and layers.
+
+A running flow also supplies its previous distinct commanded speed to live
+chat. It comes from the plan at the accepted handoff, so a replacement at
+the same uncommitted cursor cannot become an earlier speed. A new run starts
+with empty pace history. The Autopilot planner uses its own existing timeline.
+[Installed-history and runtime measurements](../installed-chat-replay-2026-11-18.md)
