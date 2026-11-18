@@ -194,6 +194,14 @@ scores a start on an acknowledgement request as a failure. Longer-history
 recall improved, while prospective definitions remain a distinct intent risk.
 [Local and hosted motion request review](motion-request-quality-2026-11-17.md)
 
+In the November 18 default-model comparison, local E4B and 12B each went
+from zero to two exact applications of delayed corrected cues in two cases.
+E4B still changed a Creative loop on one exact-hold request and could read a
+newly restated definition without reliably applying it under context pressure.
+Both Gemmas missed a single-endpoint edit after translating a band. Terra
+once reapplied a previously described range during a speed-only update.
+[Measured defaults and context limits](default-model-motion-review-2026-11-18.md)
+
 ## R36: Local port denial and ambiguous startup ownership
 
 Level: Medium

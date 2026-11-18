@@ -1,5 +1,27 @@
 # Goal Scorecard
 
+## 2026-11-18 — Setup-selected model motion
+
+Windows amd64, Go 1.26.11, RTX 5070 Ti. Both stripped cores used
+`CGO_ENABLED=0`, `-trimpath` and `-ldflags "-s -w"`. The baseline runtime
+was `72faf347`. Browser assets and dependency manifests have no changes in
+this follow-up.
+
+| Measurement | Baseline | Selected |
+| --- | ---: | ---: |
+| Pure-Go core | 25,401,344 B | 25,409,536 B (+8,192 B) |
+| Gemma E4B Simple, median model-backed turn | 970 ms | 1,030 ms |
+| Gemma 12B Intermediate, median model-backed turn | 1,869 ms | 2,166 ms |
+| Terra Advanced Low, median model-backed turn | 3,623 ms | 3,652 ms |
+| E4B calls for 112 model-backed requests | 142 | 116 |
+| 12B calls for 112 model-backed requests | 119 | 112 |
+| Terra calls for 122 model-backed requests | 122 | 122 |
+
+The medians cover model generation, retries and backend admission in the
+simulator. The two local configurations used 32,768 context tokens. The
+signed-in Terra connection used 131,072. Timing includes provider load
+variation and concurrent host activity. [First-pass scores and failed cases](default-model-motion-review-2026-11-18.md)
+
 ## 2026-11-17 — Multi-turn motion and conversation history
 
 The comparison uses the architecture branch at `d8188233` plus the evaluation

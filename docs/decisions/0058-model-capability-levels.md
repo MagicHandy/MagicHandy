@@ -134,3 +134,14 @@ Advanced model receiving more than 64 prior messages gets examples of reading
 back a definition and applying it. The examples must fit alongside all the
 selected dialogue. The matched local and hosted results explain the scope.
 [Multi-turn request evaluation](../motion-request-quality-2026-11-17.md)
+
+## Paired range edits for local Simple chat (2026-11-18)
+
+In ordinary English interactive Layered chat, local Simple and Intermediate
+can use the same list of edit groups. Each range group requires both numeric
+endpoints. Local Simple retains its own capability, model budget, output
+controls and validation. Existing Simple object-form replies still parse. The
+interactive schema, prompt inspector and parser resolve the same format from
+the current prompt set and playback state. Simple autonomous planning, paused
+playback, manual restart, tempo-only outputs and other prompt languages use
+their existing formats. [Comparison on the three setup defaults](../default-model-motion-review-2026-11-18.md)

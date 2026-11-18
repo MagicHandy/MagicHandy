@@ -7,6 +7,16 @@ can hide timing distortion, additional reversals and quantization artifacts.
 
 ## Multi-turn interactive requests
 
+Run `python scripts/evaluate-default-motion.py` for the setup-selected models.
+Set `MAGICHANDY_QUALITY_MODEL_DIR` to the data directory containing the two
+catalog models, `MAGICHANDY_QUALITY_RUNNER` to the managed llama-server
+executable and `MAGICHANDY_HOSTED_DATA_DIR` to the signed-in ChatGPT profile.
+The driver writes separate A/B captures under `.scratch` and continues after
+semantic misses. Its per-profile summary counts unexpected motion on holds and
+retried turns. The capture records capability, reasoning, context allocation
+and the catalog digest or hosted model as applicable. Use `--profiles` or
+`--cases` to select a subset. [Default profile measurements](default-model-motion-review-2026-11-18.md)
+
 `TestLiveMotionRequestSequence` drives the normal streaming chat handler with a
 local Ollama or signed-in ChatGPT model and a fake transport. Its capture
 records the original requests, admitted history counts, raw proposals, applied

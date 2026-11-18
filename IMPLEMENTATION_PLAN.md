@@ -6,6 +6,13 @@ corrected endpoints and overall speed, and answered a separate read-back without
 changing motion. The opt-in multi-turn fixture checks both the reply and the
 commanded trajectory. [Local and ChatGPT evaluation](docs/motion-request-quality-2026-11-17.md)
 
+The default-model matrix now runs the catalog Gemma 4 E4B at Simple, the
+recommended Gemma 4 12B at Intermediate and signed-in Terra at Advanced.
+English local Layered chat uses paired endpoint edits on both Gemmas. The
+matrix tests definitions inside and outside each profile’s own history window,
+including a correction restated after 228 earlier messages.
+[Default-model results](docs/default-model-motion-review-2026-11-18.md)
+
 Device admission, settings refresh, Resume, Stop and owner retirement now share the `internal/deviceapp` lifecycle coordinator. A paused run reads the latest saved limits before sending its first command. Interactive edits coalesce at the first uncommitted handoff. Backend observation ordering and the dirty-field settings patch protect updates from delayed clients. The [November 17 architecture review](docs/architecture-review-implementation-2026-11-17.md) records all 19 changes, their regressions and measured costs.
 
 Model roles gain **Answer roleplay cues with motion**, on by default, for
