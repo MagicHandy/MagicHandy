@@ -7,6 +7,15 @@ import (
 
 const hostedSinglePaceGuide = "Only overall speed changes: choose composition speed_only with speed_percent {op:set or adjust,value:number}. The rest of the current pattern keeps playing. Use the full compositions for any other edit. An earlier speed alone can be set on the current pattern. A speed-only request preserves the seed, travel, layers and variation, including at maximum speed. If the requested direction is already at its saved limit, use action none with empty edits. Change another feature only when the latest request asks for it."
 
+const hostedMaximumPaceGuide = `The current overall speed is already at its saved maximum. For another request for more overall speed alone, return {"action":"none","edits":{},"reply":"Already at the maximum speed."}. Preserve any slower phases and counted groups. A new request for specific changes to the pattern, or a lower speed, still applies.`
+
+func hostedInteractivePaceGuide(state MotionContext) string {
+	if state.Layered != nil && state.SpeedMaxPercent > 0 && state.Layered.SpeedPercent >= state.SpeedMaxPercent {
+		return hostedSinglePaceGuide + " " + hostedMaximumPaceGuide
+	}
+	return hostedSinglePaceGuide
+}
+
 // Translate only code-owned examples added by the live lifecycle contract.
 // Persona text, history and requests never pass through this function.
 func hostedLayeredContract(contract string) string {

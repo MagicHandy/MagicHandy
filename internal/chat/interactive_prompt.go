@@ -34,7 +34,7 @@ func ComposeInteractivePrompt(set PromptSet, memories []string, patterns []Patte
 				// code-owned contract is translated, never conversation text.
 				section.Text = hostedLayeredContract(section.Text)
 				if capabilities.compactHostedPace {
-					section.Text += "\n" + hostedSinglePaceGuide
+					section.Text += "\n" + hostedInteractivePaceGuide(current)
 				}
 			}
 			section.Characters = utf8.RuneCountInString(section.Text)

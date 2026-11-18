@@ -87,3 +87,15 @@ func TestHostedSinglePaceSchemaMatchesInteractivePrompt(t *testing.T) {
 		})
 	}
 }
+
+func TestHostedPaceLimitUsesTheCurrentSavedCeiling(t *testing.T) {
+	score := DefaultLayeredScore(56)
+	state := MotionContext{Running: true, Layered: &score, SpeedMaxPercent: 57}
+	if strings.Contains(hostedInteractivePaceGuide(state), hostedMaximumPaceGuide) {
+		t.Fatal("claimed the ceiling before reaching it")
+	}
+	state.SpeedMaxPercent = 56
+	if !strings.Contains(hostedInteractivePaceGuide(state), hostedMaximumPaceGuide) {
+		t.Fatal("missed a configured ceiling other than 100")
+	}
+}

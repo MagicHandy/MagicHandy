@@ -46,3 +46,30 @@ func TestPreviousFlowPaceOnlyDescribesTheCurrentRun(t *testing.T) {
 		t.Fatalf("new run inherited a prior pace: %d, %v", fresh.PreviousFlowSpeedPercent, err)
 	}
 }
+
+func TestReplacedUnsentFlowPaceDoesNotEnterHistory(t *testing.T) {
+	limits := config.DefaultSettings().Motion
+	now := time.Unix(0, 0)
+	plan := func(id string, pace int) MotionPlan {
+		spec := DefaultFlowSpec()
+		spec.SpeedPercent = pace
+		target, err := FlowTarget(spec, limits)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return NewMotionPlan(id, target, limits, 0, 0, now)
+	}
+	original, queued, replacement := plan("original", 42), plan("queued", 57), plan("replacement", 23)
+	engine := Engine{plan: original, nextSampleMillis: 1_000}
+	engine.installEditLocked(original, nil, &queued, 1_000, 0)
+	before, transition := engine.editPathLocked(0)
+	engine.installEditLocked(before, transition, &replacement, 1_000, 0)
+	if replacement.previousFlowSpeed != 42 {
+		t.Fatalf("replacement remembered an unsent speed: %d", replacement.previousFlowSpeed)
+	}
+	next := plan("same pace", 23)
+	engine.installEditLocked(replacement, nil, &next, 2_000, 1_000)
+	if next.previousFlowSpeed != 42 {
+		t.Fatalf("an equal-speed edit displaced the previous distinct pace: %d", next.previousFlowSpeed)
+	}
+}
