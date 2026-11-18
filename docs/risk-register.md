@@ -186,6 +186,14 @@ not establish physical carriage reach. Acceptance covers the tested Original
 Handy Cloud fixtures, not every count/order change. See [ADR 0052](decisions/0052-counted-layered-phrases.md)
 and [the evaluation](layered-range-review-2026-10-23.md).
 
+On November 17, a short local Granite 8B chat started simulated motion when
+asked to acknowledge a future pattern and stay idle. Its reply also described
+the simulator as idle. The explicit text-only path issued zero commands. The
+multi-turn harness records both the admitted motion action and the reply, and
+scores a start on an acknowledgement request as a failure. Longer-history
+recall improved, while prospective definitions remain a distinct intent risk.
+[Local and hosted motion request review](motion-request-quality-2026-11-17.md)
+
 ## R36: Local port denial and ambiguous startup ownership
 
 Level: Medium

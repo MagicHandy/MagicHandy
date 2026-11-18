@@ -53,6 +53,17 @@ When recent-only history deliberately excluded the cue, the baseline 3B changed 
 
 ## Prompt alternatives and held-out checks
 
+One additional short conversation on the review app exposed a separate failure.
+With motion enabled, Granite 8B started the simulator on “Please acknowledge
+only and keep the simulator idle.” Its reply said the simulator was idle.
+The subsequent correction also produced an update while the model described
+keeping it idle. The transport trace shows the first command traversing 10–95%.
+A text-only turn through the same app produced a reply and zero commands.
+The simulator acknowledged Stop and issued zero additional commands during
+the following 1.5 seconds. This independent smoke test is outside the matched
+table. Its two stream plots and trace are under `.scratch/motion-context/review-atlas`
+and `.scratch/motion-context/review-full-trace.json`.
+
 - Extra explanatory prose gave Granite 3B **4/12** on the two ordinary Layered sequences, the same as its initial screen. Worked JSON examples gave **8/12**. Ordering the upper endpoint before the lower endpoint in compact-decoder examples gave **10/12** on that screen.
 - Placing an example and the current score next to every request gave **11/12** on the development sequences. The later broad candidate scored **5/12** on independently worded mark-and-translate sequences against **7/12** on the matched baseline. Across eight independent cold-start questions and requests repeated twice, a starter example moved the result from 6/16 to 8/16, but still missed all four unfamiliar bounded-start phrasings. The shipped guidance is limited to the tested history conditions.
 - A Creative v2 experimental schema gave the model named equivalents for full-only and local-only mix. It produced more correct mix selections, but could still stop five points short of the requested end or choose a roaming focus for a fixed-end mixture. The numerical Creative v2 vocabulary ships as before. Terra’s existing prompt matched or exceeded the hosted alternatives on the held-out requests.
