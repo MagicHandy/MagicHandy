@@ -131,16 +131,9 @@ func creativeReviewProvider(t *testing.T, model string) (llm.Provider, bool) {
 func creativeReviewProviderAtContext(t *testing.T, model string, window int) (llm.Provider, bool) {
 	t.Helper()
 	if directory := os.Getenv("MAGICHANDY_HOSTED_DATA_DIR"); directory != "" {
-		manager, err := openaiauth.Open(openaiauth.Options{DataDir: directory})
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(manager.Close)
-		token, err := manager.ActiveTokenSource(t.Context())
-		if err != nil {
-			t.Fatal(err)
-		}
-		provider, err := llm.NewOpenAIResponsesProvider(llm.OpenAIOptions{Model: model, PlanUsage: true, ReasoningEffort: "low", ContextSize: window, Token: token, Timeout: 45 * time.Second, Client: &http.Client{Transport: creativeReviewTransport{t}}})
+		options := creativeReviewChatGPTOptions(t, directory, model)
+		options.ContextSize = window
+		provider, err := llm.NewOpenAIResponsesProvider(options)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -151,6 +144,20 @@ func creativeReviewProviderAtContext(t *testing.T, model string, window int) (ll
 		t.Fatal(err)
 	}
 	return provider, false
+}
+
+func creativeReviewChatGPTOptions(t *testing.T, directory, model string) llm.OpenAIOptions {
+	t.Helper()
+	manager, err := openaiauth.Open(openaiauth.Options{DataDir: directory})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(manager.Close)
+	token, err := manager.ActiveTokenSource(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return llm.OpenAIOptions{Model: model, PlanUsage: true, ReasoningEffort: "low", Token: token, Timeout: 45 * time.Second, Client: &http.Client{Transport: creativeReviewTransport{t}}}
 }
 
 type creativeReviewTransport struct{ t *testing.T }

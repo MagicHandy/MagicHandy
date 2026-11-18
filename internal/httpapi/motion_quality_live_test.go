@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -28,6 +27,7 @@ type qualityAttempt struct {
 	Raw               string `json:"raw"`
 	History           int    `json:"history_messages"`
 	InputBytes        int    `json:"input_bytes"`
+	MaxTokens         int    `json:"request_max_tokens"`
 	Dropped           int    `json:"history_dropped"`
 	CorrectionPresent bool   `json:"correction_present"`
 }
@@ -41,7 +41,7 @@ type qualityProvider struct {
 
 func (p *qualityProvider) StreamChat(ctx context.Context, req llm.ChatRequest, delta func(string) error) (string, error) {
 	bounded, budget, admissionErr := llm.BudgetChatRequest(req, p.window)
-	review := qualityAttempt{InputBytes: budget.InputBytes, Dropped: budget.HistoryMessagesDropped}
+	review := qualityAttempt{InputBytes: budget.InputBytes, Dropped: budget.HistoryMessagesDropped, MaxTokens: req.MaxTokens}
 	if admissionErr == nil {
 		for i, m := range bounded.Messages {
 			if i < len(bounded.Messages)-1 && (m.Role == "user" || m.Role == "assistant") {
@@ -217,8 +217,9 @@ func qualityFillHistory(t *testing.T, s *Server, pairs int) {
 // so that later recovery and all accepted geometry can be reviewed.
 func TestLiveMotionRequestSequence(t *testing.T) {
 	model := os.Getenv("MAGICHANDY_LIVE_MODEL")
-	if model == "" || os.Getenv("MAGICHANDY_EXPERIMENT_CAPTURE") == "" {
-		t.Skip("set a live model and a private capture path")
+	profileName := os.Getenv("MAGICHANDY_QUALITY_PROFILE")
+	if (model == "" && profileName == "") || os.Getenv("MAGICHANDY_EXPERIMENT_CAPTURE") == "" {
+		t.Skip("select a default profile or a live model and a private capture path")
 	}
 	hosted := os.Getenv("MAGICHANDY_HOSTED_DATA_DIR") != ""
 	mirror := os.Getenv("MAGICHANDY_QUALITY_MIRROR") == "1"
@@ -229,40 +230,33 @@ func TestLiveMotionRequestSequence(t *testing.T) {
 	if hosted {
 		providerName = "chatgpt"
 	}
+	var fixed *qualityDefaultProfile
+	if profileName != "" {
+		fixed = loadQualityDefault(t, profileName)
+		active := fixed.settings.ConversationSettings()
+		model, providerName, hosted = active.Model, active.Provider, active.IsHosted()
+	}
 	defer func() {
 		exportLabExperimentCapture(t, map[string]any{"schema": "motion_quality.v1", "model": model, "provider": providerName, "profiles": profiles, "mirrored": mirror, "turns": rows, "session_commands": commands})
 	}()
 	starts := qualityIndependentStarts()
-	scenarios := []string{"creative", "layered", "recall_recent", "recall_long", "holdout", "counted", "recall_readback", "recall_outside", "long_unrelated"}
+	scenarios := []string{"creative", "layered", "recall_recent", "recall_long", "holdout", "counted", "recall_readback", "recall_outside", "long_unrelated", "acknowledge_idle", "restated"}
 	for _, scenario := range append(scenarios, slices.Sorted(maps.Keys(starts))...) {
 		t.Run(scenario, func(t *testing.T) {
 			mode, pairs, window, correction, cases := qualityScenario(t, scenario, hosted, mirror, starts)
-			s, p, fake := qualityServer(t, model, mode, correction, window, hosted)
+			if fixed != nil {
+				if scenario == "counted" && !fixed.settings.ConversationSettings().AdvancedMotion() {
+					const reason = "an exact counted phrase requires the Advanced motion vocabulary"
+					profiles[scenario] = map[string]any{"profile": profileName, "mode": mode, "capability": fixed.settings.ConversationSettings().ModelCapabilityLevel(), "context_size": fixed.window, "passed": 0, "turns": 0, "skipped": reason}
+					t.Skip(reason)
+				}
+				window = fixed.window
+				pairs = fixed.historyPairs(scenario, pairs)
+			}
+			s, p, fake := qualityServer(t, model, mode, correction, window, hosted, fixed)
 			passes := 0
 			for _, tc := range cases {
-				if tc.id == "recall" {
-					qualityFillHistory(t, s, pairs)
-					if scenario == "long_unrelated" {
-						tc.request = "Raise just the current overall speed by five percentage points, preserving all other controls."
-						tc.check = qualitySpeedDelta(5)
-					}
-					if scenario == "recall_outside" {
-						tc.action, tc.check = "none", nil
-					}
-					if scenario == "recall_readback" {
-						name, _, _, _ := qualityCue(mirror)
-						tc.action, tc.check = "none", nil
-						tc.request = fmt.Sprintf("What does %s mean in its corrected form? Give the lower endpoint, upper endpoint and overall speed as three numerals, in that order. Answer only and leave the current movement alone.", name)
-					}
-				}
-				row := qualityRunTurn(t, s, p, scenario, tc)
-				if tc.id == "recall" && scenario == "recall_readback" {
-					_, lo, hi, speed := qualityCue(mirror)
-					if !slices.Equal(qualityNumerals.FindAllString(row.Events.Reply, -1), []string{strconv.Itoa(lo), strconv.Itoa(hi), strconv.Itoa(speed)}) {
-						row.Failures = append(row.Failures, "spoken corrected endpoints and speed")
-						row.IntentPass = false
-					}
-				}
+				row := qualityMemoryTurn(t, s, p, scenario, tc, pairs, mirror, fixed)
 				rows = append(rows, row)
 				if row.IntentPass {
 					passes++
@@ -271,13 +265,21 @@ func TestLiveMotionRequestSequence(t *testing.T) {
 				}
 			}
 			commands[scenario] = fake.Commands()
-			profiles[scenario] = map[string]any{"mode": mode, "context_size": window, "filler_pairs": pairs, "passed": passes, "turns": len(cases)}
+			run := map[string]any{"mode": mode, "context_size": window, "filler_pairs": pairs, "passed": passes, "turns": len(cases)}
+			if fixed != nil {
+				active := fixed.settings.ConversationSettings()
+				run["profile"], run["capability"], run["history_limit"] = profileName, active.ModelCapabilityLevel(), fixed.messages
+				if hosted {
+					run["reasoning_effort"] = active.ActiveConnection.ReasoningEffort
+				} else {
+					run["max_output_tokens"], run["gguf_sha256"], run["template_fix"] = active.MaxOutputTokens, fixed.digest, fixed.template
+				}
+			}
+			profiles[scenario] = run
 			t.Logf("%d/%d exact first-pass outcomes", passes, len(cases))
 		})
 	}
 }
-
-var qualityNumerals = regexp.MustCompile(`\b[0-9]+\b`)
 
 func qualityPlaybackFailure(action string, before, after motion.ActiveMotionState, transportBefore int, owner transport.TransportDiagnostics) string {
 	switch action {
@@ -310,6 +312,11 @@ func qualityScenario(t *testing.T, scenario string, hosted, mirror bool, starts 
 		cases = []qualityTurn{tc, {"stop", "Stop.", "stop", nil}}
 	}
 	switch scenario {
+	case "restated":
+		cases, correction = qualityRestatedCases(mirror)
+		pairs = 112
+	case "acknowledge_idle":
+		cases = qualityAcknowledgementCases(mirror)
 	case "holdout":
 		cases = qualityHoldoutCases(mirror)
 	case "counted":
@@ -338,14 +345,24 @@ func qualityScenario(t *testing.T, scenario string, hosted, mirror bool, starts 
 	return mode, pairs, window, correction, cases
 }
 
-func qualityServer(t *testing.T, model, mode, correction string, window int, hosted bool) (*Server, *qualityProvider, *transport.Fake) {
+func qualityServer(t *testing.T, model, mode, correction string, window int, hosted bool, fixed *qualityDefaultProfile) (*Server, *qualityProvider, *transport.Fake) {
 	t.Helper()
-	native, _ := creativeReviewProviderAtContext(t, model, window)
+	var native llm.Provider
+	if fixed != nil {
+		native = fixed.provider
+	} else {
+		native, _ = creativeReviewProviderAtContext(t, model, window)
+	}
 	p := &qualityProvider{Provider: native, window: window, correction: correction}
 	fake := transport.NewFake()
 	s := newTestServerWithRuntime(t, Runtime{LLMProvider: p, Transport: fake, MotionTransport: fake, MotionSimulated: true})
 	t.Cleanup(s.Close)
 	saveSettings(t, s.store, func(cfg config.Settings) config.Settings {
+		if fixed != nil {
+			cfg.LLM = fixed.settings
+			cfg.LLM.MotionGenerationMode = mode
+			return cfg
+		}
 		cfg.LLM.RetryRefusalLocally = false
 		cfg.LLM.Provider, cfg.LLM.Model = config.LLMProviderOllama, model
 		cfg.LLM.ReasoningMode, cfg.LLM.ChatVoice, cfg.LLM.MotionGenerationMode = "off", "utility", mode
