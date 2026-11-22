@@ -28,6 +28,12 @@ desktop. A hardware rule for this engine would need to check the GPU
 architecture as well as memory. The experiment covers one card and host RAM
 configuration. [Basalt platform support](https://github.com/jesdga95/basalt/blob/v0.5.5/docs/platforms.md)
 
+During an additional run a foreground GPU workload reduced free dedicated
+memory to about 314 MiB. Basalt's decode rate fell from roughly 55 to 9
+tokens/s. We stopped the evaluator, excluded the interrupted capture and
+released its VRAM. Available memory and concurrent GPU load materially
+affect this model on a 16 GB desktop.
+
 ## Response quality
 
 The main comparison covers 90 model-backed turns across two wordings. It
@@ -57,6 +63,28 @@ returned variations of “A brief answer” and ellipses on all six. It did
 acknowledge the proposed patterns and their corrected speeds. These examples
 are why a nonempty reply and an idle engine earn separate checks from a useful
 spoken answer.
+
+The existing **OpenAI-compatible** connection offers **Prompt contract and
+strict parser**. With this selection Basalt can reason before composing JSON
+and MagicHandy validates every returned proposal. The tested connection
+declared max tokens, temperature and top-p support. Its model ran over
+loopback at 32K. Including both five-turn conversations yields 100
+model-backed requests and 44 explicit holds.
+
+| Profile used for all 100 requests | Exact first pass | Exact result after any retry | Delivered a model reply | Unrequested changes on holds |
+| --- | ---: | ---: | ---: | ---: |
+| Gemma 12B, managed Intermediate | 99/100 | 99/100 | 100/100 | 0/44 |
+| Inkling, Basalt with decoder schema, 512 output tokens | 46/100 | 46/100 | 100/100 | 1/44 |
+| Inkling, saved Basalt prompt-contract connection, 4,096 output tokens and unrestricted reasoning | 92/100 | 93/100 | 94/100 | 0/44 |
+
+The saved connection preserved the upper endpoint on the edit Gemma missed.
+It also held the running pattern while reading back the corrected values.
+Two acknowledgements came back as plain prose and were rejected by the
+strict parser. Several longer generations spent the output budget before
+producing a usable answer.
+The connection-test prompt returned the exact readiness object in all three
+64-token probes, both 256-token probes and the 512-token probe. The existing
+readiness allowance was sufficient for this machine and model.
 
 ### A prompt change that looked promising on a small sample
 
@@ -105,6 +133,19 @@ identical local chat prompt and full backend validation and omitted the
 decoder's format constraint. That run produced **19/19 first pass**, including
 raising 21 to 26 while preserving the upper mark of 75. All ten holds were
 respected.
+On nine identical fresh-start and conversation requests with Auto reasoning,
+the full schema scored 4/9, JSON-object decoding scored 6/9 and the
+prompt-only diagnostic scored 9/9.
+
+The saved connection and the native local role compose different motion
+instructions. We tested the existing local range and recall guidance on the
+saved Inkling connection while keeping its server, weights, decoder policy,
+sampling and output allowance fixed. On 26 requests, including all six
+misses from the first wording of the saved-connection run, first-pass accuracy
+moved from **20/26 to 26/26**. Exact outcomes after retries moved from
+**21/26 to 26/26**. Both kept all 12 explicit holds. Gemma scored 25/26.
+The guide puts the current range and the shape of the requested edit near
+the latest request when it fits the existing history budget.
 
 ## Latency
 
@@ -119,6 +160,16 @@ probes are outside this table. Neither model retried a turn in it.
 The overall median includes quick acknowledgements that missed the request.
 Restricting timing to the same correct answers makes that difference visible.
 
+Across all 100 requests, including the conversation checks, the median / p95
+for delivered replies was **2.00 / 3.26 s** on Gemma, **1.79 / 2.76 s**
+with Basalt's decoder schema, and **5.86 / 37.77 s** on the saved Basalt
+prompt-contract connection with unrestricted reasoning. The six undelivered
+turns on the saved connection took a median **71.03 s** and a maximum
+**85.21 s**.
+The named compatible adapter checks the stream's finish status before
+publishing the accumulated response text. Its first text callback therefore
+arrives close to completion even when the provider signaled activity earlier.
+
 On the 18 identical answers that both got right in the larger-budget trial,
 Gemma's median was **1.85 s** and DSpark's was **19.11 s**. Their sample p95s
 were 4.35 s and 80.78 s. The 114.7-second unsuccessful DSpark request is
@@ -129,6 +180,11 @@ The answer-prefill run on upstream llama.cpp had an **11.51 s** median across
 validation had a **5.98 s** median and **15.68 s** p95 across 19. The Basalt
 full-schema Auto run had a **1.92 s** median across 19. The response-quality
 results distinguish the configurations that earned those timings.
+
+For the 26-turn local-guidance comparison, delivered replies had a median
+of **6.23 s** with the original saved-connection prompt and **5.73 s** with
+local guidance. Sample p95 moved from **59.04 s** to **10.76 s**. The
+original route delivered 22 replies and the guided route delivered all 26.
 
 On the same 18 first-pass successes, median prompt evaluation took **0.87 s**
 for Gemma, **10.07 s** on upstream Inkling, **11.27 s** on DSpark and
@@ -153,6 +209,12 @@ on November 20. Promoting the weights in the model catalog alone would leave a
 fresh installation unable to start them. The Gemma CUDA regression on a
 previous newer build is relevant when choosing a shared runner.
 [Upstream Mini support](https://github.com/ggml-org/llama.cpp/pull/32694) · [Gemma runtime comparison](installed-chat-replay-2026-11-18.md)
+
+The managed catalog recommends the E4B Simple profile from 6,144 MiB of
+detected NVIDIA VRAM and the 12B Intermediate profile from 10,240 MiB.
+Basalt uses its own model-pack format and server. An existing Basalt server
+can be selected through a loopback connection without replacing the shared
+Gemma runner. [Hardware fit rules and curated models](../internal/llm/model_catalog.go)
 
 Basalt accepted three small object schemas, then returned HTTP 400 on all
 seven Intermediate and all thirteen Simple model-backed requests in the
@@ -199,3 +261,13 @@ the catalog store and managed executable. To match the positive long-context
 cases, set `MAGICHANDY_QUALITY_HISTORY_PAIRS=26`. Captures contain the
 accepted semantic target, compiled samples, fake transport and failures.
 [Harness and atlas instructions](motion-visual-review.md)
+
+For the larger-budget local runs set `MAGICHANDY_QUALITY_MAX_OUTPUT=4096`
+and `MAGICHANDY_QUALITY_REASONING=auto`. Use `--profiles compatible-local`
+to exercise the shipping **Prompt contract and strict parser** setting on
+the named loopback connection. The diagnostic that held the local-role
+prompt fixed while omitting the format constraint was a separate experiment.
+For the upstream direct-answer experiment the embedded Jinja template emitted
+effort zero when `enable_thinking` was false and appended
+`<|message_model|><|content_text|>` when adding the generation prompt in
+that mode.

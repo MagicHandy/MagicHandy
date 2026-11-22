@@ -61,9 +61,15 @@ def run_profile(binary, scratch, output, profile, mirror, cases):
           f"{sum(row['intent_pass'] for row in stops)}/{len(stops)} direct Stops confirmed.")
     # A prompt rejected immediately is a quality failure. Its short round trip
     # would make a backend appear faster at delivering actual replies.
-    delivered = [row for row in model_turns
-                 if row["events"]["ok"] and not row["events"]["fallback"] and row["events"]["reply"].strip()
-                 and any(attempt["raw"].strip() for attempt in row.get("attempts") or [])]
+    delivered, undelivered_ms = [], []
+    for row in model_turns:
+        events = row["events"]
+        if (events["ok"] and events["reply"].strip() and not events["fallback"]
+                and not events["diagnostics"].get("refusal_fallback_from")
+                and any(attempt["raw"].strip() for attempt in row.get("attempts") or [])):
+            delivered.append(row)
+        else:
+            undelivered_ms.append(row["elapsed_ms"])
     elapsed = sorted(row["elapsed_ms"] for row in delivered)
     if elapsed:
         print(f"{name}: {len(elapsed)} delivered model replies, end-to-end median "
@@ -72,6 +78,9 @@ def run_profile(binary, scratch, output, profile, mirror, cases):
     if first_content:
         print(f"{name}: median time to first response content {median(first_content):.0f} ms "
               f"on {len(first_content)} replies with timing data.")
+    if undelivered_ms:
+        print(f"{name}: {len(undelivered_ms)} turns without a delivered model reply, median "
+              f"{median(undelivered_ms):.0f} ms, slowest {max(undelivered_ms)} ms.")
     print(capture, flush=True)
     return bool(turns) and result.returncode == 0
 

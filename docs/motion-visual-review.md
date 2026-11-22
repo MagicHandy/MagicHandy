@@ -33,10 +33,10 @@ exercises the connection's own prompt and history policy.
 The driver reports first-pass model decisions, exact outcomes after any retry,
 unexpected motion on holds and direct Stop acknowledgements. Its latency
 distribution covers delivered model replies and includes time spent on
-repairs. First-content timing uses the response stream's first text delta.
-Inspect the failure
-rows alongside those timings when a server rejects a schema or exhausts its
-output budget.
+repairs. First-content timing uses the first text delta the provider adapter
+delivers to the app. The named compatible adapter checks the complete stream
+before publishing that delta. Inspect failure rows alongside timings when a
+server rejects a schema or exhausts its output budget.
 
 `TestLiveMotionRequestSequence` drives the normal streaming chat handler with a
 local Ollama or signed-in ChatGPT model and a fake transport. Its capture
