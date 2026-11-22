@@ -10,7 +10,7 @@ import (
 
 // continuousActionSchema constrains decisions using backend state, never words
 // in a chat message. The model interprets intent; the engine enforces limits.
-func continuousActionSchema(schema json.RawMessage, state MotionContext, allowStop bool) json.RawMessage {
+func continuousActionSchema(schema json.RawMessage, state MotionContext, capabilities Capabilities) json.RawMessage {
 	var root struct {
 		Properties map[string]json.RawMessage `json:"properties"`
 		Required   []string                   `json:"required"`
@@ -26,7 +26,7 @@ func continuousActionSchema(schema json.RawMessage, state MotionContext, allowSt
 			actions = append(actions, MotionActionStart)
 		}
 	}
-	if allowStop && !unavailableVibrationOnly(state) {
+	if capabilities.AdvancedMotion && !unavailableVibrationOnly(state) {
 		actions = append(actions, MotionActionStop)
 	}
 	required := append(slices.Clone(root.Required), "action")
@@ -59,7 +59,13 @@ func continuousActionSchema(schema json.RawMessage, state MotionContext, allowSt
 		}
 		branches = append(branches, map[string]any{"type": "object", "properties": fields, "required": required, "additionalProperties": false})
 	}
-	encoded, _ := json.Marshal(map[string]any{"oneOf": branches})
+	union := map[string]any{"oneOf": branches}
+	if capabilities.LocalInference {
+		// Some local servers require an explicit object root before compiling
+		// the action union. Every branch already permits only an object.
+		union["type"] = "object"
+	}
+	encoded, _ := json.Marshal(union)
 	return encoded
 }
 

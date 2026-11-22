@@ -252,7 +252,7 @@ func TestLiveMotionRequestSequence(t *testing.T) {
 		exportLabExperimentCapture(t, map[string]any{"schema": "motion_quality.v1", "model": model, "provider": providerName, "profiles": profiles, "mirrored": mirror, "turns": rows, "session_commands": commands})
 	}()
 	starts := qualityIndependentStarts()
-	scenarios := []string{"creative", "layered", "recall_recent", "recall_long", "holdout", "counted", "recall_readback", "recall_outside", "long_unrelated", "acknowledge_idle", "restated"}
+	scenarios := []string{"creative", "layered", "recall_recent", "recall_long", "holdout", "counted", "recall_readback", "recall_outside", "long_unrelated", "acknowledge_idle", "restated", "conversation"}
 	for _, scenario := range append(scenarios, slices.Sorted(maps.Keys(starts))...) {
 		t.Run(scenario, func(t *testing.T) {
 			mode, pairs, window, correction, cases := qualityScenario(t, scenario, hosted, mirror, starts)
@@ -284,7 +284,12 @@ func TestLiveMotionRequestSequence(t *testing.T) {
 				if hosted {
 					run["reasoning_effort"] = active.ActiveConnection.ReasoningEffort
 				} else {
-					run["max_output_tokens"], run["gguf_sha256"], run["template_fix"] = active.MaxOutputTokens, fixed.digest, fixed.template
+					run["max_output_tokens"] = active.MaxOutputTokens
+					if fixed.serverWindow > 0 {
+						run["server_slot_context"], run["reasoning_mode"] = fixed.serverWindow, active.ReasoningMode
+					} else {
+						run["gguf_sha256"], run["template_fix"] = fixed.digest, fixed.template
+					}
 				}
 			}
 			profiles[scenario] = run
@@ -324,6 +329,8 @@ func qualityScenario(t *testing.T, scenario string, hosted, mirror bool, starts 
 		cases = []qualityTurn{tc, {"stop", "Stop.", "stop", nil}}
 	}
 	switch scenario {
+	case "conversation":
+		cases = qualityConversationCases(mirror)
 	case "restated":
 		cases, correction = qualityRestatedCases(mirror)
 		pairs = 112

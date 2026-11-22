@@ -17,6 +17,21 @@ retried turns. The capture records capability, reasoning, context allocation
 and the catalog digest or hosted model as applicable. Use `--profiles` or
 `--cases` to select a subset. [Default profile measurements](default-model-motion-review-2026-11-18.md)
 
+To compare a local candidate, start its server on loopback and select
+`--profiles external-local`. Set `MAGICHANDY_LIVE_LLAMA_URL` to the HTTP origin,
+`MAGICHANDY_LIVE_MODEL` to its served model ID and `MAGICHANDY_QUALITY_CAPABILITY`
+to the capability being evaluated. The capture records both MagicHandy's history
+budget and the runtime's per-slot context from `/props`. The `conversation`
+scenario retains plain-English explanations and checks recall after a correction
+while playback stays idle. Use `MAGICHANDY_QUALITY_REASONING` and
+`MAGICHANDY_QUALITY_MAX_OUTPUT` to compare other supported local settings.
+
+The driver reports first-pass model decisions, unexpected motion on holds and
+direct Stop acknowledgements separately. Its latency distribution covers
+delivered model replies and includes time spent on repairs. Inspect the failure
+rows alongside those timings when a server rejects a schema or exhausts its
+output budget.
+
 `TestLiveMotionRequestSequence` drives the normal streaming chat handler with a
 local Ollama or signed-in ChatGPT model and a fake transport. Its capture
 records the original requests, admitted history counts, raw proposals, applied

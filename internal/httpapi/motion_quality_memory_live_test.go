@@ -19,6 +19,23 @@ var qualityNumerals = regexp.MustCompile(`\b[0-9]+\b`)
 
 func qualityMemoryTurn(t *testing.T, s *Server, p *qualityProvider, scenario string, tc qualityTurn, pairs int, mirror bool, profile *qualityDefaultProfile) qualityRow {
 	t.Helper()
+	if scenario == "conversation" {
+		row := qualityRunTurn(t, s, p, scenario, tc)
+		switch tc.id {
+		case "readback":
+			_, lo, hi, speed := qualityCue(mirror)
+			row.checkReadback(lo, hi, speed)
+		case "explain", "explain_edit":
+			// An echo of the envelope example can leave playback idle while
+			// giving the person no explanation at all.
+			answer := strings.Trim(strings.ToLower(row.Events.Reply), " .…\t\r\n")
+			if answer == "" || answer == "a brief answer" {
+				row.Failures = append(row.Failures, "placeholder instead of an explanation")
+			}
+		}
+		row.IntentPass = len(row.Failures) == 0
+		return row
+	}
 	if scenario == "restated" {
 		if tc.id == "new_definition" {
 			qualityFillHistory(t, s, pairs)
@@ -72,6 +89,19 @@ func qualityMemoryTurn(t *testing.T, s *Server, p *qualityProvider, scenario str
 	}
 	row.IntentPass = len(row.Failures) == 0
 	return row
+}
+
+// Every request here is conversational. Score numeric recall and unchanged
+// playback, and keep the open-ended replies for separate review of the prose.
+func qualityConversationCases(mirror bool) []qualityTurn {
+	name, lo, hi, speed := qualityCue(mirror)
+	return []qualityTurn{
+		{"explain", "In one or two plain-English sentences, explain the difference between a sweep's travel range and its overall pace. Keep the simulator idle.", "none", nil},
+		{"plan", fmt.Sprintf("For later, remember %s as full sweeps between %d and %d at speed 55. Just acknowledge it and leave the simulator idle.", name, lo, hi), "none", nil},
+		{"revise", fmt.Sprintf("One correction to %s: keep its endpoints and change only the proposed speed to %d. Please just acknowledge it.", name, speed), "none", nil},
+		{"readback", fmt.Sprintf("Give me the proposed lower mark, upper mark, and pace of %s, using three numerals in that order. Leave the simulator idle.", name), "none", nil},
+		{"explain_edit", "For that proposed pattern, if I narrowed its range without changing the pace setting, what would stay the same? Answer in one short sentence. Leave the simulator idle.", "none", nil},
+	}
 }
 
 func (r *qualityRow) checkDefinitionVisible(want bool) {
