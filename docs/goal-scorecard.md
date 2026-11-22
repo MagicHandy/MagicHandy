@@ -1,5 +1,15 @@
 # Goal Scorecard
 
+## 2026-11-21 — Inkling local model evaluation
+
+The stripped Windows amd64 core measured **25,437,184 bytes** on both the
+release baseline `1b80d72e` and the local action-schema change. Both builds
+used Go 1.26.11, `CGO_ENABLED=0`, `-buildvcs=false`, `-trimpath` and
+`-ldflags "-s -w"`. The runner and model weights used in the evaluation are
+external to the binary. The simulator comparison reports first-pass motion,
+readbacks, unexpected motion on holds and end-to-end latency separately.
+[Model evaluation](inkling-local-evaluation-2026-11-21.md)
+
 ## 2026-11-18 — Review of prompt admission and retained-history replay
 
 The stripped Windows amd64 core grew from 25,425,920 bytes on `9a4c36cf` to
