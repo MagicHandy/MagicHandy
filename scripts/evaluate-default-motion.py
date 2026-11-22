@@ -2,7 +2,7 @@
 
 The local profiles use the catalog GGUF in MAGICHANDY_QUALITY_MODEL_DIR and the
 managed llama-server executable in MAGICHANDY_QUALITY_RUNNER. Terra uses the
-signed-in MAGICHANDY_HOSTED_DATA_DIR. The optional external-local profile uses
+signed-in MAGICHANDY_HOSTED_DATA_DIR. The optional external-local and compatible-local profiles use
 MAGICHANDY_LIVE_LLAMA_URL, MAGICHANDY_LIVE_MODEL and MAGICHANDY_QUALITY_CAPABILITY.
 All dispatches go to a test transport.
 """
@@ -71,7 +71,9 @@ def run_profile(binary, scratch, output, profile, mirror, cases):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profiles", nargs="+", choices=(*PROFILES, "external-local"), default=PROFILES)
+    parser.add_argument("--profiles", nargs="+", choices=(*PROFILES, "external-local", "compatible-local"), default=PROFILES)
+    parser.add_argument("--variants", nargs="+", choices=("a", "b"), default=("a", "b"),
+                        help="Request wordings to run (default: both)")
     parser.add_argument("--cases", help="Go subtest expression, such as 'layered|restated'")
     parser.add_argument("--output", type=Path, help="Capture directory (default under .scratch)")
     args = parser.parse_args()
@@ -85,8 +87,8 @@ def main():
         subprocess.run(["go", "test", "-c", "-tags", "liveeval magichandy_labs",
                         "-o", str(binary), "./internal/httpapi"], cwd=ROOT, check=True)
         for profile in args.profiles:
-            for mirror in (False, True):
-                if not run_profile(binary, scratch, output, profile, mirror, args.cases):
+            for variant in args.variants:
+                if not run_profile(binary, scratch, output, profile, variant == "b", args.cases):
                     passed = False
     return 0 if passed else 1
 

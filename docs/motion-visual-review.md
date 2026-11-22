@@ -25,6 +25,10 @@ budget and the runtime's per-slot context from `/props`. The `conversation`
 scenario retains plain-English explanations and checks recall after a correction
 while playback stays idle. Use `MAGICHANDY_QUALITY_REASONING` and
 `MAGICHANDY_QUALITY_MAX_OUTPUT` to compare other supported local settings.
+Select `--profiles compatible-local` to test the app's named OpenAI-compatible
+connection at the same loopback origin, using **Prompt contract and strict
+parser** and declaring support for max tokens, temperature and top-p. This
+exercises the connection's own prompt and history policy.
 
 The driver reports first-pass model decisions, unexpected motion on holds and
 direct Stop acknowledgements separately. Its latency distribution covers

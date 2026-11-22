@@ -37,8 +37,8 @@ func loadQualityDefault(t *testing.T, name string) *qualityDefaultProfile {
 	if name == "terra" {
 		return qualityTerraDefault(t)
 	}
-	if name == "external-local" {
-		return qualityExternalLocal(t)
+	if name == "external-local" || name == "compatible-local" {
+		return qualityExternalLocal(t, name)
 	}
 	ids := map[string]string{"gemma-e4b": "gemma-4-e4b-qat-heretic-q4-0", "gemma-12b": "gemma-4-12b-heretic-q4km"}
 	entry, ok := llm.FindCatalogModel(ids[name])
@@ -48,12 +48,12 @@ func loadQualityDefault(t *testing.T, name string) *qualityDefaultProfile {
 	return qualityGemmaDefault(t, entry)
 }
 
-// Compare a candidate using the same external llama.cpp provider, capability
-// and history budget as the app. Record the server's actual per-slot window
-// separately so a short-context run cannot stand in for a setup default.
-func qualityExternalLocal(t *testing.T) *qualityDefaultProfile {
+// Use the app's provider factory and history policy for the selected local
+// route. Record the runtime's actual per-slot window alongside the app budget.
+func qualityExternalLocal(t *testing.T, profile string) *qualityDefaultProfile {
 	t.Helper()
 	settings := config.DefaultSettings().LLM
+	settings.Provider = config.LLMProviderLlamaCPP
 	settings.Model = os.Getenv("MAGICHANDY_LIVE_MODEL")
 	settings.LlamaCPPBaseURL = strings.TrimRight(os.Getenv("MAGICHANDY_LIVE_LLAMA_URL"), "/")
 	settings.LlamaCPPMode = config.LlamaCPPModeExternal
@@ -76,8 +76,19 @@ func qualityExternalLocal(t *testing.T) *qualityDefaultProfile {
 			t.Fatal(err)
 		}
 	}
+	window := settings.LocalContextSize()
+	messages := max(chat.PromptHistoryLimit, chatCapabilities(settings, nil).HistoryMessages)
+	if profile == "compatible-local" {
+		connection := config.ModelConnection{
+			ID: "quality", Name: "Local candidate", Provider: config.LLMProviderCompatible, NoAuthentication: true,
+			BaseURL: settings.LlamaCPPBaseURL + "/v1", Model: settings.Model, CapabilityLevel: settings.LocalCapabilityLevel,
+			ContextWindow: window, OutputMode: "prompt", SupportedParameters: []string{"max_tokens", "temperature", "top_p"},
+		}.Normalize()
+		settings.Connections, settings.ConversationConnectionID = []config.ModelConnection{connection}, connection.ID
+		window, messages, _ = connection.ConversationWindow()
+	}
 	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	s := newTestServerWithRuntime(t, Runtime{LLMHTTPClient: client})
+	s := newTestServerWithRuntime(t, Runtime{LLMHTTPClient: client, OpenAIHTTPClient: client})
 	provider, err := s.resolveLLMProvider(t.Context(), settings, false)
 	if err != nil {
 		t.Fatal(err)
@@ -104,8 +115,7 @@ func qualityExternalLocal(t *testing.T) *qualityDefaultProfile {
 	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&props) != nil || props.Generation.Context < 1 {
 		t.Fatal("the local server must report its per-slot context at /props")
 	}
-	messages := max(chat.PromptHistoryLimit, chatCapabilities(settings, nil).HistoryMessages)
-	return &qualityDefaultProfile{settings: settings, provider: provider, window: settings.LocalContextSize(), messages: messages, serverWindow: props.Generation.Context}
+	return &qualityDefaultProfile{settings: settings, provider: provider, window: window, messages: messages, serverWindow: props.Generation.Context}
 }
 
 func qualityTerraDefault(t *testing.T) *qualityDefaultProfile {

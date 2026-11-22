@@ -281,15 +281,17 @@ func TestLiveMotionRequestSequence(t *testing.T) {
 			if fixed != nil {
 				active := fixed.settings.ConversationSettings()
 				run["profile"], run["capability"], run["history_limit"] = profileName, active.ModelCapabilityLevel(), fixed.messages
-				if hosted {
+				if fixed.serverWindow > 0 {
+					run["server_slot_context"], run["max_output_tokens"] = fixed.serverWindow, active.MaxOutputTokens
+					if active.ActiveConnection != nil {
+						run["output_mode"] = active.ActiveConnection.OutputMode
+					} else {
+						run["reasoning_mode"] = active.ReasoningMode
+					}
+				} else if hosted {
 					run["reasoning_effort"] = active.ActiveConnection.ReasoningEffort
 				} else {
-					run["max_output_tokens"] = active.MaxOutputTokens
-					if fixed.serverWindow > 0 {
-						run["server_slot_context"], run["reasoning_mode"] = fixed.serverWindow, active.ReasoningMode
-					} else {
-						run["gguf_sha256"], run["template_fix"] = fixed.digest, fixed.template
-					}
+					run["max_output_tokens"], run["gguf_sha256"], run["template_fix"] = active.MaxOutputTokens, fixed.digest, fixed.template
 				}
 			}
 			profiles[scenario] = run
