@@ -33,7 +33,16 @@ func TestDisabledAdministratorCannotFinishHTTPSWrite(t *testing.T) {
 	for _, useHTTP2 := range []bool{false, true} {
 		for _, action := range []string{"create", "enable", "grant", "network"} {
 			t.Run(fmt.Sprintf("http2=%t/%s", useHTTP2, action), func(t *testing.T) {
-				s, store, first, firstCookie := newControllerSessionFixture(t)
+				host := httptest.NewUnstartedServer(nil)
+				defer host.Close()
+				address := host.Listener.Addr().String()
+				policy, err := netaccess.Validate(netaccess.Config{Mode: netaccess.DirectHTTPS,
+					ListenAddress: address, PublicURL: "https://" + address,
+					TLSCertificate: "test-certificate", TLSPrivateKey: "test-key"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				s, store, first, firstCookie := newControllerSessionFixtureWithRuntime(t, Runtime{NetworkPolicy: policy})
 				second, err := store.Create(t.Context(), "other-owner", "another long review passphrase", accounts.RoleAdmin)
 				if err != nil {
 					t.Fatal(err)
@@ -48,27 +57,19 @@ func TestDisabledAdministratorCannotFinishHTTPSWrite(t *testing.T) {
 				}
 				secondCookie := &http.Cookie{Name: secureSessionCookieName, Value: token, Path: "/", Secure: true,
 					HttpOnly: true, SameSite: http.SameSiteStrictMode}
-				s.auth.options.SecureCookies = true
-				firstCookie.Name, secondCookie.Name = secureSessionCookieName, secureSessionCookieName
+				firstCookie.Name = secureSessionCookieName
 				entered, handled := make(chan struct{}), make(chan struct{})
 				var admittedProtocol int
-				host := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				host.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if r.Header.Get("X-Test-Delay") == "1" {
 						admittedProtocol = r.ProtoMajor
 						r.Body = &admittedAdministratorBody{ReadCloser: r.Body, entered: entered}
 						defer close(handled)
 					}
 					s.Handler().ServeHTTP(w, r)
-				}))
+				})
 				host.EnableHTTP2 = useHTTP2
-				s.networkPolicy, err = netaccess.Validate(netaccess.Config{Mode: netaccess.DirectHTTPS,
-					ListenAddress: host.Listener.Addr().String(), PublicURL: "https://" + host.Listener.Addr().String(),
-					TLSCertificate: "test-certificate", TLSPrivateKey: "test-key"})
-				if err != nil {
-					t.Fatal(err)
-				}
 				host.StartTLS()
-				defer host.Close()
 				client := host.Client()
 				client.Timeout = 5 * time.Second
 				ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
