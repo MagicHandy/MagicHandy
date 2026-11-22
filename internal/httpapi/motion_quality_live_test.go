@@ -79,6 +79,10 @@ type qualityEvents struct {
 	Diagnostics chat.MessageDiagnostics `json:"diagnostics"`
 }
 
+func (e qualityEvents) deliveredReply() bool {
+	return e.OK && strings.TrimSpace(e.Reply) != "" && !e.Fallback && e.Diagnostics.RefusalFallbackFrom == ""
+}
+
 func qualityChat(t *testing.T, s *Server, message string) (qualityEvents, string) {
 	t.Helper()
 	data, err := json.Marshal(map[string]string{"message": message})
@@ -138,19 +142,20 @@ func qualityChat(t *testing.T, s *Server, message string) (qualityEvents, string
 }
 
 type qualityRow struct {
-	Scenario   string           `json:"scenario"`
-	ID         string           `json:"id"`
-	Request    string           `json:"request"`
-	Response   string           `json:"response"`
-	ElapsedMS  int64            `json:"elapsed_ms"`
-	Expected   string           `json:"expected_action"`
-	Events     qualityEvents    `json:"events"`
-	Attempts   []qualityAttempt `json:"attempts"`
-	Before     *motion.FlowSpec `json:"before,omitempty"`
-	After      *motion.FlowSpec `json:"after,omitempty"`
-	Motion     *motion.Review   `json:"motion,omitempty"`
-	Failures   []string         `json:"failures,omitempty"`
-	IntentPass bool             `json:"intent_pass"`
+	Scenario            string           `json:"scenario"`
+	ID                  string           `json:"id"`
+	Request             string           `json:"request"`
+	Response            string           `json:"response"`
+	ElapsedMS           int64            `json:"elapsed_ms"`
+	Expected            string           `json:"expected_action"`
+	Events              qualityEvents    `json:"events"`
+	Attempts            []qualityAttempt `json:"attempts"`
+	Before              *motion.FlowSpec `json:"before,omitempty"`
+	After               *motion.FlowSpec `json:"after,omitempty"`
+	Motion              *motion.Review   `json:"motion,omitempty"`
+	Failures            []string         `json:"failures,omitempty"`
+	IntentPass          bool             `json:"intent_pass"`
+	DeliveredIntentPass bool             `json:"delivered_intent_pass"`
 }
 
 func qualityState(s *Server) motion.ActiveMotionState {
@@ -158,6 +163,34 @@ func qualityState(s *Server) motion.ActiveMotionState {
 		return engine.Snapshot()
 	}
 	return motion.ActiveMotionState{}
+}
+
+const qualityFirstPassFailure = "completion or provider calls"
+
+// A retry can recover the exact requested result. Preserve every independent
+// failure, including a wrong trajectory, missing cue or unrequested motion.
+func (r qualityRow) deliveredIntent() bool {
+	if r.IntentPass {
+		return true
+	}
+	retried := r.Events.Repaired || len(r.Attempts) > 1
+	return retried && r.Events.deliveredReply() && slices.Equal(r.Failures, []string{qualityFirstPassFailure})
+}
+
+func TestMotionQualityDeliveredIntent(t *testing.T) {
+	row := qualityRow{Events: qualityEvents{OK: true, Reply: "Adjusted.", Repaired: true}, Failures: []string{qualityFirstPassFailure}}
+	if !row.deliveredIntent() {
+		t.Fatal("a completed repair should count toward delivered quality")
+	}
+	row.Failures = append(row.Failures, "requested trajectory or preservation")
+	if row.deliveredIntent() {
+		t.Fatal("the repair still changed the wrong control")
+	}
+	row.Failures = row.Failures[:1]
+	row.Events.Fallback = true
+	if row.deliveredIntent() {
+		t.Fatal("credited a fallback reply as a recovered model decision")
+	}
 }
 
 func qualityRunTurn(t *testing.T, s *Server, p *qualityProvider, scenario string, tc qualityTurn) qualityRow {
@@ -183,8 +216,8 @@ func qualityRunTurn(t *testing.T, s *Server, p *qualityProvider, scenario string
 	if tc.action == "stop" {
 		calls = 0
 	}
-	if !events.OK || strings.TrimSpace(events.Reply) == "" || events.Repaired || events.Fallback || events.Diagnostics.RefusalFallbackFrom != "" || len(row.Attempts) != calls {
-		row.Failures = append(row.Failures, "completion or provider calls")
+	if !events.deliveredReply() || events.Repaired || len(row.Attempts) != calls {
+		row.Failures = append(row.Failures, qualityFirstPassFailure)
 	}
 	if events.Action != tc.action {
 		row.Failures = append(row.Failures, "action")
@@ -269,6 +302,7 @@ func TestLiveMotionRequestSequence(t *testing.T) {
 			passes := 0
 			for _, tc := range cases {
 				row := qualityMemoryTurn(t, s, p, scenario, tc, pairs, mirror, fixed)
+				row.DeliveredIntentPass = row.deliveredIntent()
 				rows = append(rows, row)
 				if row.IntentPass {
 					passes++

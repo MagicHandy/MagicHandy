@@ -30,9 +30,11 @@ connection at the same loopback origin, using **Prompt contract and strict
 parser** and declaring support for max tokens, temperature and top-p. This
 exercises the connection's own prompt and history policy.
 
-The driver reports first-pass model decisions, unexpected motion on holds and
-direct Stop acknowledgements separately. Its latency distribution covers
-delivered model replies and includes time spent on repairs. Inspect the failure
+The driver reports first-pass model decisions, exact outcomes after any retry,
+unexpected motion on holds and direct Stop acknowledgements. Its latency
+distribution covers delivered model replies and includes time spent on
+repairs. First-content timing uses the response stream's first text delta.
+Inspect the failure
 rows alongside those timings when a server rejects a schema or exhausts its
 output budget.
 

@@ -48,23 +48,30 @@ def run_profile(binary, scratch, output, profile, mirror, cases):
     model_turns = [row for row in turns if row["expected_action"] != "stop"]
     stops = [row for row in turns if row["expected_action"] == "stop"]
     passed = sum(row["intent_pass"] for row in model_turns)
+    delivered_exact = sum(row["delivered_intent_pass"] for row in model_turns)
     holds = [row for row in turns if row["expected_action"] == "none"]
     unexpected = sum(row["events"]["action"] != "none" or
                      "unexpected change to playback" in (row.get("failures") or [])
                      for row in holds)
     repairs = sum(row["events"]["repaired"] or len(row.get("attempts") or []) > 1
                   for row in turns)
-    print(f"{name}: {passed}/{len(model_turns)} first-pass model turns, {unexpected}/{len(holds)} "
+    print(f"{name}: {passed}/{len(model_turns)} first-pass model turns, {delivered_exact}/{len(model_turns)} "
+          f"exact delivered outcomes, {unexpected}/{len(holds)} "
           f"unexpected changes on holds, {repairs} turns retried, "
           f"{sum(row['intent_pass'] for row in stops)}/{len(stops)} direct Stops confirmed.")
     # A prompt rejected immediately is a quality failure. Its short round trip
     # would make a backend appear faster at delivering actual replies.
-    elapsed = sorted(row["elapsed_ms"] for row in model_turns
-                     if row["events"]["ok"] and not row["events"]["fallback"] and row["events"]["reply"].strip()
-                     and any(attempt["raw"].strip() for attempt in row.get("attempts") or []))
+    delivered = [row for row in model_turns
+                 if row["events"]["ok"] and not row["events"]["fallback"] and row["events"]["reply"].strip()
+                 and any(attempt["raw"].strip() for attempt in row.get("attempts") or [])]
+    elapsed = sorted(row["elapsed_ms"] for row in delivered)
     if elapsed:
         print(f"{name}: {len(elapsed)} delivered model replies, end-to-end median "
               f"{median(elapsed):.0f} ms, p95 {elapsed[ceil(len(elapsed) * .95) - 1]} ms.")
+    first_content = [ms for row in delivered if (ms := row["events"]["diagnostics"].get("first_token_ms", 0)) > 0]
+    if first_content:
+        print(f"{name}: median time to first response content {median(first_content):.0f} ms "
+              f"on {len(first_content)} replies with timing data.")
     print(capture, flush=True)
     return bool(turns) and result.returncode == 0
 
