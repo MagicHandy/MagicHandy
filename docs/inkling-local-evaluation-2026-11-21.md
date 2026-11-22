@@ -1,5 +1,24 @@
 # Inkling 2 Mini as a local motion model
 
+## Hardware recommendation
+
+Keep **Gemma 4 12B Intermediate** as the automatic selection on the tested
+16 GB RTX 5070 Ti. On 100 matched requests it delivered 99 exact results.
+Inkling's tuned 32K Basalt connection delivered 97 exact results, including
+one recovered by a retry. Both respected all 44 requests to hold. Inkling
+handled a lower-endpoint edit that Gemma missed. The full comparison supports
+offering it as an opt-in reasoning model on this machine.
+
+For that option, select an **OpenAI-compatible** connection to the local
+Basalt server, use the served ID `inkling-2-mini`, choose **Intermediate**
+and a **32,768-token context**, and select **Prompt contract and strict parser**.
+Enable **Endpoint supports standard token and sampling parameters** and set
+the app's output allowance to **4,096 tokens**. Start Basalt with
+`--reasoning-budget-tokens 512 --answer-room auto`. MagicHandy automatically
+applies its local range and recall guidance to this model and connection
+policy on loopback. The managed E4B and 12B hardware thresholds are listed
+under [runtime compatibility](#runtime-compatibility).
+
 ## Evaluation setup
 
 The host was a Windows PC with a Ryzen 9 9950X3D, 63.6 GiB of system RAM
@@ -76,6 +95,7 @@ model-backed requests and 44 explicit holds.
 | Gemma 12B, managed Intermediate | 99/100 | 99/100 | 100/100 | 0/44 |
 | Inkling, Basalt with decoder schema, 512 output tokens | 46/100 | 46/100 | 100/100 | 1/44 |
 | Inkling, saved Basalt prompt-contract connection, 4,096 output tokens and unrestricted reasoning | 92/100 | 93/100 | 94/100 | 0/44 |
+| Inkling, saved Basalt connection with local guidance, 4,096 output tokens and a 512-token reasoning budget | 96/100 | 97/100 | 98/100 | 0/44 |
 
 The saved connection preserved the upper endpoint on the edit Gemma missed.
 It also held the running pattern while reading back the corrected values.
@@ -85,6 +105,16 @@ producing a usable answer.
 The connection-test prompt returned the exact readiness object in all three
 64-token probes, both 256-token probes and the 512-token probe. The existing
 readiness allowance was sufficient for this machine and model.
+
+The tuned profile passed the six independent fresh-session requests and
+delayed readbacks in both wordings. Its remaining misses clustered around
+reapplying a newly restated definition and preserving it through the next
+edit. One wording recovered the restated pattern after a retry. One separate
+conversation turn failed to deliver its explanation. All 22 direct Stops
+were acknowledged on both Inkling connections and on Gemma.
+Gemma and tuned Inkling each delivered one final result that missed the
+request. The two additional misses in Inkling's delivered-outcome score
+came from turns that produced no usable reply.
 
 ### A prompt change that looked promising on a small sample
 
@@ -147,6 +177,55 @@ moved from **20/26 to 26/26**. Exact outcomes after retries moved from
 The guide puts the current range and the shape of the requested edit near
 the latest request when it fits the existing history budget.
 
+On a separate 19-turn control using the same loaded Basalt server with a
+512-token reasoning budget, the original named-connection prompt scored
+**17/19**. The local guidance scored **19/19**, with zero unwanted changes
+on ten holds in both runs. The two recovered requests were the single-endpoint
+edit and an acknowledgement of a revised proposal. The guide also scored
+19/19 on these requests with unrestricted reasoning.
+
+### Capability levels
+
+At 32K with the Simple capability and 256 output tokens, Inkling using
+Basalt's schema decoder scored **5/13** model-backed turns. The managed E4B
+default scored **13/13** on the same requests. Both acknowledged all five
+direct Stops and kept all five holds.
+
+Basalt also allocated a **65,536-token slot** on the same GPU. With the
+named Advanced prompt-contract connection, 4,096 output tokens and the
+512-token reasoning budget, Inkling scored **8/17** exact first responses.
+It delivered nine replies, held all four explicit holds, and scored **4/10**
+on counted-phrase turns. The two wordings requested three or four short
+strokes followed by one wide sweep, then changes to individual groups.
+
+For a matched control we manually configured Gemma 4 12B on b11533 with
+the 65,536-token slot, the named Advanced prompt contract, Auto reasoning
+and a 4,096-token output allowance. All 17 model calls reached the allowance
+with an empty visible answer, taking a median of 51.43 seconds. The five
+direct Stops still succeeded. The managed Gemma profile that setup selects
+uses the Intermediate schema at 32K and delivered all 100 replies in the
+broad comparison.
+
+On the 12 requests shared with the native **Advanced (no reasoning)**
+trial, the named Advanced route scored **5/12**. The native route used the
+decoder schema, a private planning note and 1,024 output tokens, and scored
+**9/12**. It kept all three holds. It missed the initial three-short,
+one-wide figure in the first wording and passed the mirrored counted
+sequence. These tests exercised the Advanced vocabulary within the 64K
+allocation. Intermediate achieved the strongest broad result for Inkling.
+
+### Compiled motion
+
+We inspected whole-loop positions, quantized transport points, velocity and
+acceleration for the selected edits, together with the failed decisions and
+Stop timelines. In the lower-endpoint case, both Gemma and tuned Inkling
+kept the requested pace at 38%. Their upper reversals were 63% and 75%
+respectively. In the readback case, the before and after curves coincided
+for both models. The decoder-schema Inkling trace instead showed a new
+24–66% loop. The study's local atlas is
+`.scratch/inkling/atlas/index.html`. The paired overview is
+`.scratch/inkling/tuned-trajectories.png`.
+
 ## Latency
 
 | Same 90 model turns | Delivered | End-to-end median | End-to-end p95 | Median on the 42 turns both got right |
@@ -170,6 +249,14 @@ The named compatible adapter checks the stream's finish status before
 publishing the accumulated response text. Its first text callback therefore
 arrives close to completion even when the provider signaled activity earlier.
 
+With local guidance and the 512-token reasoning budget, Inkling's median /
+p95 was **6.24 / 13.94 s** on 98 delivered replies. The two undelivered
+turns took a median **15.52 s** and a maximum **25.91 s**. This profile
+reduced long waits and delivered more correct replies. The unrestricted
+profile had the shorter median. The tuned run began after a sustained idle
+GPU window and used a larger VRAM reserve of 4,816 MiB. The figures describe
+the complete configurations on this desktop.
+
 On the 18 identical answers that both got right in the larger-budget trial,
 Gemma's median was **1.85 s** and DSpark's was **19.11 s**. Their sample p95s
 were 4.35 s and 80.78 s. The 114.7-second unsuccessful DSpark request is
@@ -185,6 +272,10 @@ For the 26-turn local-guidance comparison, delivered replies had a median
 of **6.23 s** with the original saved-connection prompt and **5.73 s** with
 local guidance. Sample p95 moved from **59.04 s** to **10.76 s**. The
 original route delivered 22 replies and the guided route delivered all 26.
+
+On the 19 matched requests with local guidance, the sample median / p95 was
+**5.86 / 27.77 s** with unrestricted reasoning and **6.72 / 9.86 s** with
+the 512-token reasoning budget. Both runs delivered 19 exact first responses.
 
 On the same 18 first-pass successes, median prompt evaluation took **0.87 s**
 for Gemma, **10.07 s** on upstream Inkling, **11.27 s** on DSpark and
@@ -248,8 +339,10 @@ three-token DSpark draft on the GPU. These were text-only app requests.
 $env:MAGICHANDY_LIVE_LLAMA_URL = 'http://127.0.0.1:8080'
 $env:MAGICHANDY_LIVE_MODEL = 'inkling-2-mini'
 $env:MAGICHANDY_QUALITY_CAPABILITY = 'intermediate'
+$env:MAGICHANDY_QUALITY_MAX_OUTPUT = '4096'
+$env:MAGICHANDY_QUALITY_REASONING = 'auto'
 $cases = 'creative|layered|recall_long|recall_readback|recall_outside|holdout|restated|acknowledge_idle|conversation'
-python scripts/evaluate-default-motion.py --profiles external-local --cases $cases
+python scripts/evaluate-default-motion.py --profiles compatible-local --cases $cases
 ```
 
 Use the `start_bounds`, `start_reverse_order`, `start_middle`,
@@ -262,10 +355,8 @@ cases, set `MAGICHANDY_QUALITY_HISTORY_PAIRS=26`. Captures contain the
 accepted semantic target, compiled samples, fake transport and failures.
 [Harness and atlas instructions](motion-visual-review.md)
 
-For the larger-budget local runs set `MAGICHANDY_QUALITY_MAX_OUTPUT=4096`
-and `MAGICHANDY_QUALITY_REASONING=auto`. Use `--profiles compatible-local`
-to exercise the shipping **Prompt contract and strict parser** setting on
-the named loopback connection. The diagnostic that held the local-role
+Use `--profiles external-local` with a 512-token output allowance and
+reasoning off to evaluate the decoder-schema local role. The diagnostic that held the local-role
 prompt fixed while omitting the format constraint was a separate experiment.
 For the upstream direct-answer experiment the embedded Jinja template emitted
 effort zero when `enable_thinking` was false and appended
