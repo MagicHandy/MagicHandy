@@ -1179,7 +1179,7 @@ func chatCapabilities(settings config.LLMSettings, active *persona.Persona) chat
 	resolved := settings.Capabilities()
 	mode := chatMotionMode(settings.MotionGenerationMode)
 	capabilities := chat.Capabilities{
-		LocalInference:           settings.ActiveConnection == nil && (settings.Provider == config.LLMProviderOllama || settings.Provider == config.LLMProviderLlamaCPP),
+		LocalInference:           usesLocalMotionPrompts(settings),
 		SimpleMotion:             settings.ModelCapabilityLevel() == config.ModelCapabilitySimple,
 		AdvancedMotion:           settings.AdvancedMotion(),
 		IntermediateMotion:       settings.IntermediateMotion(),

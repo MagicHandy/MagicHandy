@@ -9,6 +9,27 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/config"
 )
 
+func TestLocalMotionPromptsForInklingConnections(t *testing.T) {
+	for _, tc := range []struct {
+		model, base, level, output string
+		want                       bool
+	}{
+		{"inkling-2-mini", "http://127.0.0.1:8080/v1", "intermediate", "prompt", true},
+		{"thinkingmachines/Inkling-2-Mini", "http://[::1]:8080/v1", "intermediate", "prompt", true},
+		{"inkling-2-mini", "https://models.example/v1", "intermediate", "prompt", false},
+		{"other-model", "http://localhost:8080/v1", "intermediate", "prompt", false},
+		{"inkling-2-mini", "http://localhost:8080/v1", "advanced", "prompt", false},
+		{"inkling-2-mini", "http://localhost:8080/v1", "intermediate", "auto", false},
+	} {
+		connection := config.ModelConnection{ID: "candidate", Provider: config.LLMProviderCompatible,
+			Model: tc.model, BaseURL: tc.base, CapabilityLevel: tc.level, OutputMode: tc.output}
+		settings := config.DefaultSettings().LLM.WithConnection(connection)
+		if got := chatCapabilities(settings, nil).LocalInference; got != tc.want {
+			t.Errorf("model %q at %q, %s/%s: local prompts = %t, want %t", tc.model, tc.base, tc.level, tc.output, got, tc.want)
+		}
+	}
+}
+
 func lmStudioChat(level string) config.LLMSettings {
 	settings := config.DefaultSettings().LLM
 	settings.MotionGenerationMode = config.LLMMotionModeLayered

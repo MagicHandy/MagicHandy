@@ -5,12 +5,31 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"path"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
+
+func usesLocalMotionPrompts(settings config.LLMSettings) bool {
+	connection := settings.ActiveConnection
+	if connection == nil {
+		return settings.Provider == config.LLMProviderOllama || settings.Provider == config.LLMProviderLlamaCPP
+	}
+	// The loopback Inkling connection can let the model reason before JSON.
+	// Its Intermediate prompt needs the same range and recall guidance as
+	// the native local role. The saved output policy still controls decoding.
+	if connection.Provider != config.LLMProviderCompatible || connection.OutputMode != "prompt" ||
+		connection.ModelCapabilityLevel() != config.ModelCapabilityIntermediate || !strings.EqualFold(path.Base(connection.Model), "inkling-2-mini") {
+		return false
+	}
+	endpoint, err := url.Parse(connection.BaseURL)
+	return err == nil && (endpoint.Scheme == "http" || endpoint.Scheme == "https") && isLoopbackHost(endpoint.Host)
+}
 
 type hostedRequestLanes struct {
 	mu    sync.Mutex

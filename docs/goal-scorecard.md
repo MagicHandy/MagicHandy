@@ -2,9 +2,11 @@
 
 ## 2026-11-21 — Inkling local model evaluation
 
-The stripped Windows amd64 core measured **25,437,184 bytes** on both the
-release baseline `1b80d72e` and the local action-schema change. Both builds
-used Go 1.26.11, `CGO_ENABLED=0`, `-buildvcs=false`, `-trimpath` and
+The stripped Windows amd64 core measured **25,437,184 bytes** on the release
+baseline `1b80d72e` and on the local action-schema change. Selecting the
+local motion guidance for Inkling brought the total to **25,438,208 bytes**
+(+1,024 bytes). The builds used Go 1.26.11, `CGO_ENABLED=0`,
+`-buildvcs=false`, `-trimpath` and
 `-ldflags "-s -w"`. The runner and model weights used in the evaluation are
 external to the binary. The simulator comparison reports first-pass motion,
 readbacks, unexpected motion on holds and end-to-end latency separately.
