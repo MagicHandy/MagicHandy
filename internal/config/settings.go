@@ -171,10 +171,17 @@ const (
 	ParakeetSourceApp = "app_managed"
 	// ParakeetSourceCustom uses user-supplied local runner and model paths.
 	ParakeetSourceCustom = "custom_local"
-	// DefaultElevenLabsVoiceID is the stock Rachel voice.
-	DefaultElevenLabsVoiceID = "21m00Tcm4TlvDq8ikWAM"
-	// DefaultElevenLabsModelID is the default multilingual model.
-	DefaultElevenLabsModelID = "eleven_multilingual_v2"
+	// DefaultElevenLabsVoiceID is "Jessica" (playful, bright, warm), one of
+	// ElevenLabs' default voices, which every plan can use through the API.
+	DefaultElevenLabsVoiceID = "cgSgspJ2msm6clMCkdW9"
+	// RetiredElevenLabsVoiceID was the factory default ("Rachel"). ElevenLabs
+	// retired it from the default voices; the ID now names a Voice Library
+	// voice, which free plans cannot use through the API (HTTP 402). Settings
+	// still holding it move to the current default.
+	RetiredElevenLabsVoiceID = "21m00Tcm4TlvDq8ikWAM"
+	// DefaultElevenLabsModelID is Eleven v4 Turbo: the expressive v4 family
+	// at real-time latency and half the credits of Eleven v4.
+	DefaultElevenLabsModelID = "eleven_v4_turbo"
 	// DefaultTTSServerPort is the first managed local TTS port.
 	DefaultTTSServerPort = 8991
 	// DefaultTTSBaseURL is the loopback endpoint used by the first TTS module.
@@ -314,8 +321,9 @@ type VoiceSettings struct {
 	ASRWorkerPath string   `json:"asr_worker_path,omitempty"`
 	ASRWorkerArgs []string `json:"asr_worker_args,omitempty"`
 
-	ElevenLabsVoiceID string `json:"elevenlabs_voice_id,omitempty"`
-	ElevenLabsModelID string `json:"elevenlabs_model_id,omitempty"`
+	ElevenLabsVoiceID  string             `json:"elevenlabs_voice_id,omitempty"`
+	ElevenLabsModelID  string             `json:"elevenlabs_model_id,omitempty"`
+	ElevenLabsDelivery ElevenLabsDelivery `json:"elevenlabs_delivery"`
 
 	TTSAutoLaunch     bool   `json:"tts_auto_launch"`
 	TTSBaseURL        string `json:"tts_base_url,omitempty"`
@@ -363,91 +371,96 @@ type VoiceSettings struct {
 // PublicVoiceSettings is the API-safe voice view; the ElevenLabs key is
 // reduced to a set/unset flag.
 type PublicVoiceSettings struct {
-	Enabled            bool     `json:"enabled"`
-	TTSProvider        string   `json:"tts_provider"`
-	ASRProvider        string   `json:"asr_provider"`
-	TTSWorkerPath      string   `json:"tts_worker_path,omitempty"`
-	TTSWorkerArgs      []string `json:"tts_worker_args,omitempty"`
-	ASRWorkerPath      string   `json:"asr_worker_path,omitempty"`
-	ASRWorkerArgs      []string `json:"asr_worker_args,omitempty"`
-	SpeakReplies       bool     `json:"speak_replies"`
-	ChatSpeechPolicy   string   `json:"chat_speech_policy"`
-	ElevenLabsVoiceID  string   `json:"elevenlabs_voice_id,omitempty"`
-	ElevenLabsModelID  string   `json:"elevenlabs_model_id,omitempty"`
-	TTSAutoLaunch      bool     `json:"tts_auto_launch"`
-	TTSBaseURL         string   `json:"tts_base_url,omitempty"`
-	TTSModel           string   `json:"tts_model,omitempty"`
-	TTSVoice           string   `json:"tts_voice,omitempty"`
-	TTSResponseFormat  string   `json:"tts_response_format,omitempty"`
-	TTSHealthPath      string   `json:"tts_health_path,omitempty"`
-	TTSModuleRoot      string   `json:"tts_module_root,omitempty"`
-	TTSServerPort      int      `json:"tts_server_port,omitempty"`
-	TTSReferenceWAV    string   `json:"tts_reference_wav,omitempty"`
-	TTSReferenceText   string   `json:"tts_reference_text,omitempty"`
-	TTSLanguage        string   `json:"tts_language,omitempty"`
-	TTSDevice          string   `json:"tts_device,omitempty"`
-	TTSSeed            uint32   `json:"tts_seed"`
-	TTSSeedMode        string   `json:"tts_seed_mode"`
-	TTSTonePreset      string   `json:"tts_tone_preset"`
-	TTSTonePrompt      string   `json:"tts_tone_prompt,omitempty"`
-	ParakeetServerPath string   `json:"parakeet_server_path,omitempty"`
-	ParakeetModelPath  string   `json:"parakeet_model_path,omitempty"`
-	ParakeetServerPort int      `json:"parakeet_port,omitempty"`
-	ParakeetSource     string   `json:"parakeet_source"`
-	ASRBaseURL         string   `json:"asr_base_url,omitempty"`
-	ASRModel           string   `json:"asr_model,omitempty"`
-	InputMode          string   `json:"input_mode"`
-	InputSensitivity   int      `json:"input_sensitivity"`
-	InputSilenceMillis int      `json:"input_silence_ms"`
-	InputNoiseSuppress bool     `json:"input_noise_suppression"`
-	ElevenLabsKeySet   bool     `json:"elevenlabs_key_set"`
-	OpenAITTSKeySet    bool     `json:"openai_tts_key_set"`
+	Enabled           bool     `json:"enabled"`
+	TTSProvider       string   `json:"tts_provider"`
+	ASRProvider       string   `json:"asr_provider"`
+	TTSWorkerPath     string   `json:"tts_worker_path,omitempty"`
+	TTSWorkerArgs     []string `json:"tts_worker_args,omitempty"`
+	ASRWorkerPath     string   `json:"asr_worker_path,omitempty"`
+	ASRWorkerArgs     []string `json:"asr_worker_args,omitempty"`
+	SpeakReplies      bool     `json:"speak_replies"`
+	ChatSpeechPolicy  string   `json:"chat_speech_policy"`
+	ElevenLabsVoiceID string   `json:"elevenlabs_voice_id,omitempty"`
+	ElevenLabsModelID string   `json:"elevenlabs_model_id,omitempty"`
+	// ElevenLabsDelivery is public: it holds no credential.
+	ElevenLabsDelivery ElevenLabsDelivery `json:"elevenlabs_delivery"`
+	TTSAutoLaunch      bool               `json:"tts_auto_launch"`
+	TTSBaseURL         string             `json:"tts_base_url,omitempty"`
+	TTSModel           string             `json:"tts_model,omitempty"`
+	TTSVoice           string             `json:"tts_voice,omitempty"`
+	TTSResponseFormat  string             `json:"tts_response_format,omitempty"`
+	TTSHealthPath      string             `json:"tts_health_path,omitempty"`
+	TTSModuleRoot      string             `json:"tts_module_root,omitempty"`
+	TTSServerPort      int                `json:"tts_server_port,omitempty"`
+	TTSReferenceWAV    string             `json:"tts_reference_wav,omitempty"`
+	TTSReferenceText   string             `json:"tts_reference_text,omitempty"`
+	TTSLanguage        string             `json:"tts_language,omitempty"`
+	TTSDevice          string             `json:"tts_device,omitempty"`
+	TTSSeed            uint32             `json:"tts_seed"`
+	TTSSeedMode        string             `json:"tts_seed_mode"`
+	TTSTonePreset      string             `json:"tts_tone_preset"`
+	TTSTonePrompt      string             `json:"tts_tone_prompt,omitempty"`
+	ParakeetServerPath string             `json:"parakeet_server_path,omitempty"`
+	ParakeetModelPath  string             `json:"parakeet_model_path,omitempty"`
+	ParakeetServerPort int                `json:"parakeet_port,omitempty"`
+	ParakeetSource     string             `json:"parakeet_source"`
+	ASRBaseURL         string             `json:"asr_base_url,omitempty"`
+	ASRModel           string             `json:"asr_model,omitempty"`
+	InputMode          string             `json:"input_mode"`
+	InputSensitivity   int                `json:"input_sensitivity"`
+	InputSilenceMillis int                `json:"input_silence_ms"`
+	InputNoiseSuppress bool               `json:"input_noise_suppression"`
+	ElevenLabsKeySet   bool               `json:"elevenlabs_key_set"`
+	OpenAITTSKeySet    bool               `json:"openai_tts_key_set"`
 }
 
 // VoiceUpdate is the API write payload for voice settings. A nil API key
 // keeps the stored secret; ClearElevenLabsKey removes it.
 type VoiceUpdate struct {
-	Enabled            bool     `json:"enabled"`
-	TTSProvider        string   `json:"tts_provider"`
-	ASRProvider        string   `json:"asr_provider"`
-	TTSWorkerPath      string   `json:"tts_worker_path"`
-	TTSWorkerArgs      []string `json:"tts_worker_args"`
-	ASRWorkerPath      string   `json:"asr_worker_path"`
-	ASRWorkerArgs      []string `json:"asr_worker_args"`
-	SpeakReplies       bool     `json:"speak_replies"`
-	ChatSpeechPolicy   *string  `json:"chat_speech_policy,omitempty"`
-	ElevenLabsVoiceID  string   `json:"elevenlabs_voice_id"`
-	ElevenLabsModelID  string   `json:"elevenlabs_model_id"`
-	TTSAutoLaunch      *bool    `json:"tts_auto_launch,omitempty"`
-	TTSBaseURL         string   `json:"tts_base_url"`
-	TTSModel           string   `json:"tts_model"`
-	TTSVoice           string   `json:"tts_voice"`
-	TTSResponseFormat  string   `json:"tts_response_format"`
-	TTSHealthPath      string   `json:"tts_health_path"`
-	TTSModuleRoot      string   `json:"tts_module_root"`
-	TTSServerPort      int      `json:"tts_server_port"`
-	TTSReferenceWAV    string   `json:"tts_reference_wav"`
-	TTSReferenceText   string   `json:"tts_reference_text"`
-	TTSLanguage        string   `json:"tts_language"`
-	TTSDevice          string   `json:"tts_device"`
-	TTSSeed            *uint32  `json:"tts_seed,omitempty"`
-	TTSSeedMode        *string  `json:"tts_seed_mode,omitempty"`
-	TTSTonePreset      *string  `json:"tts_tone_preset,omitempty"`
-	TTSTonePrompt      *string  `json:"tts_tone_prompt,omitempty"`
-	ParakeetServerPath string   `json:"parakeet_server_path"`
-	ParakeetModelPath  string   `json:"parakeet_model_path"`
-	ParakeetServerPort int      `json:"parakeet_port"`
-	ParakeetSource     *string  `json:"parakeet_source,omitempty"`
-	ASRBaseURL         string   `json:"asr_base_url"`
-	ASRModel           string   `json:"asr_model"`
-	InputMode          *string  `json:"input_mode,omitempty"`
-	InputSensitivity   *int     `json:"input_sensitivity,omitempty"`
-	InputSilenceMillis *int     `json:"input_silence_ms,omitempty"`
-	InputNoiseSuppress *bool    `json:"input_noise_suppression,omitempty"`
-	ElevenLabsAPIKey   *string  `json:"elevenlabs_api_key,omitempty"`
-	ClearElevenLabsKey bool     `json:"clear_elevenlabs_key"`
-	OpenAITTSAPIKey    *string  `json:"openai_tts_api_key,omitempty"`
-	ClearOpenAITTSKey  bool     `json:"clear_openai_tts_key"`
+	Enabled           bool     `json:"enabled"`
+	TTSProvider       string   `json:"tts_provider"`
+	ASRProvider       string   `json:"asr_provider"`
+	TTSWorkerPath     string   `json:"tts_worker_path"`
+	TTSWorkerArgs     []string `json:"tts_worker_args"`
+	ASRWorkerPath     string   `json:"asr_worker_path"`
+	ASRWorkerArgs     []string `json:"asr_worker_args"`
+	SpeakReplies      bool     `json:"speak_replies"`
+	ChatSpeechPolicy  *string  `json:"chat_speech_policy,omitempty"`
+	ElevenLabsVoiceID string   `json:"elevenlabs_voice_id"`
+	ElevenLabsModelID string   `json:"elevenlabs_model_id"`
+	// ElevenLabsDelivery replaces the saved delivery when present; omitted
+	// keeps it, so older full-replacement clients do not reset it.
+	ElevenLabsDelivery *ElevenLabsDelivery `json:"elevenlabs_delivery,omitempty"`
+	TTSAutoLaunch      *bool               `json:"tts_auto_launch,omitempty"`
+	TTSBaseURL         string              `json:"tts_base_url"`
+	TTSModel           string              `json:"tts_model"`
+	TTSVoice           string              `json:"tts_voice"`
+	TTSResponseFormat  string              `json:"tts_response_format"`
+	TTSHealthPath      string              `json:"tts_health_path"`
+	TTSModuleRoot      string              `json:"tts_module_root"`
+	TTSServerPort      int                 `json:"tts_server_port"`
+	TTSReferenceWAV    string              `json:"tts_reference_wav"`
+	TTSReferenceText   string              `json:"tts_reference_text"`
+	TTSLanguage        string              `json:"tts_language"`
+	TTSDevice          string              `json:"tts_device"`
+	TTSSeed            *uint32             `json:"tts_seed,omitempty"`
+	TTSSeedMode        *string             `json:"tts_seed_mode,omitempty"`
+	TTSTonePreset      *string             `json:"tts_tone_preset,omitempty"`
+	TTSTonePrompt      *string             `json:"tts_tone_prompt,omitempty"`
+	ParakeetServerPath string              `json:"parakeet_server_path"`
+	ParakeetModelPath  string              `json:"parakeet_model_path"`
+	ParakeetServerPort int                 `json:"parakeet_port"`
+	ParakeetSource     *string             `json:"parakeet_source,omitempty"`
+	ASRBaseURL         string              `json:"asr_base_url"`
+	ASRModel           string              `json:"asr_model"`
+	InputMode          *string             `json:"input_mode,omitempty"`
+	InputSensitivity   *int                `json:"input_sensitivity,omitempty"`
+	InputSilenceMillis *int                `json:"input_silence_ms,omitempty"`
+	InputNoiseSuppress *bool               `json:"input_noise_suppression,omitempty"`
+	ElevenLabsAPIKey   *string             `json:"elevenlabs_api_key,omitempty"`
+	ClearElevenLabsKey bool                `json:"clear_elevenlabs_key"`
+	OpenAITTSAPIKey    *string             `json:"openai_tts_api_key,omitempty"`
+	ClearOpenAITTSKey  bool                `json:"clear_openai_tts_key"`
 }
 
 // DiagnosticsSettings contains logging and diagnostics verbosity settings.
@@ -789,6 +802,7 @@ func publicVoiceSettings(settings VoiceSettings) PublicVoiceSettings {
 		ChatSpeechPolicy:   settings.ChatSpeechPolicy,
 		ElevenLabsVoiceID:  settings.ElevenLabsVoiceID,
 		ElevenLabsModelID:  settings.ElevenLabsModelID,
+		ElevenLabsDelivery: settings.ElevenLabsDelivery.clone(),
 		TTSAutoLaunch:      settings.TTSAutoLaunch,
 		TTSBaseURL:         settings.TTSBaseURL,
 		TTSModel:           settings.TTSModel,
@@ -894,6 +908,10 @@ func applyVoiceUpdate(current VoiceSettings, update VoiceUpdate) VoiceSettings {
 	if update.TTSAutoLaunch != nil {
 		ttsAutoLaunch = *update.TTSAutoLaunch
 	}
+	delivery := current.ElevenLabsDelivery.clone()
+	if update.ElevenLabsDelivery != nil {
+		delivery = update.ElevenLabsDelivery.clone()
+	}
 	parakeetSource := current.ParakeetSource
 	if update.ParakeetSource != nil {
 		parakeetSource = *update.ParakeetSource
@@ -945,6 +963,7 @@ func applyVoiceUpdate(current VoiceSettings, update VoiceUpdate) VoiceSettings {
 		SpeakReplies:       update.SpeakReplies,
 		ElevenLabsVoiceID:  update.ElevenLabsVoiceID,
 		ElevenLabsModelID:  update.ElevenLabsModelID,
+		ElevenLabsDelivery: delivery,
 		TTSAutoLaunch:      ttsAutoLaunch,
 		TTSBaseURL:         update.TTSBaseURL,
 		TTSModel:           update.TTSModel,
@@ -1380,6 +1399,7 @@ func cloneSettings(settings Settings) Settings {
 	}
 	settings.Voice.TTSWorkerArgs = cloneStrings(settings.Voice.TTSWorkerArgs)
 	settings.Voice.ASRWorkerArgs = cloneStrings(settings.Voice.ASRWorkerArgs)
+	settings.Voice.ElevenLabsDelivery = settings.Voice.ElevenLabsDelivery.clone()
 	return settings
 }
 

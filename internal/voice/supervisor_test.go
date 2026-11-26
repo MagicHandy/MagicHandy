@@ -678,8 +678,9 @@ func TestRequestLogNeverEvictsActiveWork(t *testing.T) {
 func TestWorkerEnvCarriesCredentialsPrivately(t *testing.T) {
 	const secret = "el-env-secret-42" // #nosec G101 -- synthetic test credential, not a real key
 	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/user" && r.Header.Get("xi-api-key") == secret {
-			w.WriteHeader(http.StatusOK)
+		// Load checks the key against the model list (Models permission).
+		if r.URL.Path == "/v1/models" && r.Header.Get("xi-api-key") == secret {
+			_, _ = w.Write([]byte(`[{"model_id":"eleven_multilingual_v2","can_do_text_to_speech":true},{"model_id":"eleven_v4_turbo","can_do_text_to_speech":true}]`))
 			return
 		}
 		w.WriteHeader(http.StatusUnauthorized)

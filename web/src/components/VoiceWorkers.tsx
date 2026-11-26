@@ -68,6 +68,8 @@ interface Props {
   savedProviderLabel?: string;
   showParakeetModule?: boolean;
   showTTSModule?: boolean;
+  /** The saved provider is a cloud service, so starting checks a connection instead of loading a model. */
+  cloud?: boolean;
   parakeetRepair?: ParakeetRepair;
   workers: Record<string, VoiceWorkerStatus>;
   requests: VoiceRequestSnapshot[];
@@ -109,6 +111,7 @@ export function VoiceWorkers({
   savedProviderLabel,
   showParakeetModule,
   showTTSModule,
+  cloud = false,
   parakeetRepair,
   workers,
   requests,
@@ -226,7 +229,7 @@ export function VoiceWorkers({
     }
   }
 
-  const lead = phaseMessage(phase, role, { enabled, worker, module, repair });
+  const lead = phaseMessage(phase, role, { enabled, worker, module, repair, cloud });
   const showError = phase === "failed" && errorMessage;
   const errorWording = ERROR_WORDING[errorMessage];
   const detailedError = errorMessage.length > 240 || errorMessage.includes("\n");
@@ -279,12 +282,13 @@ export function VoiceWorkers({
 
 interface MessageContext {
   enabled: boolean;
+  cloud?: boolean;
   worker?: VoiceWorkerStatus;
   module?: VoiceModuleStatus;
   repair?: ParakeetRepair;
 }
 
-function phaseMessage(phase: VoicePhase, role: Role, { enabled, worker, module, repair }: MessageContext): string {
+function phaseMessage(phase: VoicePhase, role: Role, { enabled, worker, module, repair, cloud }: MessageContext): string {
   switch (phase) {
     case "off":
       return enabled ? t("Voice turns on a few seconds after saving.") : t("Voice is off. Turn on Enable voice above, then save.");
@@ -301,7 +305,9 @@ function phaseMessage(phase: VoicePhase, role: Role, { enabled, worker, module, 
     // Start always includes loading the model, so both share one explanation.
     case "starting":
     case "loading":
-      return t("Loading the model. This can take a minute or two, especially the first time after MagicHandy starts.");
+      return cloud
+        ? t("Checking the ElevenLabs connection…")
+        : t("Loading the model. This can take a minute or two, especially the first time after MagicHandy starts.");
     case "busy":
       return t("Running, but it has not reported a loaded model yet. This is normal while the model loads. If it lasts more than a few minutes, stop it and start it again.");
     case "ready":
@@ -310,7 +316,7 @@ function phaseMessage(phase: VoicePhase, role: Role, { enabled, worker, module, 
       return t("Running without its model, so it cannot be used yet.");
     case "failed":
       if (worker?.state === "crashed") return t("It stopped unexpectedly.");
-      if (worker?.state === "running") return t("It is running but not working.");
+      if (worker?.state === "running") return cloud ? t("It is running, but ElevenLabs refused the connection. The reason is below.") : t("It is running but not working.");
       return t("It could not start.");
     default:
       return "";

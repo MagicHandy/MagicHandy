@@ -127,6 +127,11 @@ shared	GET /api/voice/requests/{id}
 shared	GET /api/voice/requests/{id}/audio
 shared	GET /api/voice/requests/{id}/audio-chunk
 shared	GET /api/voice/status
+host	GET /api/voice/elevenlabs/account
+host	GET /api/voice/elevenlabs/models
+host	GET /api/voice/elevenlabs/voices
+host	GET /api/voice/elevenlabs/library
+host	GET /api/voice/elevenlabs/preview
 public	GET /healthz
 self	PATCH /api/auth/sessions/{id}
 host	PATCH /api/library/patterns/{id}
@@ -255,6 +260,8 @@ host	POST /api/transport/autoblow/disconnect
 control	POST /api/transport/autoblow/test
 control	POST /api/transport/autoblow/stroke
 host	POST /api/voice/module/update
+host	POST /api/voice/elevenlabs/account
+host	POST /api/voice/elevenlabs/library/add
 control	POST /api/voice/requests/{id}/cancel
 control	POST /api/voice/requests/{id}/played
 control	POST /api/voice/transcriptions

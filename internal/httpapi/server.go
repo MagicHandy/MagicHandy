@@ -155,6 +155,9 @@ type Server struct {
 	voiceExecutable       string
 	voiceDataDir          string
 	voiceModuleUpdates    voiceModuleUpdateCache
+	elevenLabs            elevenLabsRuntime
+	credentialSalt        [16]byte
+	credentialSaltOnce    sync.Once
 	voiceAutoloadMu       sync.Mutex
 	voiceAutoloadCancel   context.CancelFunc
 	voiceAutoloadWG       sync.WaitGroup
@@ -724,11 +727,15 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
-	settings, status := s.store.PublicSnapshot()
-	writeJSON(w, http.StatusOK, map[string]any{
-		"settings": s.clientSettings(r, settings),
+	settings, status := s.store.Snapshot()
+	response := map[string]any{
+		"settings": s.clientSettings(r, settings.Public()),
 		"status":   s.clientLoadStatus(r, status),
-	})
+	}
+	if s.capabilities(r).ConfigureHost {
+		response["credential_revision"] = s.credentialRevision(settings)
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
@@ -757,7 +764,7 @@ func (s *Server) handlePatchSettings(w http.ResponseWriter, r *http.Request) {
 	s.saveFormSettings(w, r, func(current config.Settings) (config.Settings, error) {
 		if patch.ChangesCredential() {
 			_, status := s.store.Snapshot()
-			if patch.CredentialRevision == "" || patch.CredentialRevision != status.LoadedAt {
+			if !s.credentialRevisionMatches(patch.CredentialRevision, current, status.LoadedAt) {
 				return current, config.ErrSettingsConflict
 			}
 		}

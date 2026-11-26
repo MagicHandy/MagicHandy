@@ -13,7 +13,7 @@ var (
 	setupANSI          = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
 	setupSensitiveLine = regexp.MustCompile(`(?im)^.*(?:authorization|cookie|password|passwd|api[-_ ]?key|access[-_ ]?token|hf_token|secret|connection[-_ ]?key|credential)[\w '"-]*[:=].*$`)
 	setupBearer        = regexp.MustCompile(`(?i)\b(?:bearer|basic)\s+[^\s'"<>]+`)
-	setupToken         = regexp.MustCompile(`\b(?:hf_|sk-)[A-Za-z0-9_-]{8,}\b`)
+	setupToken         = regexp.MustCompile(`\b(?:hf_|sk-|sk_)[A-Za-z0-9_-]{8,}\b`)
 	setupURL           = regexp.MustCompile(`(?i)\b(?:https?|ftp|file)://[^\s'"<>]+`)
 	// PowerShell wraps quoted paths/URLs across terminal lines; remove the
 	// entire quoted location before handling ordinary single-line locations.

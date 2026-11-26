@@ -1830,6 +1830,20 @@ does not veto speech. Automated lifecycle, framing and installer fixtures pass.
 Real-model listening, full-install activation/rollback recovery, first-audible
 latency and simultaneous local-LLM GPU acceptance remain open; R17 stays Medium.
 
+Status 2026-11-25: ElevenLabs speech had stopped working for new and
+restricted keys. The default voice had become a Voice Library voice that free
+plans cannot use through the API. ElevenLabs had also started answering a
+missing key permission with `401` instead of `403`, so restricted keys failed
+the worker's account probe. Speak replies did not start the worker, and
+30–60 second timeouts cut off long replies. The worker now probes the model
+list and treats a missing permission as non-fatal. Old settings move to a
+default voice that every plan can use. Classified ElevenLabs errors (plan,
+credits, paused free use, rate limits) reach the Chat status line. ElevenLabs
+can change account rules without notice. The opt-in live test
+(`docs/voice-elevenlabs.md`) is the check to rerun when reports arrive.
+Spoken text follows ElevenLabs' Prohibited Use Policy, and Settings states that
+plainly. See [ADR 0075](decisions/0075-elevenlabs-catalog-in-core.md).
+
 ## R18: LAN And Mobile Secure-Context Requirements
 
 Level: Medium
