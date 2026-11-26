@@ -1,4 +1,3 @@
-import "../styles/autopilot.css";
 import "../styles/freestyle.css";
 import { t, translateKnown } from "../i18n";
 // Preset Modes owns deterministic autonomous motion. Assistant-driven

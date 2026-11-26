@@ -1262,6 +1262,17 @@ trim targets and no overflow. Its client-side editor can only produce bounded
 motion-content input for the normal validated import endpoint; it cannot start
 motion or construct transport payloads.
 
+Status 2026-11-25: alpha.89 shipped a styling regression that route-level
+checks did not catch. Seven shared stylesheets loaded only with their owning
+route chunk. Chat's Autopilot card then showed the browser's default fieldset
+border, and the persona switcher, the device connection choices and several
+settings hints lost their layout. The fault was visible only on a first visit
+that skipped the owning route. Alpha.90 restores those sheets to the app
+shell. `web/scripts/check-route-styles.mjs` models the bundler's entry chunks
+and runs with `npm test`. It fails when a component names a class defined only
+in a stylesheet its chunk does not load. Class names built in variables
+outside a `className` attribute remain outside that check.
+
 ## R10: Scope Creep Toward Legacy Parity
 
 Level: High

@@ -18,6 +18,11 @@ controls, and one card level. The Chat control sidebar uses **control cards**
 study. Tokens live in `web/src/styles/tokens.css`; shell and component rules in
 `shell.css` / `components.css`, with feature files beside them. The pre-React
 `web/app.css` is retired under `web/legacy/` (reference only, not embedded).
+A feature stylesheet whose classes render on more than one route loads from
+`web/src/main.tsx`, in its established cascade position. Only a sheet used by
+a single route may load with that route's chunk. `npm test` runs
+`web/scripts/check-route-styles.mjs`, which fails when a component names a
+class defined only in a stylesheet its chunk does not load.
 
 Older design reviews and sketches are history, not specification. Where one
 disagrees with this file, this file and the build win. In particular, the

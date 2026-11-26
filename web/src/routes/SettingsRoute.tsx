@@ -1,5 +1,3 @@
-import "../styles/model-manager.css";
-import "../styles/settings-form.css";
 // Settings as a routed workspace (not an overlay). Sub-sections are real hash
 // routes: #/settings/devices|media|chat|diagnostics. Routed sections share one
 // Save; Devices saves each option as it changes, and prompt sets, memory and

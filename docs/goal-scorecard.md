@@ -1,5 +1,28 @@
 # Goal Scorecard
 
+## 2026-11-25 — Shared stylesheets load with the app shell again
+
+Alpha.89 moved nine feature stylesheets into route chunks. Seven of them
+style components that also render on other routes. Chat's Autopilot card, the
+persona switcher, the device connection choices and several settings panels
+therefore rendered unstyled until their owning route had loaded. Those seven
+sheets load with the app shell again, in their earlier cascade order. Modes and
+Videos keep their route-only sheets. Sizes are bytes, and gzip uses Python with
+`mtime=0`.
+
+| Measurement | alpha.89 (`1b80d72e`) | This change |
+| --- | ---: | ---: |
+| Main CSS, raw / gzip | 122,700 / 22,178 | 196,634 / 33,953 |
+| All CSS, raw | 226,006 in 8 files | 226,002 in 4 files |
+| Main JS, raw / gzip | 827,779 / 223,651 | 827,620 / 223,592 |
+| Entire canonical `web/dist` tree | 2,959,304 | 2,959,141 |
+| Stripped core, Go 1.26.11, `CGO_ENABLED=0`, `-trimpath -ldflags "-s -w"` | 25,437,184 | 25,436,672 |
+
+A first visit now fetches 11,775 more compressed bytes of CSS. Settings,
+Setup, Personas and Pattern library no longer fetch a separate stylesheet. The
+main stylesheet stays below the 207,527 / 35,619 B it was before alpha.89. No
+dependency was added. The ownership check runs only in `npm test`.
+
 ## 2026-11-18 — Review of prompt admission and retained-history replay
 
 The stripped Windows amd64 core grew from 25,425,920 bytes on `9a4c36cf` to
