@@ -14,6 +14,8 @@ export type { AutoblowDevice, AutoblowSettings, AutoblowStatus, AutoblowTranspor
 export type { TempoMode, TempoReadout, TempoRoutine, TempoSection, TempoSpec } from "./tempo-types";
 import type { AccountCapabilities } from "./access-types";
 export type { AccountRole, ManagedSession, ManagedSessionsResponse, UserAccount, ControlIdentity, AuthenticationStatus, AccountCapabilities, ControlGrant, NetworkConfig, NetworkStatus, InternetDiscovery, CertificatePreparation } from "./access-types";
+import type { ElevenLabsDelivery } from "./elevenlabs-types";
+export type { ElevenLabsAccount, ElevenLabsDelivery, ElevenLabsLibraryPage, ElevenLabsLibraryVoice, ElevenLabsModel, ElevenLabsProbe, ElevenLabsVoice, ElevenLabsVoicePage } from "./elevenlabs-types";
 
 export type MotionStyle = "gentle" | "balanced" | "intense";
 export type HandyModel = "handy_original" | "handy_2_standard" | "handy_2_pro";
@@ -901,6 +903,7 @@ export interface VoiceSettings {
   chat_speech_policy?: "interrupt" | "finish_current" | string;
   elevenlabs_voice_id?: string;
   elevenlabs_model_id?: string;
+  elevenlabs_delivery?: ElevenLabsDelivery;
   tts_auto_launch: boolean;
   tts_base_url?: string;
   tts_model?: string;

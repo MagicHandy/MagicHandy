@@ -68,6 +68,8 @@ func hostPrivateRead(route string) bool {
 	return hostDiagnosticsRoute(route) || route == "/api/audit" || strings.HasPrefix(route, "/api/audit/") || route == "/api/network" || strings.HasPrefix(route, "/api/network/") ||
 		route == "/api/setup" || strings.HasPrefix(route, "/api/setup/") ||
 		(strings.HasPrefix(route, "/api/llm/") && route != "/api/llm/status") ||
+		// ElevenLabs reads use the host's API key and reveal its plan and voices.
+		strings.HasPrefix(route, "/api/voice/elevenlabs/") ||
 		route == "/api/media/tools" || route == "/api/accounts" ||
 		(strings.HasPrefix(route, "/api/accounts/") && !singleResourceAction(route, "/api/accounts/", "/profile-image"))
 }

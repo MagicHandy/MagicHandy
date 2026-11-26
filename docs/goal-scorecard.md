@@ -1,5 +1,29 @@
 # Goal Scorecard
 
+## 2026-11-25 — ElevenLabs refactor and voice browser
+
+The comparison base is the stylesheet fix at `8d5d9efe`. Binaries used Go
+1.26.11, `CGO_ENABLED=0`, `-trimpath` and `-ldflags "-s -w"`. Sizes are bytes,
+and gzip uses Python with `mtime=0`.
+
+| Measurement | Base | ElevenLabs refactor |
+| --- | ---: | ---: |
+| Stripped core | 25,436,672 | 25,641,984 (+205,312) |
+| Stripped `voice-elevenlabs-worker` | 6,439,936 | 6,799,872 (+359,936) |
+| Main JS, raw / gzip | 827,620 / 223,592 | 836,187 / 225,705 |
+| Main CSS, raw / gzip | 196,634 / 33,953 | unchanged |
+| Settings chunk JS, raw / gzip | 184,038 / 49,005 | 206,342 / 55,342 |
+| Settings chunk CSS, raw / gzip | none | 3,574 / 1,037 |
+| Four lazy locale bundles, raw | 1,313,123 | 1,348,715 (+35,592) |
+| Entire canonical `web/dist` tree | 2,959,141 | 3,029,951 (+70,810) |
+
+The core grows by the shared ElevenLabs client, its routes and the larger
+embedded UI. No dependency was added. Nothing new runs at startup, and the core
+calls ElevenLabs only while Voice settings shows the ElevenLabs provider. The
+voice browser and delivery controls load with the Settings chunk. Chat's
+status line and the English strings account for the main-script growth. The
+stripped core remains below the 30 MB target.
+
 ## 2026-11-25 — Shared stylesheets load with the app shell again
 
 Alpha.89 moved nine feature stylesheets into route chunks. Seven of them

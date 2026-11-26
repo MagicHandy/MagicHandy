@@ -32,6 +32,11 @@ const voiceHealthTimeout = 3 * time.Second
 // follows a user-initiated start; managed providers may boot a local server.
 const voiceModelLoadTimeout = 15 * time.Minute
 
+// elevenLabsJobTimeout bounds one ElevenLabs reply, including pauses for a
+// rate-limit retry. The default 60s could cut off a long reply on a slower
+// expressive model.
+const elevenLabsJobTimeout = 5 * time.Minute
+
 const (
 	maxVoiceAudioBytes       = 32 << 20
 	maxVoiceAudioBase64Bytes = ((maxVoiceAudioBytes + 2) / 3) * 4
@@ -51,8 +56,18 @@ func voiceManagerConfig(settings config.VoiceSettings, executablePath, dataDir s
 	tts := voice.WorkerConfig{Enabled: settings.Enabled && settings.TTSProvider != config.VoiceProviderNone}
 	switch settings.TTSProvider {
 	case config.VoiceTTSProviderElevenLabs:
-		tts.Command = resolveWorkerBinary(settings.TTSWorkerPath, executablePath, dataDir, "voice-elevenlabs-worker")
-		tts.Args = []string{"-voice-id", settings.ElevenLabsVoiceID, "-model-id", settings.ElevenLabsModelID}
+		// The worker path is only editable for Custom workers, so a saved path
+		// here is a leftover; the bundled worker wins, and an override is used
+		// only where no bundled worker exists (source builds).
+		tts.Command = resolveWorkerBinary("", executablePath, dataDir, "voice-elevenlabs-worker")
+		if tts.Command == "" {
+			tts.Command = resolveFirstPartyWorkerBinary(settings.TTSWorkerPath, executablePath, dataDir, "voice-elevenlabs-worker")
+		}
+		tts.Args = append([]string{"-voice-id", settings.ElevenLabsVoiceID, "-model-id", settings.ElevenLabsModelID},
+			elevenLabsDeliveryArgs(settings.ElevenLabsDelivery)...)
+		// One streaming request per reply is bounded by the worker's idle and
+		// header timeouts; this only caps a whole very long reply.
+		tts.JobTimeout = elevenLabsJobTimeout
 		if settings.ElevenLabsAPIKey != "" {
 			tts.Env = map[string]string{"ELEVENLABS_API_KEY": settings.ElevenLabsAPIKey}
 		}
@@ -89,6 +104,29 @@ func voiceManagerConfig(settings config.VoiceSettings, executablePath, dataDir s
 		asr.Command, asr.Args = settings.ASRWorkerPath, settings.ASRWorkerArgs
 	}
 	return voice.Config{TTS: tts, ASR: asr}
+}
+
+// elevenLabsDeliveryArgs passes only the delivery settings the person set;
+// anything unset keeps the voice's own setting.
+func elevenLabsDeliveryArgs(delivery config.ElevenLabsDelivery) []string {
+	var args []string
+	for _, setting := range []struct {
+		flag  string
+		value *float64
+	}{
+		{"-stability", delivery.Stability},
+		{"-similarity", delivery.Similarity},
+		{"-style", delivery.Style},
+		{"-speed", delivery.Speed},
+	} {
+		if setting.value != nil {
+			args = append(args, setting.flag, strconv.FormatFloat(*setting.value, 'f', -1, 64))
+		}
+	}
+	if delivery.Language != "" {
+		args = append(args, "-language", delivery.Language)
+	}
+	return args
 }
 
 func openAITTSWorkerConfig(settings config.VoiceSettings, executablePath, dataDir string) voice.WorkerConfig {
@@ -741,6 +779,7 @@ func (s *Server) voiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/voice/input-preferences", s.handleVoiceInputPreferences)
 	mux.HandleFunc("POST /api/voice/module/update", s.handleTTSModuleUpdate)
 	mux.HandleFunc("DELETE /api/voice/module/update", s.handleTTSModuleUpdateCancel)
+	s.elevenLabsRoutes(mux)
 }
 
 // voiceState is the /api/state block: lifecycle snapshots only, no live IPC
@@ -1340,7 +1379,7 @@ func (s *Server) handleVoicePreferences(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	_, _, err := s.store.UpdateContext(r.Context(), func(settings config.Settings) (config.Settings, error) {
+	previous, saved, err := s.store.UpdateContext(r.Context(), func(settings config.Settings) (config.Settings, error) {
 		settings.Voice.SpeakReplies = body.SpeakReplies
 		return settings, nil
 	})
@@ -1348,6 +1387,10 @@ func (s *Server) handleVoicePreferences(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, errors.New("voice preference could not be saved"))
 		return
 	}
+	// Speaking replies needs a running speech worker. Turning it on from Chat
+	// must start and load the worker the same way saving Settings does;
+	// otherwise every reply is dropped with "tts worker is not running".
+	s.applyVoiceSettingsTransition(previous, saved)
 	writeJSON(w, http.StatusOK, map[string]any{"speak_replies": body.SpeakReplies})
 }
 

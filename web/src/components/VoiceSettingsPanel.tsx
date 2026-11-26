@@ -3,6 +3,7 @@ import type { PublicSettings } from "../api/types";
 import { t, translateKnown, type MessageKey } from "../i18n";
 import { RefreshIcon } from "../shell/icons";
 import { useAppState } from "../state/app-state";
+import { ElevenLabsVoiceSettings } from "./ElevenLabsVoiceSettings";
 import { HostPathField } from "./HostPathField";
 import { TTSModuleUpdate } from "./TTSModuleUpdate";
 import { useParakeetRepair } from "./useParakeetRepair";
@@ -213,16 +214,13 @@ export function VoiceSettingsPanel({
       <div className="group">
         <h3 className="group-title">{t("Speech output")}</h3>
         {/* The backend inspects the saved TTS module, so its readout only belongs under that provider. */}
-        <VoiceWorkers role="tts" {...roleCard(voice.tts_provider, savedTTS)} showTTSModule={managedTTS && savedTTS === voice.tts_provider} {...runtimeProps} />
+        <VoiceWorkers role="tts" {...roleCard(voice.tts_provider, savedTTS)} showTTSModule={managedTTS && savedTTS === voice.tts_provider} cloud={savedTTS === "elevenlabs"} {...runtimeProps} />
         {managedTTS && <TTSModuleUpdate update={runtime.modules.tts?.update} locked={locked} dirty={dirty} refresh={runtime.refresh} onComplete={onRuntimeChanged} />}
         <label className="field"><span className="label">{t("Provider")}</span>{providerSelect(t("Speech output provider"), voice.tts_provider, s.options.tts_providers, selectTTSProvider)}</label>
 
-        {voice.tts_provider === "elevenlabs" && <>
-          <label className="field"><span className="label">{t("API key")}{voice.elevenlabs_key_set && <span className="badge">{t("set")}</span>}</span><input type="password" autoComplete="off" placeholder={voice.elevenlabs_key_set ? t("set (leave blank to keep)") : t("Paste API key")} value={newKey} disabled={locked} onChange={(event) => setNewKey(event.target.value)} /></label>
-          <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked || Boolean(newKey.trim())} onChange={(event) => setClearKey(event.target.checked)} /><span className="track" aria-hidden="true" /></span><span>{t("Clear API key on save")}</span></label>
-          <label className="field"><span className="label">{t("Voice ID")}</span><input type="text" value={voice.elevenlabs_voice_id ?? ""} disabled={locked} onChange={(event) => patch({ elevenlabs_voice_id: event.target.value })} /></label>
-          <label className="field"><span className="label">{t("Model ID")}</span><input type="text" value={voice.elevenlabs_model_id ?? ""} disabled={locked} onChange={(event) => patch({ elevenlabs_model_id: event.target.value })} /></label>
-        </>}
+        {voice.tts_provider === "elevenlabs" && (
+          <ElevenLabsVoiceSettings voice={voice} locked={locked} patch={patch} newKey={newKey} setNewKey={setNewKey} clearKey={clearKey} setClearKey={setClearKey} />
+        )}
 
         {voice.tts_provider === "faster_qwen3_tts" && <>
           <p className="hint-block">{t("Faster Qwen3-TTS requires an NVIDIA GPU with CUDA.")}</p>
