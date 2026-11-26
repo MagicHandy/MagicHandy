@@ -6,12 +6,33 @@ Accepted. The reviewed unsigned policy was established after Microsoft completed
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.64 and alpha.66 through alpha.89
-package-preserving releases. The latest amendment is dated 2026-11-18.
+reviewed alpha.14 through alpha.64 and alpha.66 through alpha.90
+package-preserving releases. The latest amendment is dated 2026-11-26.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.90 amendment
+
+The owner asked for this release. Alpha.90 combines PR #377, which loads
+shared stylesheets with the app shell again, and PR #378, the ElevenLabs
+refactor and voice browser. The
+[release review](../alpha90-release-review-2026-11-26.md) records first-visit
+screenshots before and after the stylesheet fix. It also records a review
+build with a working local model: a chat reply spoken by ElevenLabs with no
+motion commanded, and checks against the live ElevenLabs API. Physical-device
+acceptance and human listening remain open. Motion, transport and Stop code are
+unchanged.
+
+Only `0.1.0-alpha.90` joins `ReviewedUnsignedPublic`. Later versions require
+another review, and alpha.65 stays excluded. The release keeps the same package
+and verification policy as alpha.89. That covers the native x64 setup, the
+non-solid ZIP and the three explicit public assets. It also covers the Defender
+scan of the exact public directory and symbol-preserving vulnerability checks
+on all five payload executables. The full installer lifecycle, the manifest
+and checksum checks, and the immutable current-main tag requirement apply as
+well. Trusted signing remains the target.
 
 ### Alpha.89 amendment
 
@@ -1214,11 +1235,11 @@ Negative:
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
   alpha.8 through alpha.11, alpha.13 through alpha.64, or alpha.66 through
-  alpha.89 version, the recorded Microsoft case ID, the
+  alpha.90 version, the recorded Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
 - Alpha.9 through alpha.11, alpha.13 through alpha.64, and alpha.66 through
-  alpha.89 reviewed setup workflows run Microsoft Defender against the exact
+  alpha.90 reviewed setup workflows run Microsoft Defender against the exact
   public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,
