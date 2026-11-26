@@ -1,4 +1,3 @@
-import "../styles/setup.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { LLMCatalog } from "../api/catalog-types";
