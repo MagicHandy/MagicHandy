@@ -313,7 +313,8 @@ initial 8K probes. MagicHandy constrains each legal action with a separate
 object branch. Declaring that their union also has `type: object` lets Basalt
 compile the schema while preserving the action and edit constraints. The
 app supplies that declaration for loopback Inkling 2 Mini on the native
-local route and on saved compatible connections, including Automatic.
+local route and when a saved Automatic connection sends the raw schema.
+Prompt-only connections keep the additional 16 bytes of history allowance.
 The Intermediate range and recall guide on a saved connection applies only
 to the explicit prompt-contract setting. Basalt
 chose a legal branch on all three contradictory union probes after that

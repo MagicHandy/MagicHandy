@@ -20,9 +20,12 @@ func localMotionContract(settings config.LLMSettings) (localGuidance, objectRoot
 		if c.Provider != config.LLMProviderCompatible || !isLoopbackInkling(c.Model, c.BaseURL) {
 			return false, false
 		}
-		// The decoder needs the typed union on Automatic too. Only the tuned
-		// Intermediate prompt contract uses the extra range and recall guide.
-		return c.OutputMode == "prompt" && c.ModelCapabilityLevel() == config.ModelCapabilityIntermediate, true
+		// Automatic with no declared parameters sends the raw action schema.
+		// Prompt-only connections send no decoder schema and use its budget
+		// for history. The tuned Intermediate profile also gets the local guide.
+		localGuidance = c.OutputMode == "prompt" && c.ModelCapabilityLevel() == config.ModelCapabilityIntermediate
+		objectRoot = c.OutputMode == "auto" && len(c.SupportedParameters) == 0
+		return localGuidance, objectRoot
 	}
 	if settings.Provider == config.LLMProviderLlamaCPP {
 		return true, isLoopbackInkling(settings.Model, settings.LlamaCPPBaseURL)

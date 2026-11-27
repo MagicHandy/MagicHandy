@@ -23,10 +23,11 @@ func TestLocalMotionContractsForInklingAndDefaultModels(t *testing.T) {
 		{"ollama", "gemma-4-12b", local, "intermediate", "", true, false},
 		{"chatgpt", "gpt-6.1-terra", "", "advanced", "auto", false, false},
 		{"llama_cpp", "inkling-2-mini", local, "intermediate", "", true, true},
-		{"compatible", "inkling-2-mini", local + "/v1", "intermediate", "prompt", true, true},
-		{"compatible", "thinkingmachines/Inkling-2-Mini", "http://[::1]:8080/v1", "intermediate", "prompt", true, true},
+		{"compatible", "inkling-2-mini", local + "/v1", "intermediate", "prompt", true, false},
+		{"compatible", "thinkingmachines/Inkling-2-Mini", "http://[::1]:8080/v1", "intermediate", "prompt", true, false},
 		{"compatible", "inkling-2-mini", local + "/v1", "intermediate", "auto", false, true},
-		{"compatible", "inkling-2-mini", local + "/v1", "advanced", "prompt", false, true},
+		{"compatible", "inkling-2-mini", local + "/v1", "advanced", "prompt", false, false},
+		{"compatible", "inkling-2-mini", local + "/v1", "intermediate", "strict", false, false},
 		{"compatible", "inkling-2-mini", "https://models.example/v1", "intermediate", "prompt", false, false},
 		{"compatible", "other-model", local + "/v1", "intermediate", "prompt", false, false},
 	} {
@@ -58,6 +59,18 @@ func TestLocalMotionContractsForInklingAndDefaultModels(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestInklingAutomaticWithDeclaredParametersUsesTheSelectedOutputPolicy(t *testing.T) {
+	for _, parameters := range [][]string{{"temperature"}, {"response_format"}, {"structured_outputs"}} {
+		settings := config.DefaultSettings().LLM.WithConnection(config.ModelConnection{
+			ID: "review", Provider: config.LLMProviderCompatible, Model: "inkling-2-mini",
+			BaseURL: "http://localhost:8080/v1", OutputMode: "auto", SupportedParameters: parameters,
+		})
+		if caps := chatCapabilities(settings, nil); caps.ActionSchemaObjectRoot {
+			t.Errorf("Automatic with declared parameters %v reserved the raw decoder's object root", parameters)
+		}
 	}
 }
 
