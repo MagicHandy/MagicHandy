@@ -1,5 +1,15 @@
 # Goal Scorecard
 
+## 2026-11-27 — Optional Xet downloads for managed voice modules
+
+On Windows AMD64, both the Faster Qwen Python 3.11 and Chatterbox Python 3.10
+test environments resolved Hub 0.36.2 with `hf-xet` 1.8.0. Its wheel download
+was 3,911,559 bytes. The installed package accounted for 9,822,762 bytes per
+environment, excluding model data and transfer caches. The module installer
+fetches this wheel on demand. It adds no dependency to the Go core or browser
+bundle. [Wheel and license](https://pypi.org/project/hf-xet/1.8.0/) ·
+[Managed voice download behavior](voice-tts-modules.md)
+
 ## 2026-11-25 — ElevenLabs refactor and voice browser
 
 The comparison base is the stylesheet fix at `8d5d9efe`. Binaries used Go

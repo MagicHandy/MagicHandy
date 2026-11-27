@@ -379,6 +379,7 @@ try {
         'scripts\tts\chatterbox-server.py',
         'scripts\tts\chatterbox-constraints.txt',
         'scripts\tts\runtime-probe.py',
+        'scripts\tts\hub_xet.py',
         'scripts\tts\tts_stream.py',
         'SOURCE.txt',
         'docs\update-checks.md',
