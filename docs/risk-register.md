@@ -1262,6 +1262,17 @@ trim targets and no overflow. Its client-side editor can only produce bounded
 motion-content input for the normal validated import endpoint; it cannot start
 motion or construct transport payloads.
 
+Status 2026-11-25: alpha.89 shipped a styling regression that route-level
+checks did not catch. Seven shared stylesheets loaded only with their owning
+route chunk. Chat's Autopilot card then showed the browser's default fieldset
+border, and the persona switcher, the device connection choices and several
+settings hints lost their layout. The fault was visible only on a first visit
+that skipped the owning route. Alpha.90 restores those sheets to the app
+shell. `web/scripts/check-route-styles.mjs` models the bundler's entry chunks
+and runs with `npm test`. It fails when a component names a class defined only
+in a stylesheet its chunk does not load. Class names built in variables
+outside a `className` attribute remain outside that check.
+
 ## R10: Scope Creep Toward Legacy Parity
 
 Level: High
@@ -1818,6 +1829,20 @@ and controller-gated browser playback; scoped ElevenLabs account-read denial
 does not veto speech. Automated lifecycle, framing and installer fixtures pass.
 Real-model listening, full-install activation/rollback recovery, first-audible
 latency and simultaneous local-LLM GPU acceptance remain open; R17 stays Medium.
+
+Status 2026-11-25: ElevenLabs speech had stopped working for new and
+restricted keys. The default voice had become a Voice Library voice that free
+plans cannot use through the API. ElevenLabs had also started answering a
+missing key permission with `401` instead of `403`, so restricted keys failed
+the worker's account probe. Speak replies did not start the worker, and
+30–60 second timeouts cut off long replies. The worker now probes the model
+list and treats a missing permission as non-fatal. Old settings move to a
+default voice that every plan can use. Classified ElevenLabs errors (plan,
+credits, paused free use, rate limits) reach the Chat status line. ElevenLabs
+can change account rules without notice. The opt-in live test
+(`docs/voice-elevenlabs.md`) is the check to rerun when reports arrive.
+Spoken text follows ElevenLabs' Prohibited Use Policy, and Settings states that
+plainly. See [ADR 0075](decisions/0075-elevenlabs-catalog-in-core.md).
 
 ## R18: LAN And Mobile Secure-Context Requirements
 

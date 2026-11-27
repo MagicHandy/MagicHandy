@@ -38,13 +38,21 @@ func applyMissingVoiceDefaults(settings, defaults VoiceSettings) VoiceSettings {
 	return settings
 }
 
-func applyMissingTTSDefaults(settings, defaults VoiceSettings) VoiceSettings {
-	if settings.ElevenLabsVoiceID == "" {
+// applyMissingElevenLabsDefaults fills the ElevenLabs voice and model. The
+// retired default voice is replaced too: it now resolves to a Voice Library
+// voice that free plans cannot use through the API.
+func applyMissingElevenLabsDefaults(settings, defaults VoiceSettings) VoiceSettings {
+	if settings.ElevenLabsVoiceID == "" || settings.ElevenLabsVoiceID == RetiredElevenLabsVoiceID {
 		settings.ElevenLabsVoiceID = defaults.ElevenLabsVoiceID
 	}
 	if settings.ElevenLabsModelID == "" {
 		settings.ElevenLabsModelID = defaults.ElevenLabsModelID
 	}
+	return settings
+}
+
+func applyMissingTTSDefaults(settings, defaults VoiceSettings) VoiceSettings {
+	settings = applyMissingElevenLabsDefaults(settings, defaults)
 	if settings.TTSBaseURL == "" {
 		settings.TTSBaseURL = defaults.TTSBaseURL
 	}
@@ -116,6 +124,12 @@ func normalizeVoiceStrings(settings VoiceSettings) VoiceSettings {
 	settings.ASRWorkerArgs = trimVoiceArgs(settings.ASRWorkerArgs)
 	settings.ElevenLabsVoiceID = strings.TrimSpace(settings.ElevenLabsVoiceID)
 	settings.ElevenLabsModelID = strings.TrimSpace(settings.ElevenLabsModelID)
+	// A pasted key often carries a trailing newline; any whitespace would make
+	// the provider reject it. The field-scoped settings form saves keys here
+	// directly, so trim them the same way the full-replacement path does.
+	settings.ElevenLabsAPIKey = strings.TrimSpace(settings.ElevenLabsAPIKey)
+	settings.OpenAITTSAPIKey = strings.TrimSpace(settings.OpenAITTSAPIKey)
+	settings.ElevenLabsDelivery = normalizeElevenLabsDelivery(settings.ElevenLabsDelivery)
 	settings.TTSBaseURL = strings.TrimRight(strings.TrimSpace(settings.TTSBaseURL), "/")
 	settings.TTSModel = strings.TrimSpace(settings.TTSModel)
 	settings.TTSVoice = strings.TrimSpace(settings.TTSVoice)
@@ -181,6 +195,9 @@ func validateTTSSettings(settings VoiceSettings) error {
 		}
 	}
 	if err := validateTTSFieldBounds(settings); err != nil {
+		return err
+	}
+	if err := validateElevenLabsDelivery(settings.ElevenLabsDelivery); err != nil {
 		return err
 	}
 	if err := validateTTSResponseFormat(settings.TTSProvider, settings.TTSResponseFormat); err != nil {

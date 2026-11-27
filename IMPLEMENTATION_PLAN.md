@@ -1,5 +1,13 @@
 # MagicHandy Go Implementation Plan
 
+ElevenLabs speech works again with current accounts and restricted keys. The
+default voice and model are now Jessica and Eleven v4 Turbo. Settings checks
+the key, shows the plan and credits, and only offers the delivery controls the
+model honors. It can also browse the account's voices and the Voice Library,
+with companion-oriented suggested searches. Short replies stream as PCM, and
+transient failures are retried. See [the ElevenLabs guide](docs/voice-elevenlabs.md)
+and [ADR 0075](docs/decisions/0075-elevenlabs-catalog-in-core.md).
+
 Advanced local chat now carries the configured conversation window from SQLite to
 the final model request. In two delayed-cue scenarios Granite 8B recovered the
 corrected endpoints and overall speed, and answered a separate read-back without

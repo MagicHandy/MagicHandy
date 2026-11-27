@@ -1,6 +1,6 @@
 // Package elevenlabsworker implements the ADR 0003 worker protocol for the
 // ElevenLabs cloud TTS API (ADR 0007's premium non-Python path). It is pure
-// Go HTTP — no Python, no CGo — and runs as a separate worker process so a
+// Go HTTP â€” no Python, no CGo â€” and runs as a separate worker process so a
 // cloud outage or bad key can never take the core app down. The API key is
 // a private credential: it arrives only via the ELEVENLABS_API_KEY
 // environment variable, is sent only as the xi-api-key header, and never
@@ -12,44 +12,71 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
+	"github.com/mapledaemon/MagicHandy/internal/voice/elevenlabs"
 	"github.com/mapledaemon/MagicHandy/internal/voice/protocol"
 	"github.com/mapledaemon/MagicHandy/internal/voice/workerhost"
 )
 
-// Defaults for the ElevenLabs API. Voice and model are deliberately
-// overridable worker arguments — the app's settings surface stays minimal.
+// Defaults for the ElevenLabs API. Voice and model are overridable worker
+// arguments chosen in Settings â†’ Voice.
 const (
-	DefaultBaseURL      = "https://api.elevenlabs.io"
-	DefaultVoiceID      = "21m00Tcm4TlvDq8ikWAM" // "Rachel", a stock voice
-	DefaultModelID      = "eleven_multilingual_v2"
-	DefaultOutputFormat = "mp3_44100_128"
+	DefaultBaseURL = elevenlabs.DefaultBaseURL
+	// DefaultVoiceID is "Jessica", a current default voice every plan can
+	// use through the API. Keep it equal to config.DefaultElevenLabsVoiceID.
+	DefaultVoiceID = "cgSgspJ2msm6clMCkdW9"
+	// DefaultModelID matches config.DefaultElevenLabsModelID.
+	DefaultModelID = "eleven_v4_turbo"
+	// OutputFormatAuto streams raw PCM for progressive playback when the reply
+	// fits the core's audio bound, and falls back to MP3 for long replies.
+	OutputFormatAuto = "auto"
+	// DefaultOutputFormat is kept for command-line compatibility.
+	DefaultOutputFormat = OutputFormatAuto
 
 	providerName    = "elevenlabs"
-	providerVersion = "1.0.0"
+	providerVersion = "2.0.0"
 
-	requestTimeout = 30 * time.Second
+	loadTimeout    = 20 * time.Second
 	chunkBytes     = 32 * 1024
 	queueCapacity  = 8
 	maxSpeechBytes = 32 << 10
 	maxAudioBytes  = protocol.MaxAudioBytes
+
+	// pcmOutputFormat is raw 16-bit little-endian mono PCM at 24 kHz, which the
+	// core and browser already play progressively as pcm_s16le_24000.
+	pcmOutputFormat = "pcm_24000"
+	pcmFormatLabel  = "pcm_s16le_24000"
+	// pcmMaxSeconds keeps progressive PCM (48,000 bytes per second) inside the
+	// 8 MiB per-utterance bound with headroom for a slower-than-estimated read.
+	pcmMaxSeconds = 150
+	// charactersPerSecond is a deliberately slow reading-rate estimate.
+	charactersPerSecond = 11.0
+	// stitchContextRunes bounds previous_text/next_text for split replies.
+	stitchContextRunes = 300
 )
 
 // Options configure one worker session.
 type Options struct {
-	APIKey       string
-	VoiceID      string
-	ModelID      string
-	BaseURL      string
-	OutputFormat string
-	HTTPClient   *http.Client
+	APIKey        string
+	VoiceID       string
+	ModelID       string
+	BaseURL       string
+	OutputFormat  string
+	LanguageCode  string
+	VoiceSettings *elevenlabs.VoiceSettings
+	HTTPClient    *http.Client
+	// RetrySleep and StreamIdleTimeout are test seams for the API client.
+	RetrySleep        func(context.Context, time.Duration) error
+	StreamIdleTimeout time.Duration
 }
 
 // Run speaks the worker protocol over reader/writer until EOF or shutdown.
@@ -65,23 +92,24 @@ func Run(reader io.Reader, writer io.Writer, options Options) error {
 	}
 	options.BaseURL = strings.TrimRight(options.BaseURL, "/")
 	if options.OutputFormat == "" {
-		options.OutputFormat = DefaultOutputFormat
-	}
-	if options.HTTPClient == nil {
-		options.HTTPClient = &http.Client{
-			Timeout: requestTimeout,
-			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
-		}
+		options.OutputFormat = OutputFormatAuto
 	}
 
 	s := &session{
 		options: options,
 		writer:  writer,
 		queue:   make(chan protocol.Request, queueCapacity),
-
-		setupErr: validateOptions(options),
+		profile: elevenlabs.ProfileFor(options.ModelID, nil),
+	}
+	s.setupErr = validateOptions(options)
+	if s.setupErr == nil {
+		s.client, s.setupErr = elevenlabs.New(elevenlabs.Options{
+			BaseURL:           options.BaseURL,
+			APIKey:            options.APIKey,
+			HTTPClient:        options.HTTPClient,
+			Sleep:             options.RetrySleep,
+			StreamIdleTimeout: options.StreamIdleTimeout,
+		})
 	}
 
 	workDone := make(chan struct{})
@@ -99,6 +127,7 @@ func Run(reader io.Reader, writer io.Writer, options Options) error {
 
 type session struct {
 	options Options
+	client  *elevenlabs.Client
 
 	writeMu sync.Mutex
 	writer  io.Writer
@@ -106,6 +135,7 @@ type session struct {
 	mu       sync.Mutex
 	loaded   bool
 	pending  int
+	profile  elevenlabs.ModelProfile
 	jobs     workerhost.Jobs
 	setupErr error
 
@@ -139,7 +169,7 @@ func (s *session) readLoop(reader io.Reader) error {
 			s.cancelAll()
 			s.send(s.healthResponse(request.ID))
 		case protocol.RequestCancel:
-			s.markCanceled(request.TargetID)
+			s.jobs.Cancel(request.TargetID)
 		case protocol.RequestShutdown:
 			s.send(protocol.Response{Type: protocol.ResponseDone, RequestID: request.ID})
 			return nil
@@ -167,54 +197,72 @@ func (s *session) handleHello(request protocol.Request) {
 		Provider:        providerName,
 		ProviderVersion: providerVersion,
 		Role:            protocol.RoleTTS,
-		Capabilities:    []string{"cancel", "load", "unload", "cloud"},
+		Capabilities:    []string{"cancel", "load", "unload", "cloud", "stream"},
 	})
 }
 
-// handleLoad validates the API key against the account endpoint so a bad or
-// missing key is a clear, immediate error instead of a failed first speak.
+// handleLoad checks the key and the selected model without spending credits.
+// The model list doubles as the key check: it needs only the Models
+// permission. A key restricted to speech cannot list models; that is not a
+// bad key, so load succeeds and speech reports any problem itself.
 func (s *session) handleLoad(request protocol.Request) {
 	if s.setupErr != nil {
 		s.sendError(request.ID, protocol.ErrorCodeInvalidRequest, s.setupErr.Error(), false)
 		return
 	}
-	if s.options.APIKey == "" {
+	if !s.client.HasKey() {
 		s.sendError(request.ID, protocol.ErrorCodeMissingDependency,
-			"ELEVENLABS_API_KEY is not set; add the API key in Settings → Voice", false)
+			"ELEVENLABS_API_KEY is not set; add the API key in Settings â†’ Voice", false)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), loadTimeout)
 	defer cancel()
-	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, s.options.BaseURL+"/v1/user", nil)
-	if err != nil {
-		s.sendError(request.ID, protocol.ErrorCodeInternal, "build key check request", false)
-		return
-	}
-	httpRequest.Header.Set("xi-api-key", s.options.APIKey)
-
-	response, err := s.options.HTTPClient.Do(httpRequest)
-	if err != nil {
-		s.sendError(request.ID, protocol.ErrorCodeInternal,
-			"ElevenLabs is unreachable: "+sanitize(err.Error(), s.options.APIKey), true)
-		return
-	}
-	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode == http.StatusUnauthorized {
-		s.sendError(request.ID, protocol.ErrorCodeMissingDependency,
-			"ElevenLabs rejected the API key (401); check the key in Settings → Voice", false)
-		return
-	}
-	// Endpoint-scoped speech keys need not grant account/profile access. A
-	// forbidden /user probe is inconclusive; speech reports its own auth errors.
-	if response.StatusCode >= 400 && response.StatusCode != http.StatusForbidden {
-		s.sendError(request.ID, protocol.ErrorCodeInternal,
-			fmt.Sprintf("ElevenLabs key check failed with status %d", response.StatusCode), true)
+	models, err := s.client.Models(ctx)
+	switch {
+	case err == nil:
+		model, ok := findModel(models, s.options.ModelID)
+		if !ok || !model.CanDoTextToSpeech {
+			s.sendError(request.ID, protocol.ErrorCodeInvalidRequest, unavailableModelMessage(s.options.ModelID, models), false)
+			return
+		}
+		s.setProfile(elevenlabs.ProfileFor(s.options.ModelID, &model))
+	case elevenlabs.IsKind(err, elevenlabs.KindPermission):
+		s.setProfile(elevenlabs.ProfileFor(s.options.ModelID, nil))
+	default:
+		s.sendAPIError(request.ID, err)
 		return
 	}
 
 	s.setLoaded(true)
 	s.send(s.healthResponse(request.ID))
+}
+
+func findModel(models []elevenlabs.Model, id string) (elevenlabs.Model, bool) {
+	for _, model := range models {
+		if model.ID == id {
+			return model, true
+		}
+	}
+	return elevenlabs.Model{}, false
+}
+
+func unavailableModelMessage(id string, models []elevenlabs.Model) string {
+	var speech []string
+	for _, model := range models {
+		if model.CanDoTextToSpeech && elevenlabs.ValidIdentifier(model.ID) {
+			speech = append(speech, model.ID)
+		}
+	}
+	sort.Strings(speech)
+	message := fmt.Sprintf("ElevenLabs doesn't offer the speech model %q to this account; choose another model in Settings â†’ Voice", id)
+	if len(speech) > 0 {
+		if len(speech) > 8 {
+			speech = speech[:8]
+		}
+		message += " (available: " + strings.Join(speech, ", ") + ")"
+	}
+	return message
 }
 
 func (s *session) enqueue(request protocol.Request) {
@@ -240,7 +288,7 @@ func (s *session) workLoop() {
 	for request := range s.queue {
 		s.mu.Lock()
 		s.pending--
-		canceled := s.canceledLocked(request.ID)
+		canceled := s.jobs.Canceled(request.ID)
 		loaded := s.loaded
 		ctx := s.jobs.Context(request.ID)
 		s.mu.Unlock()
@@ -259,89 +307,147 @@ func (s *session) workLoop() {
 	}
 }
 
-// speak streams one sentence at a time so first audio arrives quickly and
-// cancellation lands between (or inside) sentence requests.
+// speak sends the reply as one streaming request whenever it fits the
+// model's per-request limit, so its delivery stays continuous and the first
+// audio arrives as soon as ElevenLabs produces it. Longer text is split at
+// paragraph or sentence boundaries and stitched with request context.
 func (s *session) speak(ctx context.Context, request protocol.Request) {
-	if len(request.Text) > maxSpeechBytes {
-		s.sendError(request.ID, protocol.ErrorCodeInvalidRequest,
-			fmt.Sprintf("speak text exceeds %d KiB", maxSpeechBytes>>10), false)
+	text, voiceID, ok := s.speechTarget(request)
+	if !ok {
 		return
 	}
-	sentences := SplitSentences(request.Text)
-	if len(sentences) == 0 {
+	plan := s.newSpeechPlan(text, request.Seed)
+	pieces := elevenlabs.SplitForSpeech(text, plan.profile.MaxTextRunes)
+	if len(pieces) == 0 {
 		s.sendError(request.ID, protocol.ErrorCodeInvalidRequest, "speak text is empty", false)
 		return
 	}
 
-	seq := 0
-	total := 0
-	for _, sentence := range sentences {
-		if s.isCanceled(request.ID) || ctx.Err() != nil {
+	seq, total := 0, 0
+	var previousIDs []string
+	for index := range pieces {
+		if s.jobs.Canceled(request.ID) || ctx.Err() != nil {
 			s.send(protocol.Response{Type: protocol.ResponseCanceled, RequestID: request.ID})
 			return
 		}
-		ok := s.streamSentence(ctx, request.ID, sentence, &seq, &total)
+		speech, err := s.streamPiece(ctx, voiceID, &plan, plan.pieceRequest(pieces, index, previousIDs), total == 0)
+		if err != nil {
+			if s.jobs.Canceled(request.ID) || ctx.Err() != nil {
+				s.send(protocol.Response{Type: protocol.ResponseCanceled, RequestID: request.ID})
+				return
+			}
+			s.sendAPIError(request.ID, err)
+			return
+		}
+		ok := s.relay(ctx, request.ID, speech.Body, plan.label, &seq, &total)
+		_ = speech.Body.Close()
 		if !ok {
 			return
 		}
+		if speech.RequestID != "" {
+			previousIDs = append(previousIDs, speech.RequestID)
+		}
+	}
+	if total == 0 {
+		s.sendError(request.ID, protocol.ErrorCodeInternal, elevenlabs.ErrNoAudio.Error(), true)
+		return
 	}
 	s.send(protocol.Response{Type: protocol.ResponseDone, RequestID: request.ID})
 }
 
-// streamSentence performs one TTS HTTP call and relays its byte stream as
-// audio_chunk frames; false means the request already terminated (error or
-// cancel frame sent).
-func (s *session) streamSentence(ctx context.Context, requestID string, sentence string, seq, total *int) bool {
-	body, err := json.Marshal(map[string]any{
-		"text":     sentence,
-		"model_id": s.options.ModelID,
-	})
-	if err != nil {
-		s.sendError(requestID, protocol.ErrorCodeInternal, "encode TTS request", false)
-		return false
+// speechTarget validates the text and the optional per-request voice; false
+// means an error frame was sent.
+func (s *session) speechTarget(request protocol.Request) (string, string, bool) {
+	text := strings.TrimSpace(request.Text)
+	if len(text) > maxSpeechBytes {
+		s.sendError(request.ID, protocol.ErrorCodeInvalidRequest,
+			fmt.Sprintf("speak text exceeds %d KiB", maxSpeechBytes>>10), false)
+		return "", "", false
 	}
-
-	endpoint := fmt.Sprintf("%s/v1/text-to-speech/%s/stream?output_format=%s",
-		s.options.BaseURL, url.PathEscape(s.options.VoiceID), url.QueryEscape(s.options.OutputFormat))
-	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(body)))
-	if err != nil {
-		s.sendError(requestID, protocol.ErrorCodeInternal, "build TTS request", false)
-		return false
-	}
-	httpRequest.Header.Set("xi-api-key", s.options.APIKey)
-	httpRequest.Header.Set("Content-Type", "application/json")
-
-	response, err := s.options.HTTPClient.Do(httpRequest)
-	if err != nil {
-		if ctx.Err() != nil {
-			s.send(protocol.Response{Type: protocol.ResponseCanceled, RequestID: requestID})
-			return false
+	voiceID := s.options.VoiceID
+	if override := strings.TrimSpace(request.Voice); override != "" {
+		if !elevenlabs.ValidIdentifier(override) {
+			s.sendError(request.ID, protocol.ErrorCodeInvalidRequest, "the requested ElevenLabs voice ID is not valid", false)
+			return "", "", false
 		}
-		s.sendError(requestID, protocol.ErrorCodeInternal,
-			"ElevenLabs request failed: "+sanitize(err.Error(), s.options.APIKey), true)
-		return false
+		voiceID = override
 	}
-	defer func() { _ = response.Body.Close() }()
+	return text, voiceID, true
+}
 
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		detail, _ := io.ReadAll(io.LimitReader(response.Body, 512))
-		code := protocol.ErrorCodeInternal
-		if response.StatusCode == http.StatusUnauthorized {
-			code = protocol.ErrorCodeMissingDependency
-		}
-		s.sendError(requestID, code, fmt.Sprintf("ElevenLabs returned status %d: %s",
-			response.StatusCode, sanitize(string(detail), s.options.APIKey)), response.StatusCode >= 500)
-		return false
+// speechPlan is everything about a reply's requests that does not change
+// from one piece to the next, except the format after a fallback.
+type speechPlan struct {
+	profile  elevenlabs.ModelProfile
+	modelID  string
+	format   string
+	label    string
+	settings *elevenlabs.VoiceSettings
+	language string
+	seed     *uint32
+}
+
+func (s *session) newSpeechPlan(text string, seed *uint32) speechPlan {
+	profile := s.currentProfile()
+	format, label := s.outputFormat(text, profile)
+	plan := speechPlan{
+		profile: profile, modelID: s.options.ModelID, format: format, label: label,
+		settings: profile.Shape(s.options.VoiceSettings), seed: seed,
 	}
+	if profile.LanguageCode {
+		plan.language = s.options.LanguageCode
+	}
+	return plan
+}
 
+// pieceRequest builds one piece's request, stitched to its neighbors.
+func (p speechPlan) pieceRequest(pieces []string, index int, previousIDs []string) elevenlabs.SpeechRequest {
+	request := elevenlabs.SpeechRequest{
+		Text:          pieces[index],
+		ModelID:       p.modelID,
+		OutputFormat:  p.format,
+		LanguageCode:  p.language,
+		VoiceSettings: p.settings,
+		Seed:          p.seed,
+	}
+	if p.profile.RequestStitching && len(previousIDs) > 0 {
+		request.PreviousRequestIDs = previousIDs
+	} else if index > 0 {
+		request.PreviousText = lastRunes(pieces[index-1], stitchContextRunes)
+	}
+	if index+1 < len(pieces) {
+		request.NextText = firstRunes(pieces[index+1], stitchContextRunes)
+	}
+	return request
+}
+
+// streamPiece starts one piece. Before any audio of the reply has been sent,
+// a refusal of the PCM format is answered by finishing the reply as MP3.
+func (s *session) streamPiece(ctx context.Context, voiceID string, plan *speechPlan, request elevenlabs.SpeechRequest, firstAudio bool) (*elevenlabs.Speech, error) {
+	speech, err := s.client.StreamSpeech(ctx, voiceID, request)
+	if err == nil || !firstAudio || plan.format != pcmOutputFormat ||
+		s.options.OutputFormat != OutputFormatAuto || !rejectsOutputFormat(err) {
+		return speech, err
+	}
+	// PCM at 24 kHz is available on every plan today; if a plan or model
+	// ever refuses it, finish the reply as MP3 instead of failing.
+	plan.format, plan.label = "mp3_44100_128", "mp3"
+	request.OutputFormat = plan.format
+	return s.client.StreamSpeech(ctx, voiceID, request)
+}
+
+// relay forwards one response body as audio_chunk frames; false means the
+// request already terminated (error or cancel frame sent).
+func (s *session) relay(ctx context.Context, requestID string, body io.Reader, label string, seq, total *int) bool {
 	buffer := make([]byte, chunkBytes)
-	format := formatLabel(s.options.OutputFormat)
 	for {
-		if s.isCanceled(requestID) {
+		if s.jobs.Canceled(requestID) {
 			s.send(protocol.Response{Type: protocol.ResponseCanceled, RequestID: requestID})
 			return false
 		}
-		n, err := response.Body.Read(buffer)
+		// Relay whatever arrived: waiting to fill the buffer would hold back the
+		// first audio of a reply.
+		n, err := body.Read(buffer)
 		if n > 0 {
 			*total += n
 			if *total > maxAudioBytes {
@@ -354,58 +460,137 @@ func (s *session) streamSentence(ctx context.Context, requestID string, sentence
 				RequestID:   requestID,
 				Seq:         *seq,
 				AudioB64:    base64.StdEncoding.EncodeToString(buffer[:n]),
-				AudioFormat: format,
+				AudioFormat: label,
 			})
 			*seq++
 		}
-		if err == io.EOF {
+		switch {
+		case err == nil:
+			continue
+		case errors.Is(err, io.EOF):
 			return true
-		}
-		if err != nil {
-			if ctx.Err() != nil {
-				s.send(protocol.Response{Type: protocol.ResponseCanceled, RequestID: requestID})
-				return false
-			}
+		case s.jobs.Canceled(requestID) || ctx.Err() != nil:
+			s.send(protocol.Response{Type: protocol.ResponseCanceled, RequestID: requestID})
+			return false
+		case errors.Is(err, elevenlabs.ErrStreamStalled):
 			s.sendError(requestID, protocol.ErrorCodeInternal,
-				"ElevenLabs stream interrupted: "+sanitize(err.Error(), s.options.APIKey), true)
+				"ElevenLabs stopped sending audio partway through the reply; try again", true)
+			return false
+		default:
+			s.sendError(requestID, protocol.ErrorCodeInternal,
+				"ElevenLabs audio stream was interrupted: "+s.client.Redact(err.Error()), true)
 			return false
 		}
 	}
 }
 
+// outputFormat picks the wire format and the protocol label for a reply.
+func (s *session) outputFormat(text string, profile elevenlabs.ModelProfile) (string, string) {
+	if s.options.OutputFormat != OutputFormatAuto {
+		return s.options.OutputFormat, formatLabel(s.options.OutputFormat)
+	}
+	speed := 1.0
+	if settings := profile.Shape(s.options.VoiceSettings); settings != nil && settings.Speed != nil {
+		speed = *settings.Speed
+	}
+	seconds := float64(utf8.RuneCountInString(text)) / (charactersPerSecond * speed)
+	switch {
+	case seconds <= pcmMaxSeconds:
+		return pcmOutputFormat, pcmFormatLabel
+	case seconds <= 480:
+		return "mp3_44100_128", "mp3"
+	default:
+		return "mp3_44100_64", "mp3"
+	}
+}
+
+// rejectsOutputFormat recognizes a refusal of the requested audio format, as
+// opposed to a problem with the voice, text, key or plan in general.
+func rejectsOutputFormat(err error) bool {
+	apiErr, ok := elevenlabs.AsAPIError(err)
+	if !ok {
+		return false
+	}
+	switch apiErr.Kind() {
+	case elevenlabs.KindInvalid, elevenlabs.KindPlan, elevenlabs.KindPermission:
+	default:
+		return false
+	}
+	signals := strings.ToLower(apiErr.Param + " " + apiErr.Code + " " + apiErr.Status + " " + apiErr.Message)
+	return strings.Contains(signals, "output_format") || strings.Contains(signals, "output format")
+}
+
+func (s *session) sendAPIError(requestID string, err error) {
+	apiErr, ok := elevenlabs.AsAPIError(err)
+	if !ok {
+		s.sendError(requestID, protocol.ErrorCodeInternal, s.client.Redact(err.Error()), true)
+		return
+	}
+	code := protocol.ErrorCodeInternal
+	switch apiErr.Kind() {
+	case elevenlabs.KindAuth, elevenlabs.KindPermission, elevenlabs.KindPlan,
+		elevenlabs.KindQuota, elevenlabs.KindUnusualActivity:
+		code = protocol.ErrorCodeMissingDependency
+	case elevenlabs.KindNotFound, elevenlabs.KindInvalid:
+		code = protocol.ErrorCodeInvalidRequest
+	}
+	s.sendError(requestID, code, s.client.Redact(apiErr.Error()), apiErr.Retryable())
+}
+
 func validateOptions(options Options) error {
-	parsed, err := url.Parse(options.BaseURL)
-	if err != nil || parsed.Host == "" || !parsed.IsAbs() {
-		return fmt.Errorf("ElevenLabs base URL must be an absolute HTTP URL with a host")
+	if err := elevenlabs.ValidateBaseURL(options.BaseURL); err != nil {
+		return err
 	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return fmt.Errorf("ElevenLabs base URL scheme must be http or https")
+	if !elevenlabs.ValidIdentifier(options.VoiceID) {
+		return errors.New("the ElevenLabs voice ID is not valid; choose a voice in Settings â†’ Voice")
 	}
-	if parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" {
-		return fmt.Errorf("ElevenLabs base URL must not contain credentials, a query, or a fragment")
+	if !elevenlabs.ValidIdentifier(options.ModelID) {
+		return errors.New("the ElevenLabs model ID is not valid; choose a model in Settings â†’ Voice")
 	}
-	for label, value := range map[string]string{
-		"voice ID": options.VoiceID, "model ID": options.ModelID, "output format": options.OutputFormat,
-	} {
-		if strings.TrimSpace(value) == "" || len(value) > 256 || strings.ContainsAny(value, "\r\n") {
-			return fmt.Errorf("ElevenLabs %s is invalid", label)
-		}
+	if options.LanguageCode != "" && !validLanguageCode(options.LanguageCode) {
+		return errors.New("the ElevenLabs language code must be a two- or three-letter ISO 639 code")
+	}
+	switch format := options.OutputFormat; {
+	case format == OutputFormatAuto, format == pcmOutputFormat,
+		strings.HasPrefix(format, "mp3_") && len(format) <= 32,
+		strings.HasPrefix(format, "opus_") && len(format) <= 32:
+	default:
+		// Other PCM rates and telephony codecs have no browser playback path.
+		return fmt.Errorf("the ElevenLabs output format %q is not supported for playback", format)
 	}
 	return nil
 }
 
-func (s *session) markCanceled(id string) { s.jobs.Cancel(id) }
+func validLanguageCode(code string) bool {
+	if len(code) < 2 || len(code) > 3 {
+		return false
+	}
+	for _, r := range code {
+		if r < 'a' || r > 'z' {
+			return false
+		}
+	}
+	return true
+}
 
 func (s *session) cancelAll() { s.jobs.CancelAll() }
-
-func (s *session) isCanceled(id string) bool { return s.jobs.Canceled(id) }
-
-func (s *session) canceledLocked(id string) bool { return s.jobs.Canceled(id) }
 
 func (s *session) setLoaded(loaded bool) {
 	s.mu.Lock()
 	s.loaded = loaded
 	s.mu.Unlock()
+}
+
+func (s *session) setProfile(profile elevenlabs.ModelProfile) {
+	s.mu.Lock()
+	s.profile = profile
+	s.mu.Unlock()
+}
+
+func (s *session) currentProfile() elevenlabs.ModelProfile {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.profile
 }
 
 func (s *session) healthResponse(requestID string) protocol.Response {
@@ -449,61 +634,30 @@ func (s *session) send(response protocol.Response) {
 	_, _ = s.writer.Write(data)
 }
 
-// sanitize scrubs the API key from any text that could reach a frame or log.
-func sanitize(text string, key string) string {
-	if key == "" {
-		return text
-	}
-	return strings.ReplaceAll(text, key, "[redacted]")
-}
-
 func formatLabel(outputFormat string) string {
 	switch {
+	case outputFormat == pcmOutputFormat:
+		return pcmFormatLabel
 	case strings.HasPrefix(outputFormat, "mp3"):
 		return "mp3"
 	case strings.HasPrefix(outputFormat, "opus"):
 		return "opus"
-	case strings.HasPrefix(outputFormat, "pcm"):
-		return "pcm"
 	default:
 		return outputFormat
 	}
 }
 
-// SplitSentences breaks text on sentence punctuation so synthesis can start
-// on the first sentence while later ones render. Very short fragments merge
-// forward to avoid choppy one-word requests.
-func SplitSentences(text string) []string {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return nil
+func firstRunes(text string, limit int) string {
+	if utf8.RuneCountInString(text) <= limit {
+		return text
 	}
+	return string([]rune(text)[:limit])
+}
 
-	var sentences []string
-	var current strings.Builder
-	for _, r := range text {
-		current.WriteRune(r)
-		if r == '.' || r == '!' || r == '?' || r == '…' {
-			sentence := strings.TrimSpace(current.String())
-			if sentence != "" {
-				sentences = append(sentences, sentence)
-			}
-			current.Reset()
-		}
+func lastRunes(text string, limit int) string {
+	runes := []rune(text)
+	if len(runes) <= limit {
+		return text
 	}
-	if tail := strings.TrimSpace(current.String()); tail != "" {
-		sentences = append(sentences, tail)
-	}
-
-	// Merge fragments under ~20 chars into their successor so abbreviations
-	// and interjections do not become separate API calls.
-	merged := make([]string, 0, len(sentences))
-	for _, sentence := range sentences {
-		if len(merged) > 0 && len(merged[len(merged)-1]) < 20 {
-			merged[len(merged)-1] += " " + sentence
-			continue
-		}
-		merged = append(merged, sentence)
-	}
-	return merged
+	return string(runes[len(runes)-limit:])
 }

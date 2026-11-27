@@ -1,5 +1,3 @@
-import "../styles/model-manager.css";
-import "../styles/settings-form.css";
 // Settings as a routed workspace (not an overlay). Sub-sections are real hash
 // routes: #/settings/devices|media|chat|diagnostics. Routed sections share one
 // Save; Devices saves each option as it changes, and prompt sets, memory and
@@ -125,7 +123,9 @@ export function SettingsRoute() {
     try {
       const res = await api.getSettings();
       if (!mounted.current || generation !== loadGeneration.current) return;
-      if (!preserveDraft || !hasCredentialEdit.current) credentialRevision.current = res.status?.loaded_at ?? "";
+      // The credential revision changes only when a key changes, so unrelated
+      // saves elsewhere (a motion slider, Speak replies) cannot block a key save.
+      if (!preserveDraft || !hasCredentialEdit.current) credentialRevision.current = res.credential_revision ?? res.status?.loaded_at ?? "";
       const baseline = savedRef.current;
       setS((draft) => preserveDraft && baseline && draft
         ? rebaseSettingsDraft(baseline, draft, res.settings)

@@ -73,6 +73,10 @@ import type {
   VoiceRequestSnapshot,
   VoiceState,
   VoiceWorkerStatus,
+  ElevenLabsAccount,
+  ElevenLabsLibraryPage,
+  ElevenLabsModel,
+  ElevenLabsVoicePage,
   AuthenticationStatus,
   ManagedSessionsResponse,
   UserAccount,
@@ -827,7 +831,7 @@ export const api = {
   cancelModelCheck: () => request<ModelCheckReport>("DELETE", "/api/llm/model-check"),
 
   // Settings.
-  getSettings: () => request<{ settings: PublicSettings; status?: { loaded_at: string } }>("GET", "/api/settings"),
+  getSettings: () => request<{ settings: PublicSettings; status?: { loaded_at: string }; credential_revision?: string }>("GET", "/api/settings"),
   saveSettings: (patch: import("../util/settings-draft").SettingsPatch) => request<{ settings: PublicSettings }>("PATCH", "/api/settings", patch),
   setLabsEnabled: (enabled:boolean) => request<{enabled:boolean}>("PUT", "/api/settings/labs", {enabled}),
   // The Chat motion card: the mode, plus the Pattern library's two options.
@@ -1032,6 +1036,24 @@ export const api = {
   voiceTranscribe: (audio: Blob, format: string, stopSequence?: number, signal?: AbortSignal) => uploadVoiceTranscription(audio, format, stopSequence, signal),
   saveVoicePreferences: (speak_replies: boolean) =>
     request<{ speak_replies: boolean }>("PUT", "/api/voice/preferences", { speak_replies }),
+  // ElevenLabs catalog: the saved key (or a typed one for the account check)
+  // stays on the backend; responses never contain it.
+  elevenLabsAccount: (typed?: { api_key?: string; voice_id?: string }, signal?: AbortSignal) =>
+    typed ? request<ElevenLabsAccount>("POST", "/api/voice/elevenlabs/account", typed, signal)
+      : request<ElevenLabsAccount>("GET", "/api/voice/elevenlabs/account", undefined, signal),
+  elevenLabsModels: (signal?: AbortSignal) =>
+    request<{ models: ElevenLabsModel[] }>("GET", "/api/voice/elevenlabs/models", undefined, signal),
+  elevenLabsVoices: (query: Record<string, string>, signal?: AbortSignal) =>
+    request<ElevenLabsVoicePage>("GET", `/api/voice/elevenlabs/voices?${new URLSearchParams(query)}`, undefined, signal),
+  elevenLabsLibrary: (query: Record<string, string>, signal?: AbortSignal) =>
+    request<ElevenLabsLibraryPage>("GET", `/api/voice/elevenlabs/library?${new URLSearchParams(query)}`, undefined, signal),
+  elevenLabsAddVoice: (body: { public_owner_id: string; voice_id: string; name: string }) =>
+    request<{ voice_id: string }>("POST", "/api/voice/elevenlabs/library/add", body),
+  elevenLabsPreview: async (url: string, signal?: AbortSignal): Promise<Blob> => {
+    const res = await fetch(`/api/voice/elevenlabs/preview?${new URLSearchParams({ url })}`, { signal });
+    if (!res.ok) throw new ApiError(`Preview failed (${res.status})`, res.status, null);
+    return res.blob();
+  },
   saveFreestylePreferences: (freestyle: FreestyleSettings) =>
     request<{ freestyle: FreestyleSettings }>("PUT", "/api/modes/freestyle/preferences", freestyle),
   saveAutopilotPreferences: (autopilot: AutopilotSettings) =>
