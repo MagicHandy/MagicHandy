@@ -3,9 +3,9 @@
 ## 2026-11-27 — Cloud refill timing and saved chat evidence
 
 On Windows amd64 with Go 1.26.11, the stripped pure-Go core measured
-25,692,672 bytes, up 50,688 bytes from alpha.90 (25,641,984). Both builds used
+25,710,592 bytes, up 68,608 bytes from alpha.90 (25,641,984). Both builds used
 `CGO_ENABLED=0`, `-trimpath`, the same embedded version and commit, and
-`-ldflags "-s -w"`. The change adds no dependency or browser asset.
+`-ldflags "-s -w"`.
 The Cloud delay replay and chat evidence limits are described in the
 [HSP invariants](hsp-v4-invariants.md) and [LLM control surface](llm-control-surface.md).
 

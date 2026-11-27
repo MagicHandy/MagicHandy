@@ -121,3 +121,27 @@ func TestHistoryLookupHonorsBudgetsAndOrdinaryTurns(t *testing.T) {
 		}
 	}
 }
+
+func TestOpeningPaceEvidenceStopsAtUnverifiedOrReplacedSetting(t *testing.T) {
+	source := []HistorySource{{11, "Set 25 percent"}, {13, "Set 35 percent"}, {15, "Five points faster"}}
+	v25, v35, v5 := 25.0, 35.0, 5.0
+	a := citedPace{"set", &v25, "25 percent"}
+	b := citedPace{"set", &v35, "35 percent"}
+	delta := citedPace{"adjust", &v5, "Five points"}
+	keys := []string{"message11", "message13", "message15"}
+	rows := map[string][]citedPace{keys[0]: {a}, keys[1]: {b}, keys[2]: {delta}}
+	events, intact, err := verifiedPacePrefix(source, keys, rows)
+	if err != nil || !intact || renderOpeningPaces(events, 2, true, "?") != "25 percent, 35 percent, Five points" {
+		t.Fatal(events, err)
+	}
+	for _, bad := range []citedPace{{"set", &v35, "not in the message"}, {"set", &v25, "35 percent"}} {
+		rows[keys[1]] = []citedPace{bad}
+		events, intact, err = verifiedPacePrefix(source, keys, rows)
+		if err != nil || intact || renderOpeningPaces(events, 2, true, "?") != "25 percent, ?, ?" {
+			t.Fatal("later event crossed unverified evidence", events, err)
+		}
+	}
+	if got := renderOpeningPaces([]citedPace{a, b, a, delta}, 2, true, "?"); got != "25 percent, 35 percent, ?" {
+		t.Fatal("a later adjustment was attributed to a superseded setting", got)
+	}
+}

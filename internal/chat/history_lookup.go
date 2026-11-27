@@ -23,14 +23,25 @@ const ordinaryHistoryRoute = `{"type":"object","properties":{"ordinary":{"type":
 
 const paceHistoryBranch = `{"type":"object","properties":{"action":{"type":"string","const":"read_user_history"},"scope":{"type":"string","const":"opening_paces"},"count":{"type":"integer","minimum":1,"maximum":8},"following_adjustment":{"type":"boolean"}},"required":["action","scope","count","following_adjustment"],"additionalProperties":false}`
 
+func (s Service) offersHistoryLookup(input llm.ChatRequest, request Request) bool {
+	if s.TrustedMotionInput || request.ReadUserHistory == nil {
+		return false
+	}
+	if input.HistoryMessagesDropped > 0 || len(request.History) >= PromptHistoryLimit {
+		return true
+	}
+	if len(request.History) == 0 {
+		return false
+	}
+	// A verbose short conversation can also lose messages at provider admission.
+	_, budget, _ := llm.BudgetChatRequest(input, s.PromptBudget.ContextSize)
+	return budget.HistoryMessagesDropped > 0
+}
+
 // Only the model chooses a lookup. Archived instructions are never sent to
 // the motion-capable completion.
 func (s Service) streamInitial(ctx context.Context, input llm.ChatRequest, request Request, emit func(StreamEvent) error) (string, *Result, error) {
-	lookupEnabled := false
-	if !s.TrustedMotionInput && request.ReadUserHistory != nil && (input.HistoryMessagesDropped > 0 || len(request.History) > 0) {
-		_, budget, _ := llm.BudgetChatRequest(input, s.PromptBudget.ContextSize)
-		lookupEnabled = budget.HistoryMessagesDropped > 0 || len(request.History) >= PromptHistoryLimit
-	}
+	lookupEnabled := s.offersHistoryLookup(input, request)
 	caps := s.capabilities()
 	if lookupEnabled && caps.LocalInference && (caps.SimpleMotion || caps.IntermediateMotion) {
 		// Compact models anchored their decisions to later settings in a full
@@ -88,14 +99,10 @@ func (s Service) resolveHistoryLookup(ctx context.Context, request Request, raw 
 	sources, err := request.ReadUserHistory(ctx, lookup)
 	if err == nil {
 		if lookup.Scope == "opening_paces" {
-			for i := range lookup.Count {
-				lookup.Facts = append(lookup.Facts, historyFact{Detail: "distinct explicitly requested absolute pace #" + strconv.Itoa(i+1) + " in chronological order", Kind: "number"})
-			}
-			if *lookup.FollowingAdjustment {
-				lookup.Facts = append(lookup.Facts, historyFact{Detail: "size of the subsequently requested RELATIVE change after that last pace setting", Kind: "number"})
-			}
+			result.Response.Reply, err = s.openingPaceAnswer(ctx, lookup, sources)
+		} else {
+			result.Response.Reply, err = s.answerFromHistory(ctx, request.Message, lookup.Facts, sources)
 		}
-		result.Response.Reply, err = s.answerFromHistory(ctx, request.Message, lookup.Facts, sources)
 	}
 	return raw, &result, err
 }
@@ -139,11 +146,7 @@ func (s Service) answerFromHistory(ctx context.Context, question string, facts [
 		fields.WriteString("\n" + keys[i] + " (" + fact.Kind + ") = " + fact.Detail)
 	}
 	schema, _ := json.Marshal(map[string]any{"type": "object", "properties": properties, "required": keys, "additionalProperties": false})
-	input := llm.ChatRequest{Model: s.Model, ReasoningMode: s.ReasoningMode, ReasoningBudgetTokens: s.ReasoningBudgetTokens, HistoryLookup: true,
-		MaxTokens: 1024, JSONSchema: schema}
-	if s.MaxTokens > 0 {
-		input.MaxTokens = min(input.MaxTokens, s.MaxTokens)
-	}
+	input := s.historyAnswerRequest(schema)
 	for len(sources) > 0 {
 		var archive strings.Builder
 		for _, source := range sources {
@@ -197,6 +200,15 @@ func (s Service) answerFromHistory(ctx context.Context, question string, facts [
 		return unavailable, ctx.Err()
 	}
 	return strings.Join(words, ", "), ctx.Err()
+}
+
+func (s Service) historyAnswerRequest(schema json.RawMessage) llm.ChatRequest {
+	limit := 1024
+	if s.MaxTokens > 0 {
+		limit = min(limit, s.MaxTokens)
+	}
+	return llm.ChatRequest{Model: s.Model, ReasoningMode: s.ReasoningMode, ReasoningBudgetTokens: s.ReasoningBudgetTokens,
+		HistoryLookup: true, MaxTokens: limit, JSONSchema: schema}
 }
 
 type quoteSpan struct{ start, end int }

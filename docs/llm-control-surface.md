@@ -659,7 +659,10 @@ the original wording and marks missing fields unavailable. Archived commands
 reach only this text reader. A fresh instruction to apply an earlier pattern
 uses the normal motion contract. Simple and Intermediate local models route
 the current message in a short, separate generation because later settings in
-the full prompt led them to guess earlier values. Other models choose the
+the full prompt led them to guess earlier values. For an opening pace sequence
+the reader extracts set and adjust requests from up to four source rows at a
+time. The app verifies each quote against its own row and reads until it can
+resolve the requested settings and following change. Other models choose the
 lookup in their ordinary response. The extra generation cost applies to local
 long-chat routing and to retrieving evidence, and is reported as generation
 time in response diagnostics.
