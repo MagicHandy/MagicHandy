@@ -75,7 +75,8 @@ func (s *Server) handleProductionChatTest(w http.ResponseWriter, r *http.Request
 	}
 	defer release()
 	started := time.Now()
-	result, completionErr := service.Complete(providerCtx, chat.Request{Message: message, History: context.History, HistoryMessagesDropped: context.HistoryOmitted}, nil)
+	result, completionErr := service.Complete(providerCtx, chat.Request{Message: message, History: context.History,
+		HistoryMessagesDropped: context.HistoryOmitted, ReadUserHistory: s.chatLog.UserHistoryBefore(sessionID, 0)}, nil)
 	if s.chatCanceled(providerCtx, stopSequence) {
 		writeError(w, http.StatusConflict, errors.New("test canceled by Stop or its client"))
 		return

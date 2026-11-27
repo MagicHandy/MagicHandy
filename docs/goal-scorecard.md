@@ -1,5 +1,34 @@
 # Goal Scorecard
 
+## 2026-11-27 — Cloud refill timing and saved chat evidence
+
+On Windows amd64 with Go 1.26.11, the stripped pure-Go core measured
+25,710,592 bytes, up 68,608 bytes from alpha.90 (25,641,984). Both builds used
+`CGO_ENABLED=0`, `-trimpath`, the same embedded version and commit, and
+`-ldflags "-s -w"`.
+The Cloud delay replay and chat evidence limits are described in the
+[HSP invariants](hsp-v4-invariants.md) and [LLM control surface](llm-control-surface.md).
+
+## 2026-11-27 — Inkling action schema and Gemma history
+
+On Windows AMD64, the stripped Go core measured 25,641,472 bytes on alpha.90
+(`4286ae43`) and 25,643,008 bytes with the Inkling PR and its scoped schema
+fix (+1,536 bytes). Both builds used Go 1.26.11, `CGO_ENABLED=0`,
+`-buildvcs=false -trimpath` and `-ldflags "-s -w"`. The schema fix restores
+16 bytes of input budget on each default Gemma profile. In a conversation at
+the admission limit this kept the oldest user message available for recall.
+[Regression review](inkling-local-evaluation-2026-11-21.md#gemma-and-gpt-regression-review)
+
+## 2026-11-27 — Optional Xet downloads for managed voice modules
+
+On Windows AMD64, both the Faster Qwen Python 3.11 and Chatterbox Python 3.10
+test environments resolved Hub 0.36.2 with `hf-xet` 1.8.0. Its wheel download
+was 3,911,559 bytes. The installed package accounted for 9,822,762 bytes per
+environment, excluding model data and transfer caches. The module installer
+fetches this wheel on demand. It adds no dependency to the Go core or browser
+bundle. [Wheel and license](https://pypi.org/project/hf-xet/1.8.0/) ·
+[Managed voice download behavior](voice-tts-modules.md)
+
 ## 2026-11-25 — ElevenLabs refactor and voice browser
 
 The comparison base is the stylesheet fix at `8d5d9efe`. Binaries used Go
@@ -46,6 +75,18 @@ A first visit now fetches 11,775 more compressed bytes of CSS. Settings,
 Setup, Personas and Pattern library no longer fetch a separate stylesheet. The
 main stylesheet stays below the 207,527 / 35,619 B it was before alpha.89. No
 dependency was added. The ownership check runs only in `npm test`.
+
+## 2026-11-21 — Inkling local model evaluation
+
+The stripped Windows amd64 core measured **25,437,184 bytes** on the release
+baseline `1b80d72e` and on the local action-schema change. Selecting the
+local motion guidance for Inkling brought the total to **25,438,208 bytes**
+(+1,024 bytes). The builds used Go 1.26.11, `CGO_ENABLED=0`,
+`-buildvcs=false`, `-trimpath` and
+`-ldflags "-s -w"`. The runner and model weights used in the evaluation are
+external to the binary. The simulator comparison reports first-pass motion,
+readbacks, unexpected motion on holds and end-to-end latency separately.
+[Model evaluation](inkling-local-evaluation-2026-11-21.md)
 
 ## 2026-11-18 — Review of prompt admission and retained-history replay
 

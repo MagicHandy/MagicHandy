@@ -5,12 +5,41 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"path"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
+
+func localMotionContract(settings config.LLMSettings) (localGuidance, objectRoot bool) {
+	if c := settings.ActiveConnection; c != nil {
+		if c.Provider != config.LLMProviderCompatible || !isLoopbackInkling(c.Model, c.BaseURL) {
+			return false, false
+		}
+		// Automatic with no declared parameters sends the raw action schema.
+		// Prompt-only connections send no decoder schema and use its budget
+		// for history. The tuned Intermediate profile also gets the local guide.
+		localGuidance = c.OutputMode == "prompt" && c.ModelCapabilityLevel() == config.ModelCapabilityIntermediate
+		objectRoot = c.OutputMode == "auto" && len(c.SupportedParameters) == 0
+		return localGuidance, objectRoot
+	}
+	if settings.Provider == config.LLMProviderLlamaCPP {
+		return true, isLoopbackInkling(settings.Model, settings.LlamaCPPBaseURL)
+	}
+	return settings.Provider == config.LLMProviderOllama, false
+}
+
+func isLoopbackInkling(model, baseURL string) bool {
+	if !strings.EqualFold(path.Base(model), "inkling-2-mini") {
+		return false
+	}
+	endpoint, err := url.Parse(baseURL)
+	return err == nil && (endpoint.Scheme == "http" || endpoint.Scheme == "https") && isLoopbackHost(endpoint.Host)
+}
 
 type hostedRequestLanes struct {
 	mu    sync.Mutex

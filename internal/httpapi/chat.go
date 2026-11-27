@@ -163,6 +163,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		Message:                body.Message,
 		History:                promptContext.History,
 		HistoryMessagesDropped: promptContext.HistoryOmitted,
+		ReadUserHistory:        s.chatLog.UserHistoryBefore(sessionID, userSeq),
 	}
 	bindChatRepair(chatCtx, userSeq, service, settings.LLM, promptContext)
 	result, ok, completionErr := s.completeInteractiveChat(chatCtx, settings.LLM, service, request, emit, started, preparation, &diagnostics)
@@ -1178,8 +1179,10 @@ func (s *Server) chatPatternChoicesFor(capabilities chat.Capabilities) ([]chat.P
 func chatCapabilities(settings config.LLMSettings, active *persona.Persona) chat.Capabilities {
 	resolved := settings.Capabilities()
 	mode := chatMotionMode(settings.MotionGenerationMode)
+	localGuidance, objectRoot := localMotionContract(settings)
 	capabilities := chat.Capabilities{
-		LocalInference:           settings.ActiveConnection == nil && (settings.Provider == config.LLMProviderOllama || settings.Provider == config.LLMProviderLlamaCPP),
+		LocalInference:           localGuidance,
+		ActionSchemaObjectRoot:   objectRoot,
 		SimpleMotion:             settings.ModelCapabilityLevel() == config.ModelCapabilitySimple,
 		AdvancedMotion:           settings.AdvancedMotion(),
 		IntermediateMotion:       settings.IntermediateMotion(),

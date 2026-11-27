@@ -88,7 +88,7 @@ func (e *Engine) dispatchIfLeadNeeded(ctx context.Context, runEpoch uint64, reas
 	var targetTail int64
 	e.mu.Lock()
 	if e.validateRunLocked(runEpoch) == nil {
-		requiredTail := e.estimatedPlaybackMillisLocked(e.now()) + e.leadMillisLocked()
+		requiredTail := e.estimatedPlaybackMillisLocked(e.now()) + e.refillLeadMillisLocked()
 		needsLead = e.bufferedTailMillisLocked() < requiredTail
 		if needsLead {
 			targetTail = e.refillTailMillisLocked(requiredTail)
@@ -102,6 +102,17 @@ func (e *Engine) dispatchIfLeadNeeded(ctx context.Context, runEpoch uint64, reas
 		return nil
 	}
 	return e.dispatchThrough(ctx, runEpoch, reason, targetTail)
+}
+
+func (e *Engine) refillLeadMillisLocked() int64 {
+	lead := e.leadMillisLocked()
+	if e.refillArrivalMarginMillis <= 0 || e.plan.Target.Media != nil {
+		return lead
+	}
+	// The accepted tail can lose one polling interval plus an append round
+	// trip. Keep the interactive ceiling even after an unusually slow command.
+	arrival := e.refillArrivalMarginMillis + e.dispatchInterval.Milliseconds() + e.recentCommandLatencyMillisLocked()
+	return max(lead, min(arrival, maxLeadMillis))
 }
 
 func (e *Engine) refillTailMillisLocked(requiredTail int64) int64 {
@@ -125,7 +136,7 @@ func (e *Engine) prebufferBeforePlay(ctx context.Context, runEpoch uint64, reaso
 		}
 		requiredLead := e.selectedMinimumBufferedLeadMillisLocked()
 		if requiredLead > 0 {
-			requiredLead = e.leadMillisLocked()
+			requiredLead = e.refillLeadMillisLocked()
 		}
 		dispatchTail := int64(0)
 		if e.plan.Target.Media != nil {

@@ -86,13 +86,17 @@ func TestContinuousDecisionSchemaUsesOnlyBackendState(t *testing.T) {
 				schema = CreativeV2ResponseSchema(limits, false)
 			}
 			var decoded struct {
+				Type  string `json:"type"`
 				OneOf []struct {
 					Properties map[string]json.RawMessage `json:"properties"`
 					Required   []string                   `json:"required"`
 				} `json:"oneOf"`
 			}
-			if err := json.Unmarshal(continuousActionSchema(schema, state, false), &decoded); err != nil {
+			if err := json.Unmarshal(continuousActionSchema(schema, state, Capabilities{ActionSchemaObjectRoot: true}), &decoded); err != nil {
 				t.Fatal(err)
+			}
+			if decoded.Type != "object" {
+				t.Fatalf("local response schema root type = %q", decoded.Type)
 			}
 			want := []string{"none"}
 			if !state.Paused {

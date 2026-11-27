@@ -60,6 +60,15 @@ func authenticatedControlRequest(server *Server, cookie *http.Cookie, method, ro
 
 func newControllerSessionFixture(t *testing.T, providers ...llm.Provider) (*Server, *accounts.Store, accounts.Account, *http.Cookie) {
 	t.Helper()
+	runtime := Runtime{}
+	if len(providers) > 0 {
+		runtime.LLMProvider = providers[0]
+	}
+	return newControllerSessionFixtureWithRuntime(t, runtime)
+}
+
+func newControllerSessionFixtureWithRuntime(t *testing.T, runtime Runtime) (*Server, *accounts.Store, accounts.Account, *http.Cookie) {
+	t.Helper()
 	settings, err := openTestStore(t)
 	if err != nil {
 		t.Fatal(err)
@@ -69,12 +78,8 @@ func newControllerSessionFixture(t *testing.T, providers ...llm.Provider) (*Serv
 		t.Fatal(err)
 	}
 	fake := transport.NewFake()
-	runtime := Runtime{
-		Accounts: store, AuthenticationRequired: true, MotionTransport: fake, Transport: fake,
-	}
-	if len(providers) > 0 {
-		runtime.LLMProvider = providers[0]
-	}
+	runtime.Accounts, runtime.AuthenticationRequired = store, true
+	runtime.MotionTransport, runtime.Transport = fake, fake
 	s := newTestServerWithStore(t, settings, runtime)
 	admin, err := store.BootstrapAdmin(t.Context(), "owner", "a long review passphrase")
 	if err != nil {

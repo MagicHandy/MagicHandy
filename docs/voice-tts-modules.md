@@ -55,6 +55,19 @@ Choose a managed module in `install.ps1`, or run
    auto-launch choice are persisted in SQLite. Faster Qwen reference fields
    remain empty until the user completes them in Settings > Voice.
 
+During a Hub model install or module update, Faster Qwen and Chatterbox check
+whether their private Python environment can load the Xet download backend.
+If needed, the installer asks `uv` for the Xet extra of the **already selected
+Hub version** and verifies the native wheel in a fresh interpreter. A local
+Faster Qwen model directory skips this step. The updater's `-CheckOnly` mode
+reports the available backend without installing packages.
+
+Setup uses HTTP when `HF_HUB_DISABLE_XET=1` is set or a compatible Xet wheel
+is unavailable. If Xet fails during a transfer, the remaining download
+attempts use HTTP with the same cache and destination.
+Other failures keep the usual retry policy. Xet's default cache sits beside
+the module's Hub cache. An explicit `HF_XET_CACHE` takes precedence.
+
 Settings > Voice treats these as self-managed modules. It exposes choices that
 change the resulting voice (reference audio, transcript, language, tone, seed,
 or selected Chatterbox voice) and one live module-health readout. Installer

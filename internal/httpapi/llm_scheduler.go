@@ -146,6 +146,7 @@ func (c *llmRequestCoordinator) signalLocked() {
 }
 
 type llmCallTiming struct {
+	historyLookup bool
 	started       time.Time
 	firstToken    time.Time
 	finished      time.Time
@@ -172,7 +173,7 @@ func (p *timedLLMProvider) StreamChat(
 	request llm.ChatRequest,
 	onDelta func(string) error,
 ) (string, error) {
-	call := llmCallTiming{started: time.Now()}
+	call := llmCallTiming{started: time.Now(), historyLookup: request.HistoryLookup}
 	previousProgress := request.OnProgress
 	request.OnProgress = func(progress llm.ProviderProgress) {
 		if progress.Activity && call.firstActivity.IsZero() {
@@ -208,7 +209,7 @@ func (p *timedLLMProvider) StreamChat(
 		call.firstToken = call.finished
 	}
 	p.mu.Lock()
-	if p.initialRequest == nil {
+	if p.initialRequest == nil || (p.initialRequest.HistoryLookup && !request.HistoryLookup) {
 		request.OnProgress, request.OnBudget = nil, nil
 		p.initialRequest = &request
 	}
@@ -245,19 +246,27 @@ func (p *timedLLMProvider) applyDiagnostics(
 	if !calls[0].firstToken.IsZero() {
 		diagnostics.FirstTokenMillis = calls[0].firstToken.Sub(requestStarted).Milliseconds()
 	}
-	diagnostics.GenerationMillis = calls[0].finished.Sub(calls[0].started).Milliseconds()
 	if !calls[0].firstActivity.IsZero() {
 		diagnostics.FirstActivityMillis = calls[0].firstActivity.Sub(requestStarted).Milliseconds()
 	}
-	diagnostics.ModelLoadMillis = calls[0].progress.LoadMillis
-	diagnostics.PromptEvalMillis = calls[0].progress.PromptEvalMillis
-	diagnostics.PromptTokens = calls[0].progress.PromptTokens
-	diagnostics.CachedPromptTokens = calls[0].progress.CachedPromptTokens
-	diagnostics.GeneratedTokens = calls[0].progress.GeneratedTokens
-	diagnostics.PromptBytes = calls[0].budget.InputBytes
-	diagnostics.PromptLimitBytes = calls[0].budget.LimitBytes
-	diagnostics.HistoryMessagesDropped = calls[0].budget.HistoryMessagesDropped
-	for _, call := range calls[1:] {
-		diagnostics.RepairMillis += call.finished.Sub(call.started).Milliseconds()
+	ordinaryCallSeen := false
+	for _, call := range calls {
+		millis := call.finished.Sub(call.started).Milliseconds()
+		if !call.historyLookup && ordinaryCallSeen {
+			diagnostics.RepairMillis += millis
+			continue
+		}
+		ordinaryCallSeen = ordinaryCallSeen || !call.historyLookup
+		diagnostics.GenerationMillis += millis
+		diagnostics.ModelLoadMillis += call.progress.LoadMillis
+		diagnostics.PromptEvalMillis += call.progress.PromptEvalMillis
+		diagnostics.PromptTokens += call.progress.PromptTokens
+		diagnostics.CachedPromptTokens += call.progress.CachedPromptTokens
+		diagnostics.GeneratedTokens += call.progress.GeneratedTokens
+		diagnostics.HistoryMessagesDropped = max(diagnostics.HistoryMessagesDropped, call.budget.HistoryMessagesDropped)
+		if call.budget.InputBytes >= diagnostics.PromptBytes {
+			diagnostics.PromptBytes = call.budget.InputBytes
+			diagnostics.PromptLimitBytes = call.budget.LimitBytes
+		}
 	}
 }

@@ -1,5 +1,8 @@
 # Local Model Suitability
 
+For the November 2026 comparison of Inkling 2 Mini and the hardware-selected
+Gemma profiles, see the [Inkling motion, conversation and latency measurements](inkling-local-evaluation-2026-11-21.md).
+
 Measured 2026-08-05 against the managed llama.cpp runtime (`b9966-cuda`), one
 RTX 5070 Ti, `-ngl 999 -c 8192`, using the same request shape
 `internal/llm/llama_cpp.go` sends: OpenAI-compatible endpoint,

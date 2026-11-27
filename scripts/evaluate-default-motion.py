@@ -2,13 +2,17 @@
 
 The local profiles use the catalog GGUF in MAGICHANDY_QUALITY_MODEL_DIR and the
 managed llama-server executable in MAGICHANDY_QUALITY_RUNNER. Terra uses the
-signed-in MAGICHANDY_HOSTED_DATA_DIR. All dispatches go to a test transport.
+signed-in MAGICHANDY_HOSTED_DATA_DIR. The optional external-local and compatible-local profiles use
+MAGICHANDY_LIVE_LLAMA_URL, MAGICHANDY_LIVE_MODEL and MAGICHANDY_QUALITY_CAPABILITY.
+All dispatches go to a test transport.
 """
 
 import argparse
 import json
+from math import ceil
 import os
 from pathlib import Path
+from statistics import median
 import subprocess
 import tempfile
 from datetime import datetime, timezone
@@ -41,21 +45,51 @@ def run_profile(binary, scratch, output, profile, mirror, cases):
     pending.replace(capture)
     report = json.loads(capture.read_bytes())
     turns = report["turns"]
-    passed = sum(row["intent_pass"] for row in turns)
+    model_turns = [row for row in turns if row["expected_action"] != "stop"]
+    stops = [row for row in turns if row["expected_action"] == "stop"]
+    passed = sum(row["intent_pass"] for row in model_turns)
+    delivered_exact = sum(row["delivered_intent_pass"] for row in model_turns)
     holds = [row for row in turns if row["expected_action"] == "none"]
     unexpected = sum(row["events"]["action"] != "none" or
                      "unexpected change to playback" in (row.get("failures") or [])
                      for row in holds)
     repairs = sum(row["events"]["repaired"] or len(row.get("attempts") or []) > 1
                   for row in turns)
-    print(f"{name}: {passed}/{len(turns)} first-pass turns, {unexpected}/{len(holds)} "
-          f"unexpected changes on holds, {repairs} turns retried. {capture}", flush=True)
+    print(f"{name}: {passed}/{len(model_turns)} first-pass model turns, {delivered_exact}/{len(model_turns)} "
+          f"exact delivered outcomes, {unexpected}/{len(holds)} "
+          f"unexpected changes on holds, {repairs} turns retried, "
+          f"{sum(row['intent_pass'] for row in stops)}/{len(stops)} direct Stops confirmed.")
+    # A prompt rejected immediately is a quality failure. Its short round trip
+    # would make a backend appear faster at delivering actual replies.
+    delivered, undelivered_ms = [], []
+    for row in model_turns:
+        events = row["events"]
+        if (events["ok"] and events["reply"].strip() and not events["fallback"]
+                and not events["diagnostics"].get("refusal_fallback_from")
+                and any(attempt["raw"].strip() for attempt in row.get("attempts") or [])):
+            delivered.append(row)
+        else:
+            undelivered_ms.append(row["elapsed_ms"])
+    elapsed = sorted(row["elapsed_ms"] for row in delivered)
+    if elapsed:
+        print(f"{name}: {len(elapsed)} delivered model replies, end-to-end median "
+              f"{median(elapsed):.0f} ms, p95 {elapsed[ceil(len(elapsed) * .95) - 1]} ms.")
+    first_content = [ms for row in delivered if (ms := row["events"]["diagnostics"].get("first_token_ms", 0)) > 0]
+    if first_content:
+        print(f"{name}: median time to first response content {median(first_content):.0f} ms "
+              f"on {len(first_content)} replies with timing data.")
+    if undelivered_ms:
+        print(f"{name}: {len(undelivered_ms)} turns without a delivered model reply, median "
+              f"{median(undelivered_ms):.0f} ms, slowest {max(undelivered_ms)} ms.")
+    print(capture, flush=True)
     return bool(turns) and result.returncode == 0
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profiles", nargs="+", choices=PROFILES, default=PROFILES)
+    parser.add_argument("--profiles", nargs="+", choices=(*PROFILES, "external-local", "compatible-local"), default=PROFILES)
+    parser.add_argument("--variants", nargs="+", choices=("a", "b"), default=("a", "b"),
+                        help="Request wordings to run (default: both)")
     parser.add_argument("--cases", help="Go subtest expression, such as 'layered|restated'")
     parser.add_argument("--output", type=Path, help="Capture directory (default under .scratch)")
     args = parser.parse_args()
@@ -69,8 +103,8 @@ def main():
         subprocess.run(["go", "test", "-c", "-tags", "liveeval magichandy_labs",
                         "-o", str(binary), "./internal/httpapi"], cwd=ROOT, check=True)
         for profile in args.profiles:
-            for mirror in (False, True):
-                if not run_profile(binary, scratch, output, profile, mirror, args.cases):
+            for variant in args.variants:
+                if not run_profile(binary, scratch, output, profile, variant == "b", args.cases):
                     passed = False
     return 0 if passed else 1
 

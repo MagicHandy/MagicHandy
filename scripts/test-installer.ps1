@@ -167,6 +167,7 @@ try {
     }
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $Repo 'scripts\tts\chatterbox-server.py') -PathType Leaf) -Message 'Chatterbox launcher shim should ship with the installer'
     $ttsRuntimeProbe = Join-Path $Repo 'scripts\tts\runtime-probe.py'
+    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $Repo 'scripts\tts\hub_xet.py') -PathType Leaf) -Message 'managed Hub transfer checks should ship with the voice modules'
     Assert-True -Condition (Test-Path -LiteralPath $ttsRuntimeProbe -PathType Leaf) -Message 'Python runtime verification should ship as a standalone script'
     $ttsRuntimeProbeSource = [System.IO.File]::ReadAllText($ttsRuntimeProbe)
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $Repo 'internal\llm\runtimeassets\LICENSE-llama.cpp') -PathType Leaf) -Message 'managed llama.cpp installer should ship the pinned upstream license'
@@ -259,7 +260,8 @@ try {
                 $args[0].Name -eq $functionName
         }, $true)
         Assert-True -Condition ($null -ne $functionAst) -Message "TTS installer should define $functionName"
-        Invoke-Expression $functionAst.Extent.Text
+        # Keep the source filename so packaged helpers resolve through $PSScriptRoot.
+        Set-Item -LiteralPath ('Function:\' + $functionName) -Value $functionAst.Body.GetScriptBlock()
     }
 
     $localModelFixture = Join-Path $tempRoot 'user-local-model'
@@ -340,6 +342,12 @@ func copySelf(destination string) {
 
 func main() {
 	base := filepath.Base(os.Args[0])
+	if len(os.Args) == 5 && os.Args[1] == "-I" && os.Args[2] == "-B" && filepath.Base(os.Args[3]) == "hub_xet.py" {
+		if os.Getenv("MAGICHANDY_FAKE_XET_UNAVAILABLE") == "1" {
+			os.Exit(1)
+		}
+		return
+	}
 	if capture := os.Getenv("MAGICHANDY_FAKE_CAPTURE_INVOCATION"); capture != "" {
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -374,6 +382,26 @@ func main() {
 		return
 	}
 	if strings.EqualFold(base, "hf.exe") {
+		if log := os.Getenv("MAGICHANDY_FAKE_HF_ATTEMPTS"); log != "" {
+			disabled := os.Getenv("HF_HUB_DISABLE_XET")
+			file, err := os.OpenFile(log, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+			if err != nil {
+				panic(err)
+			}
+			fmt.Fprintln(file, disabled)
+			file.Close()
+			if err := os.WriteFile(log+".cache", []byte(os.Getenv("HF_XET_CACHE")), 0o600); err != nil {
+				panic(err)
+			}
+			if (hasArg("fixture/cas") || hasArg("fixture/both-fail")) && disabled != "1" {
+				fmt.Fprintln(os.Stderr, "File \"file_download.py\", line 612, in xet_get")
+				os.Exit(65)
+			}
+			if hasArg("fixture/forbidden") || hasArg("fixture/both-fail") {
+				fmt.Fprintln(os.Stderr, "HTTP 403 Forbidden")
+				os.Exit(66)
+			}
+		}
 		if os.Getenv("MAGICHANDY_FAKE_HF_STDERR") == "1" {
 			fmt.Fprintln(os.Stderr, "download progress on stderr")
 		}
@@ -500,16 +528,69 @@ func main() {
 
     Write-Host 'Checking Hugging Face stderr progress handling...'
     $fakeHF = Join-Path $tempRoot 'hf.exe'
+    $hfToolchain = @{ Python = $fakeRuntimeBuild; Uv = (Join-Path $tempRoot 'managed uv.exe') }
     Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $fakeHF
     $savedFakeHFStderr = $env:MAGICHANDY_FAKE_HF_STDERR
     try {
         $env:MAGICHANDY_FAKE_HF_STDERR = '1'
-        Invoke-HuggingFaceModelDownload `
+        Invoke-HuggingFaceModelDownload @hfToolchain `
             -Executable $fakeHF `
             -Repository 'fixture/model' `
             -CacheDirectory (Join-Path $tempRoot 'hf-cache')
     } finally {
         $env:MAGICHANDY_FAKE_HF_STDERR = $savedFakeHFStderr
+    }
+
+    & {
+        function Start-Sleep { param([int]$Seconds) }
+        $savedAttempts = $env:MAGICHANDY_FAKE_HF_ATTEMPTS
+        $savedDisable = $env:HF_HUB_DISABLE_XET
+        $savedXetCache = $env:HF_XET_CACHE
+        $savedUnavailable = $env:MAGICHANDY_FAKE_XET_UNAVAILABLE
+        $cache = Join-Path $tempRoot 'hf-cache'
+        try {
+            $env:MAGICHANDY_FAKE_HF_ATTEMPTS = Join-Path $tempRoot 'hf-xet-retry.txt'
+            $env:HF_HUB_DISABLE_XET = '0'
+            $env:HF_XET_CACHE = $null
+            $env:MAGICHANDY_FAKE_XET_UNAVAILABLE = $null
+            Invoke-HuggingFaceModelDownload @hfToolchain -Executable $fakeHF -Repository 'fixture/cas' -CacheDirectory $cache
+            $attempts = [System.IO.File]::ReadAllLines($env:MAGICHANDY_FAKE_HF_ATTEMPTS)
+            Assert-Equal '0,1' ($attempts -join ',') 'a failed Xet transfer should retry over HTTP'
+            Assert-Equal '0' $env:HF_HUB_DISABLE_XET 'successful fallback should restore the previous setting'
+            Assert-Equal (Join-Path $tempRoot 'xet') ([System.IO.File]::ReadAllText($env:MAGICHANDY_FAKE_HF_ATTEMPTS + '.cache')) 'Xet should use a module-local cache by default'
+            Assert-True ($null -eq $env:HF_XET_CACHE) 'the module cache must not leak into the caller'
+
+            $env:MAGICHANDY_FAKE_HF_ATTEMPTS = Join-Path $tempRoot 'hf-http-only.txt'
+            $env:HF_HUB_DISABLE_XET = $null
+            $env:MAGICHANDY_FAKE_XET_UNAVAILABLE = '1'
+            Invoke-HuggingFaceModelDownload @hfToolchain -Executable $fakeHF -Repository 'fixture/cas' -CacheDirectory $cache
+            Assert-Equal '1' ([System.IO.File]::ReadAllText($env:MAGICHANDY_FAKE_HF_ATTEMPTS).Trim()) 'an unavailable accelerator should use HTTP on the first attempt'
+            Assert-True ($null -eq $env:HF_HUB_DISABLE_XET) 'HTTP fallback should preserve an unset caller environment'
+
+            $env:MAGICHANDY_FAKE_HF_ATTEMPTS = Join-Path $tempRoot 'hf-auth-error.txt'
+            $env:HF_HUB_DISABLE_XET = 'off'
+            $env:HF_XET_CACHE = Join-Path $tempRoot 'explicit-xet-cache'
+            $env:MAGICHANDY_FAKE_XET_UNAVAILABLE = $null
+            Assert-Throws -Action {
+                Invoke-HuggingFaceModelDownload @hfToolchain -Executable $fakeHF -Repository 'fixture/forbidden' -CacheDirectory $cache
+            } -Pattern '3 attempts.*66' -Message 'persistent Hub errors must fail installation'
+            $attempts = [System.IO.File]::ReadAllLines($env:MAGICHANDY_FAKE_HF_ATTEMPTS)
+            Assert-Equal 'off,off,off' ($attempts -join ',') 'a repository error should not switch download backends'
+            Assert-Equal 'off' $env:HF_HUB_DISABLE_XET 'failed downloads should restore the caller setting'
+            Assert-Equal $env:HF_XET_CACHE ([System.IO.File]::ReadAllText($env:MAGICHANDY_FAKE_HF_ATTEMPTS + '.cache')) 'an explicit Xet cache should be honored'
+
+            $env:MAGICHANDY_FAKE_HF_ATTEMPTS = Join-Path $tempRoot 'hf-both-fail.txt'
+            Assert-Throws -Action {
+                Invoke-HuggingFaceModelDownload @hfToolchain -Executable $fakeHF -Repository 'fixture/both-fail' -CacheDirectory $cache
+            } -Pattern '3 attempts.*66' -Message 'an unsuccessful HTTP fallback must report the final failure'
+            Assert-Equal 'off,1,1' ([System.IO.File]::ReadAllLines($env:MAGICHANDY_FAKE_HF_ATTEMPTS) -join ',') 'remaining retries should reuse the HTTP fallback'
+            Assert-Equal 'off' $env:HF_HUB_DISABLE_XET 'failed HTTP fallback should restore the caller setting'
+        } finally {
+            $env:MAGICHANDY_FAKE_HF_ATTEMPTS = $savedAttempts
+            $env:HF_HUB_DISABLE_XET = $savedDisable
+            $env:HF_XET_CACHE = $savedXetCache
+            $env:MAGICHANDY_FAKE_XET_UNAVAILABLE = $savedUnavailable
+        }
     }
 
     Write-Host 'Checking Hugging Face materialized model arguments...'
@@ -520,7 +601,7 @@ func main() {
     try {
         $env:MAGICHANDY_FAKE_CAPTURE_INVOCATION = $modelInvocation
         Initialize-FasterQwenMaterializedModel -Root $tempRoot -Directory $materializedModel -Repository $materializedRepository
-        Invoke-HuggingFaceModelDownload `
+        Invoke-HuggingFaceModelDownload @hfToolchain `
             -Executable $fakeHF `
             -Repository $materializedRepository `
             -CacheDirectory (Join-Path $tempRoot 'hf-cache') `
@@ -876,7 +957,7 @@ func main() {
     $releaseVerifierSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1'))
     Assert-True -Condition ($releaseVerifierSource.Contains("'ReviewedUnsignedPublic'")) -Message 'release verifier should expose the reviewed unsigned public policy'
     Assert-True -Condition ($releaseVerifierSource.Contains('ReviewedUnsignedPublic requires Microsoft false-positive case')) -Message 'reviewed unsigned publication should fail closed without the recorded Microsoft case'
-    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11', '0.1.0-alpha.13', '0.1.0-alpha.14', '0.1.0-alpha.15', '0.1.0-alpha.16', '0.1.0-alpha.17', '0.1.0-alpha.18', '0.1.0-alpha.19', '0.1.0-alpha.20', '0.1.0-alpha.21', '0.1.0-alpha.22', '0.1.0-alpha.23', '0.1.0-alpha.24', '0.1.0-alpha.25', '0.1.0-alpha.26', '0.1.0-alpha.27', '0.1.0-alpha.28', '0.1.0-alpha.29', '0.1.0-alpha.30', '0.1.0-alpha.31', '0.1.0-alpha.32', '0.1.0-alpha.33', '0.1.0-alpha.34', '0.1.0-alpha.35', '0.1.0-alpha.36', '0.1.0-alpha.37', '0.1.0-alpha.38', '0.1.0-alpha.39', '0.1.0-alpha.40', '0.1.0-alpha.41', '0.1.0-alpha.42', '0.1.0-alpha.43', '0.1.0-alpha.44', '0.1.0-alpha.45', '0.1.0-alpha.46', '0.1.0-alpha.47', '0.1.0-alpha.48', '0.1.0-alpha.49', '0.1.0-alpha.50', '0.1.0-alpha.51', '0.1.0-alpha.52', '0.1.0-alpha.53', '0.1.0-alpha.54', '0.1.0-alpha.55', '0.1.0-alpha.56', '0.1.0-alpha.57', '0.1.0-alpha.58', '0.1.0-alpha.59', '0.1.0-alpha.60', '0.1.0-alpha.61', '0.1.0-alpha.62', '0.1.0-alpha.63', '0.1.0-alpha.64', '0.1.0-alpha.66', '0.1.0-alpha.67', '0.1.0-alpha.68', '0.1.0-alpha.69', '0.1.0-alpha.70', '0.1.0-alpha.71', '0.1.0-alpha.72', '0.1.0-alpha.73', '0.1.0-alpha.74', '0.1.0-alpha.75', '0.1.0-alpha.76', '0.1.0-alpha.77', '0.1.0-alpha.78', '0.1.0-alpha.79', '0.1.0-alpha.80', '0.1.0-alpha.81', '0.1.0-alpha.82', '0.1.0-alpha.83', '0.1.0-alpha.84', '0.1.0-alpha.85', '0.1.0-alpha.86', '0.1.0-alpha.87', '0.1.0-alpha.88', '0.1.0-alpha.89', '0.1.0-alpha.90')")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release versions'
+    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11', '0.1.0-alpha.13', '0.1.0-alpha.14', '0.1.0-alpha.15', '0.1.0-alpha.16', '0.1.0-alpha.17', '0.1.0-alpha.18', '0.1.0-alpha.19', '0.1.0-alpha.20', '0.1.0-alpha.21', '0.1.0-alpha.22', '0.1.0-alpha.23', '0.1.0-alpha.24', '0.1.0-alpha.25', '0.1.0-alpha.26', '0.1.0-alpha.27', '0.1.0-alpha.28', '0.1.0-alpha.29', '0.1.0-alpha.30', '0.1.0-alpha.31', '0.1.0-alpha.32', '0.1.0-alpha.33', '0.1.0-alpha.34', '0.1.0-alpha.35', '0.1.0-alpha.36', '0.1.0-alpha.37', '0.1.0-alpha.38', '0.1.0-alpha.39', '0.1.0-alpha.40', '0.1.0-alpha.41', '0.1.0-alpha.42', '0.1.0-alpha.43', '0.1.0-alpha.44', '0.1.0-alpha.45', '0.1.0-alpha.46', '0.1.0-alpha.47', '0.1.0-alpha.48', '0.1.0-alpha.49', '0.1.0-alpha.50', '0.1.0-alpha.51', '0.1.0-alpha.52', '0.1.0-alpha.53', '0.1.0-alpha.54', '0.1.0-alpha.55', '0.1.0-alpha.56', '0.1.0-alpha.57', '0.1.0-alpha.58', '0.1.0-alpha.59', '0.1.0-alpha.60', '0.1.0-alpha.61', '0.1.0-alpha.62', '0.1.0-alpha.63', '0.1.0-alpha.64', '0.1.0-alpha.66', '0.1.0-alpha.67', '0.1.0-alpha.68', '0.1.0-alpha.69', '0.1.0-alpha.70', '0.1.0-alpha.71', '0.1.0-alpha.72', '0.1.0-alpha.73', '0.1.0-alpha.74', '0.1.0-alpha.75', '0.1.0-alpha.76', '0.1.0-alpha.77', '0.1.0-alpha.78', '0.1.0-alpha.79', '0.1.0-alpha.80', '0.1.0-alpha.81', '0.1.0-alpha.82', '0.1.0-alpha.83', '0.1.0-alpha.84', '0.1.0-alpha.85', '0.1.0-alpha.86', '0.1.0-alpha.87', '0.1.0-alpha.88', '0.1.0-alpha.89', '0.1.0-alpha.90', '0.1.0-alpha.91')")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release versions'
     Assert-Throws -Action {
         & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
             -Version '0.0.0-local' `
@@ -894,12 +975,12 @@ func main() {
     } -Pattern 'approved only for versions 0.1.0-alpha.8, 0.1.0-alpha.9, 0.1.0-alpha.10, 0.1.0-alpha.11, 0.1.0-alpha.13' -Message 'non-allowlisted version rejected by ReviewedUnsignedPublic'
     Assert-Throws -Action {
         & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
-            -Version '0.1.0-alpha.91' `
+            -Version '0.1.0-alpha.92' `
             -Commit ('0' * 40) `
             -ArtifactsRoot $tempRoot `
             -ArtifactPolicy ReviewedUnsignedPublic `
             -ReviewedFalsePositiveCaseID '15c1e36d-fb35-4c5d-85de-83707169818a'
-    } -Pattern 'approved only for versions' -Message 'alpha.90 review grants no permission to later versions'
+    } -Pattern 'approved only for versions' -Message 'alpha.91 review grants no permission to later versions'
     Assert-Throws -Action {
         & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
             -Version '0.1.0-alpha.65' `

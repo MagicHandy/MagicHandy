@@ -79,6 +79,10 @@ type qualityEvents struct {
 	Diagnostics chat.MessageDiagnostics `json:"diagnostics"`
 }
 
+func (e qualityEvents) deliveredReply() bool {
+	return e.OK && strings.TrimSpace(e.Reply) != "" && !e.Fallback && e.Diagnostics.RefusalFallbackFrom == ""
+}
+
 func qualityChat(t *testing.T, s *Server, message string) (qualityEvents, string) {
 	t.Helper()
 	data, err := json.Marshal(map[string]string{"message": message})
@@ -138,19 +142,20 @@ func qualityChat(t *testing.T, s *Server, message string) (qualityEvents, string
 }
 
 type qualityRow struct {
-	Scenario   string           `json:"scenario"`
-	ID         string           `json:"id"`
-	Request    string           `json:"request"`
-	Response   string           `json:"response"`
-	ElapsedMS  int64            `json:"elapsed_ms"`
-	Expected   string           `json:"expected_action"`
-	Events     qualityEvents    `json:"events"`
-	Attempts   []qualityAttempt `json:"attempts"`
-	Before     *motion.FlowSpec `json:"before,omitempty"`
-	After      *motion.FlowSpec `json:"after,omitempty"`
-	Motion     *motion.Review   `json:"motion,omitempty"`
-	Failures   []string         `json:"failures,omitempty"`
-	IntentPass bool             `json:"intent_pass"`
+	Scenario            string           `json:"scenario"`
+	ID                  string           `json:"id"`
+	Request             string           `json:"request"`
+	Response            string           `json:"response"`
+	ElapsedMS           int64            `json:"elapsed_ms"`
+	Expected            string           `json:"expected_action"`
+	Events              qualityEvents    `json:"events"`
+	Attempts            []qualityAttempt `json:"attempts"`
+	Before              *motion.FlowSpec `json:"before,omitempty"`
+	After               *motion.FlowSpec `json:"after,omitempty"`
+	Motion              *motion.Review   `json:"motion,omitempty"`
+	Failures            []string         `json:"failures,omitempty"`
+	IntentPass          bool             `json:"intent_pass"`
+	DeliveredIntentPass bool             `json:"delivered_intent_pass"`
 }
 
 func qualityState(s *Server) motion.ActiveMotionState {
@@ -158,6 +163,34 @@ func qualityState(s *Server) motion.ActiveMotionState {
 		return engine.Snapshot()
 	}
 	return motion.ActiveMotionState{}
+}
+
+const qualityFirstPassFailure = "completion or provider calls"
+
+// A retry can recover the exact requested result. Preserve every independent
+// failure, including a wrong trajectory, missing cue or unrequested motion.
+func (r qualityRow) deliveredIntent() bool {
+	if r.IntentPass {
+		return true
+	}
+	retried := r.Events.Repaired || len(r.Attempts) > 1
+	return retried && r.Events.deliveredReply() && slices.Equal(r.Failures, []string{qualityFirstPassFailure})
+}
+
+func TestMotionQualityDeliveredIntent(t *testing.T) {
+	row := qualityRow{Events: qualityEvents{OK: true, Reply: "Adjusted.", Repaired: true}, Failures: []string{qualityFirstPassFailure}}
+	if !row.deliveredIntent() {
+		t.Fatal("a completed repair should count toward delivered quality")
+	}
+	row.Failures = append(row.Failures, "requested trajectory or preservation")
+	if row.deliveredIntent() {
+		t.Fatal("the repair still changed the wrong control")
+	}
+	row.Failures = row.Failures[:1]
+	row.Events.Fallback = true
+	if row.deliveredIntent() {
+		t.Fatal("credited a fallback reply as a recovered model decision")
+	}
 }
 
 func qualityRunTurn(t *testing.T, s *Server, p *qualityProvider, scenario string, tc qualityTurn) qualityRow {
@@ -183,8 +216,8 @@ func qualityRunTurn(t *testing.T, s *Server, p *qualityProvider, scenario string
 	if tc.action == "stop" {
 		calls = 0
 	}
-	if !events.OK || strings.TrimSpace(events.Reply) == "" || events.Repaired || events.Fallback || events.Diagnostics.RefusalFallbackFrom != "" || len(row.Attempts) != calls {
-		row.Failures = append(row.Failures, "completion or provider calls")
+	if !events.deliveredReply() || events.Repaired || len(row.Attempts) != calls {
+		row.Failures = append(row.Failures, qualityFirstPassFailure)
 	}
 	if events.Action != tc.action {
 		row.Failures = append(row.Failures, "action")
@@ -252,7 +285,7 @@ func TestLiveMotionRequestSequence(t *testing.T) {
 		exportLabExperimentCapture(t, map[string]any{"schema": "motion_quality.v1", "model": model, "provider": providerName, "profiles": profiles, "mirrored": mirror, "turns": rows, "session_commands": commands})
 	}()
 	starts := qualityIndependentStarts()
-	scenarios := []string{"creative", "layered", "recall_recent", "recall_long", "holdout", "counted", "recall_readback", "recall_outside", "long_unrelated", "acknowledge_idle", "restated"}
+	scenarios := []string{"creative", "layered", "recall_recent", "recall_long", "holdout", "counted", "recall_readback", "recall_outside", "long_unrelated", "acknowledge_idle", "restated", "conversation"}
 	for _, scenario := range append(scenarios, slices.Sorted(maps.Keys(starts))...) {
 		t.Run(scenario, func(t *testing.T) {
 			mode, pairs, window, correction, cases := qualityScenario(t, scenario, hosted, mirror, starts)
@@ -269,6 +302,7 @@ func TestLiveMotionRequestSequence(t *testing.T) {
 			passes := 0
 			for _, tc := range cases {
 				row := qualityMemoryTurn(t, s, p, scenario, tc, pairs, mirror, fixed)
+				row.DeliveredIntentPass = row.deliveredIntent()
 				rows = append(rows, row)
 				if row.IntentPass {
 					passes++
@@ -281,7 +315,14 @@ func TestLiveMotionRequestSequence(t *testing.T) {
 			if fixed != nil {
 				active := fixed.settings.ConversationSettings()
 				run["profile"], run["capability"], run["history_limit"] = profileName, active.ModelCapabilityLevel(), fixed.messages
-				if hosted {
+				if fixed.serverWindow > 0 {
+					run["server_slot_context"], run["max_output_tokens"] = fixed.serverWindow, active.MaxOutputTokens
+					if active.ActiveConnection != nil {
+						run["output_mode"] = active.ActiveConnection.OutputMode
+					} else {
+						run["reasoning_mode"] = active.ReasoningMode
+					}
+				} else if hosted {
 					run["reasoning_effort"] = active.ActiveConnection.ReasoningEffort
 				} else {
 					run["max_output_tokens"], run["gguf_sha256"], run["template_fix"] = active.MaxOutputTokens, fixed.digest, fixed.template
@@ -324,6 +365,8 @@ func qualityScenario(t *testing.T, scenario string, hosted, mirror bool, starts 
 		cases = []qualityTurn{tc, {"stop", "Stop.", "stop", nil}}
 	}
 	switch scenario {
+	case "conversation":
+		cases = qualityConversationCases(mirror)
 	case "restated":
 		cases, correction = qualityRestatedCases(mirror)
 		pairs = 112

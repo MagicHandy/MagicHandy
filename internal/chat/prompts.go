@@ -228,6 +228,9 @@ type Capabilities struct {
 	// LocalInference identifies the app's local-model route for optional
 	// conversation guidance. Model capability and motion authority are separate.
 	LocalInference bool `json:"-"`
+	// ActionSchemaObjectRoot declares the object type required by the
+	// loopback Inkling decoder. Schema bytes count against retained history.
+	ActionSchemaObjectRoot bool `json:"-"`
 	// IntermediateMotion enables the fuller local contract after explicit opt-in.
 	IntermediateMotion bool
 	// Some Simple interactive turns use the paired-range wire format. This
