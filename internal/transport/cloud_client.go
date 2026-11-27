@@ -96,6 +96,7 @@ func (*CloudRESTTransport) MotionSamplingCapabilities() MotionSamplingCapabiliti
 func (*CloudRESTTransport) MotionTimingCapabilities() MotionTimingCapabilities {
 	return MotionTimingCapabilities{
 		MinimumBufferedLead:      cloudMinimumBufferedLead,
+		RefillArrivalMargin:      cloudMinimumBufferedLead,
 		MinimumMediaBufferedLead: cloudMinimumMediaBufferedLead,
 	}
 }

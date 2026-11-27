@@ -457,9 +457,10 @@ func (s Service) completeTempo(ctx context.Context, request Request, emit func(S
 		ReasoningBudgetTokens:  s.ReasoningBudgetTokens,
 		JSONSchema:             schema,
 	}
-	raw, err := s.Provider.StreamChat(ctx, input, func(text string) error {
-		return emitEvent(emit, StreamEvent{Type: "delta", Phase: "initial", Text: text})
-	})
+	raw, lookup, err := s.streamInitial(ctx, input, request, emit)
+	if lookup != nil {
+		return *lookup, err
+	}
 	truncated := errors.Is(err, llm.ErrOutputTruncated)
 	if err != nil && !truncated {
 		return Result{Raw: raw, Input: &input}, err

@@ -102,6 +102,7 @@ type Engine struct {
 	preferredPointIntervalMillis   int64
 	preferSparseGeneratedMotion    bool
 	minimumBufferedLeadMillis      int64
+	refillArrivalMarginMillis      int64
 	minimumMediaBufferedLeadMillis int64
 	positionResolutionPercent      float64
 	resolutionAfterStrokeWindow    bool
@@ -183,6 +184,7 @@ func NewEngine(options EngineOptions) (*Engine, error) {
 		if capabilities.MinimumBufferedLead > 0 {
 			engine.minimumBufferedLeadMillis = max(int64(1), capabilities.MinimumBufferedLead.Milliseconds())
 		}
+		engine.refillArrivalMarginMillis = capabilities.RefillArrivalMargin.Milliseconds()
 		if capabilities.MinimumMediaBufferedLead > 0 {
 			engine.minimumMediaBufferedLeadMillis = max(
 				int64(1),

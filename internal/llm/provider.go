@@ -51,6 +51,8 @@ type ChatRequest struct {
 	// HistoryMessagesDropped accounts for whole messages removed by the
 	// composer before provider admission (never includes their contents).
 	HistoryMessagesDropped int
+	// HistoryLookup identifies read-only archive work for generation timings.
+	HistoryLookup bool `json:"-"`
 }
 
 // Provider streams text from one local LLM runtime.

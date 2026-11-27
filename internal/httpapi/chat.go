@@ -163,6 +163,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		Message:                body.Message,
 		History:                promptContext.History,
 		HistoryMessagesDropped: promptContext.HistoryOmitted,
+		ReadUserHistory:        s.chatLog.UserHistoryBefore(sessionID, userSeq),
 	}
 	bindChatRepair(chatCtx, userSeq, service, settings.LLM, promptContext)
 	result, ok, completionErr := s.completeInteractiveChat(chatCtx, settings.LLM, service, request, emit, started, preparation, &diagnostics)

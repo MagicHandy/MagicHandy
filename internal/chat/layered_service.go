@@ -190,9 +190,10 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 		MaxTokens: maxTokens, ReasoningMode: s.ReasoningMode,
 		ReasoningBudgetTokens: s.ReasoningBudgetTokens, JSONSchema: schema}
 	input = s.withLocalMotionGuide(input, state, capabilities, prompt.ID)
-	raw, err := s.Provider.StreamChat(ctx, input, func(delta string) error {
-		return emitEvent(emit, StreamEvent{Type: "delta", Phase: "initial", Text: delta})
-	})
+	raw, lookup, err := s.streamInitial(ctx, input, request, emit)
+	if lookup != nil {
+		return *lookup, err
+	}
 	result := Result{Raw: raw}
 	if err != nil {
 		return result, err

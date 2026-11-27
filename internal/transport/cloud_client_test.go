@@ -82,6 +82,9 @@ func TestCloudRESTTransportDispatchesHSPCommands(t *testing.T) {
 
 func TestCloudRESTTransportDeclaresBufferedLead(t *testing.T) {
 	capabilities := (&CloudRESTTransport{}).MotionTimingCapabilities()
+	if capabilities.RefillArrivalMargin != 1500*time.Millisecond {
+		t.Fatalf("interactive refill arrival margin = %v, want 1.5s", capabilities.RefillArrivalMargin)
+	}
 	if capabilities.MinimumBufferedLead != 1500*time.Millisecond {
 		t.Fatalf("minimum buffered lead = %v, want 1.5s", capabilities.MinimumBufferedLead)
 	}
