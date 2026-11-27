@@ -6,12 +6,27 @@ Accepted. The reviewed unsigned policy was established after Microsoft completed
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.64 and alpha.66 through alpha.90
-package-preserving releases. The latest amendment is dated 2026-11-26.
+reviewed alpha.14 through alpha.64 and alpha.66 through alpha.91
+package-preserving releases. The latest amendment is dated 2026-11-27.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.91 amendment
+
+The owner requested a Windows release of the reviewed Cloud refill and
+saved-chat recall changes, loopback Inkling support, and managed voice-model
+downloads. The [release review](../alpha91-release-review-2026-11-27.md)
+records the combined simulator, model and download checks and their limits.
+
+This amendment adds `0.1.0-alpha.91` to the exact `ReviewedUnsignedPublic`
+allowlist. Publication requires the recorded Microsoft case ID, a Defender
+scan of the public artifact directory, vulnerability checks on the five
+symbol-bearing payload executables, and installer lifecycle, manifest and
+checksum verification. The release workflow publishes the x64 setup,
+portable ZIP and two-entry checksum file from the immutable main tag.
+Each later unsigned version requires its own review.
 
 ### Alpha.90 amendment
 
@@ -1235,11 +1250,11 @@ Negative:
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
   alpha.8 through alpha.11, alpha.13 through alpha.64, or alpha.66 through
-  alpha.90 version, the recorded Microsoft case ID, the
+  alpha.91 version, the recorded Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
 - Alpha.9 through alpha.11, alpha.13 through alpha.64, and alpha.66 through
-  alpha.90 reviewed setup workflows run Microsoft Defender against the exact
+  alpha.91 reviewed setup workflows run Microsoft Defender against the exact
   public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,
