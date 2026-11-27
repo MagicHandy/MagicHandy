@@ -511,6 +511,7 @@ func (f *FanOut) MotionTimingCapabilities() MotionTimingCapabilities {
 		timing := timingOf(participant.Transport)
 		result.MinimumPointInterval = max(result.MinimumPointInterval, timing.MinimumPointInterval)
 		result.MinimumBufferedLead = max(result.MinimumBufferedLead, timing.MinimumBufferedLead)
+		result.RefillArrivalMargin = max(result.RefillArrivalMargin, timing.RefillArrivalMargin)
 		result.MinimumMediaBufferedLead = max(result.MinimumMediaBufferedLead, timing.MinimumMediaBufferedLead)
 	}
 	return result

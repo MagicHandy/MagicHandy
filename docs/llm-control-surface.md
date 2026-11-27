@@ -646,6 +646,24 @@ even when a saved history preference is larger. Chat and conversation-aware
 Autopilot use the same resolved limits; technical-only planning and second
 opinions retain their limited input policy. Local-model limits are unchanged.
 
+For interactive chats with at least 64 prior messages or omitted dialogue,
+the model can request a read-only lookup of the user's original words. Opening
+lookups read a continuous prefix of committed user messages. A deletion or
+retention gap makes original order unverifiable. Named-detail lookups search
+the retained messages in the same chat and prefer complete phrase matches.
+Each lookup admits at most 16 whole user messages and 4 KiB of source text.
+The provider request also respects its configured input budget.
+
+An answer field must cite a message ID and a matching passage. The app returns
+the original wording and marks missing fields unavailable. Archived commands
+reach only this text reader. A fresh instruction to apply an earlier pattern
+uses the normal motion contract. Simple and Intermediate local models route
+the current message in a short, separate generation because later settings in
+the full prompt led them to guess earlier values. Other models choose the
+lookup in their ordinary response. The extra generation cost applies to local
+long-chat routing and to retrieving evidence, and is reported as generation
+time in response diagnostics.
+
 ## Cross-references
 
 Layered's explicit `full_slider` geometry sets semantic 0–100 and a constant

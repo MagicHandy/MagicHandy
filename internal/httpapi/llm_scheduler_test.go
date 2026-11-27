@@ -196,3 +196,18 @@ func TestTimedLLMProviderAttributesInitialAndRepairCalls(t *testing.T) {
 		t.Fatalf("timing diagnostics = %+v", diagnostics)
 	}
 }
+
+func TestTimedLLMProviderCountsArchiveReadsAsGeneration(t *testing.T) {
+	at := time.Now()
+	calls := []llmCallTiming{
+		{started: at, finished: at.Add(10 * time.Millisecond), historyLookup: true},
+		{started: at, finished: at.Add(20 * time.Millisecond), budget: llm.PromptBudget{InputBytes: 4000, LimitBytes: 16000}},
+		{started: at, finished: at.Add(5 * time.Millisecond)},
+	}
+	p := &timedLLMProvider{calls: calls}
+	var info chat.MessageDiagnostics
+	p.applyDiagnostics(&info, at, 0, 0)
+	if info.ProviderCalls != 3 || info.GenerationMillis != 30 || info.RepairMillis != 5 || info.PromptBytes != 4000 {
+		t.Fatalf("archive, ordinary and repair timings: %+v", info)
+	}
+}

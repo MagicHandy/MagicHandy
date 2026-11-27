@@ -72,6 +72,10 @@ type MotionTimingCapabilities struct {
 	// buffered owner needs ahead of playback. The engine prebuffers to this
 	// duration before Play and maintains it while the stream is active.
 	MinimumBufferedLead time.Duration
+	// RefillArrivalMargin is the interactive coverage the owner wants left at
+	// append arrival. The scheduler budgets polling and delivery time before
+	// that deadline. It does not extend edit batches or fixed-media queues.
+	RefillArrivalMargin time.Duration
 	// MinimumMediaBufferedLead is the longer accepted coverage required for a
 	// clock-locked media stream. Interactive targets retain
 	// MinimumBufferedLead so retargets do not inherit media-sized latency.

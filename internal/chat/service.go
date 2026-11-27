@@ -31,6 +31,7 @@ type Request struct {
 	Message                string
 	History                []llm.Message
 	HistoryMessagesDropped int
+	ReadUserHistory        HistoryReader
 }
 
 // Result is the validated chat turn outcome.
@@ -215,9 +216,10 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		ReasoningBudgetTokens:  s.ReasoningBudgetTokens,
 		JSONSchema:             PatternResponseSchema(s.Patterns, capabilities, s.MotionContext),
 	}
-	raw, err := s.Provider.StreamChat(ctx, input, func(text string) error {
-		return emitEvent(emit, StreamEvent{Type: "delta", Phase: "initial", Text: text})
-	})
+	raw, lookup, err := s.streamInitial(ctx, input, request, emit)
+	if lookup != nil {
+		return *lookup, err
+	}
 	truncated := errors.Is(err, llm.ErrOutputTruncated)
 	if err != nil && !truncated {
 		return Result{Raw: raw}, err

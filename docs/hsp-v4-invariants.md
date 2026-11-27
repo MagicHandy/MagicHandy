@@ -211,8 +211,26 @@ The lead calculation uses the timestamp of the last point actually emitted,
 not the nominal end of its sampling window. It accounts for both observed
 append latency and the dispatch-loop polling interval. A buffered owner may
 declare a higher minimum; the engine must reach it before Play and maintain it
-while active. Cloud REST currently requires 1.5 seconds of accepted coverage so
-ordinary latency variance does not repeatedly trigger `pause_on_starving`.
+while active. Interactive Cloud REST targets 1.5 seconds of remaining coverage
+when the refill arrives. The trigger adds one dispatch interval (normally 200
+ms) and the slowest recent command round trip, up to the existing 2 second
+interactive ceiling. The same threshold primes playback. Retargets still
+splice at the first uncommitted point, and fixed media uses its own lead.
+
+At 25% pace, delaying the eighth active append to a simulated Original Handy
+gave the following margins against the previous accepted tail. A negative
+margin means the peer reported starvation and the engine stopped. Each run
+used the production Cloud encoder and a deterministic clock.
+
+| Injected delay | alpha.90 scheduler | Arrival-aware scheduler |
+| --- | ---: | ---: |
+| 1.0 s | +304 ms | +504 ms |
+| 1.4 s | −96 ms | +104 ms |
+| 1.8 s | −496 ms | −296 ms |
+
+The regression also retargets during a delayed append, cancels a held request
+with Emergency Stop, and observes eight seconds for subsequent movement
+writes. [Cloud refill regression](../internal/motion/cloud_refill_test.go)
 
 An HTTP 2xx status is not proof that an HSP command was accepted. API v3 error
 envelopes are failures and must not advance the cumulative point index.
