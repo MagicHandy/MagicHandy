@@ -15,19 +15,26 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
 
-func usesLocalMotionPrompts(settings config.LLMSettings) bool {
-	connection := settings.ActiveConnection
-	if connection == nil {
-		return settings.Provider == config.LLMProviderOllama || settings.Provider == config.LLMProviderLlamaCPP
+func localMotionContract(settings config.LLMSettings) (localGuidance, objectRoot bool) {
+	if c := settings.ActiveConnection; c != nil {
+		if c.Provider != config.LLMProviderCompatible || !isLoopbackInkling(c.Model, c.BaseURL) {
+			return false, false
+		}
+		// The decoder needs the typed union on Automatic too. Only the tuned
+		// Intermediate prompt contract uses the extra range and recall guide.
+		return c.OutputMode == "prompt" && c.ModelCapabilityLevel() == config.ModelCapabilityIntermediate, true
 	}
-	// The loopback Inkling connection can let the model reason before JSON.
-	// Its Intermediate prompt needs the same range and recall guidance as
-	// the native local role. The saved output policy still controls decoding.
-	if connection.Provider != config.LLMProviderCompatible || connection.OutputMode != "prompt" ||
-		connection.ModelCapabilityLevel() != config.ModelCapabilityIntermediate || !strings.EqualFold(path.Base(connection.Model), "inkling-2-mini") {
+	if settings.Provider == config.LLMProviderLlamaCPP {
+		return true, isLoopbackInkling(settings.Model, settings.LlamaCPPBaseURL)
+	}
+	return settings.Provider == config.LLMProviderOllama, false
+}
+
+func isLoopbackInkling(model, baseURL string) bool {
+	if !strings.EqualFold(path.Base(model), "inkling-2-mini") {
 		return false
 	}
-	endpoint, err := url.Parse(connection.BaseURL)
+	endpoint, err := url.Parse(baseURL)
 	return err == nil && (endpoint.Scheme == "http" || endpoint.Scheme == "https") && isLoopbackHost(endpoint.Host)
 }
 

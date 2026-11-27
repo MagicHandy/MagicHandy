@@ -60,9 +60,8 @@ func continuousActionSchema(schema json.RawMessage, state MotionContext, capabil
 		branches = append(branches, map[string]any{"type": "object", "properties": fields, "required": required, "additionalProperties": false})
 	}
 	union := map[string]any{"oneOf": branches}
-	if capabilities.LocalInference {
-		// Some local servers require an explicit object root before compiling
-		// the action union. Every branch already permits only an object.
+	if capabilities.ActionSchemaObjectRoot {
+		// Basalt checks the root type before compiling the action branches.
 		union["type"] = "object"
 	}
 	encoded, _ := json.Marshal(union)

@@ -311,7 +311,11 @@ Basalt accepted three small object schemas, then returned HTTP 400 on all
 seven Intermediate and all thirteen Simple model-backed requests in the
 initial 8K probes. MagicHandy constrains each legal action with a separate
 object branch. Declaring that their union also has `type: object` lets Basalt
-compile the schema while preserving the action and edit constraints. Basalt
+compile the schema while preserving the action and edit constraints. The
+app supplies that declaration for loopback Inkling 2 Mini on the native
+local route and on saved compatible connections, including Automatic.
+The Intermediate range and recall guide on a saved connection applies only
+to the explicit prompt-contract setting. Basalt
 chose a legal branch on all three contradictory union probes after that
 change. E4B on b11533 scored 18/18 on the same focused checks on both sides
 of the schema change, including direct Stops.
@@ -324,6 +328,72 @@ exhausted all 512 output tokens. The long corrected-cue request still used
 the entire budget with an empty visible reply. The publisher also used a
 prefilled answer channel when measuring direct answers.
 [Thinking Machines Lab's model evaluation](https://thinkingmachines.ai/news/inkling-2-mini/)
+
+## Gemma and GPT regression review
+
+On November 27 we compared alpha.90 (`4286ae43`), the submitted Inkling
+change (`e29b1341`) integrated with alpha.90, and the corrected build. Both
+32K Gemmas used the catalog weights and managed b11533 CUDA runner on an RTX
+5070 Ti. GPT-6.1 Terra used the signed-in ChatGPT provider, Advanced, 128K
+and Low reasoning. Each build received both wordings of the full synthetic
+conversation suite through streaming chat and the shared engine. A simulated
+transport recorded commands. Each model generated its own conversation
+history during the live runs.
+
+The submitted change added 16 bytes to every native action schema. The
+admission budget counts those bytes and removes whole messages. In a
+32K fixture a user recorded the word `lapwing`, exchanged 30 unrelated
+question-and-answer pairs, then asked for the word. With seven bytes of
+headroom on E4B and six on 12B, alpha.90 retained the cue and the submitted
+PR dropped it. The correction retains it on both profiles. At two fixed
+inference seeds, each Gemma gave the same answer on alpha.90 and the fix.
+Neither retrieved this arbitrary word correctly at that distance.
+
+We also captured the outgoing HTTP bodies for idle, running and long-history
+requests in both Layered and Creative v2. All 18 corrected Gemma and Terra
+bodies matched alpha.90. Basalt 0.5.5's request validator accepted all six
+corrected Automatic-connection schemas. It rejected all six from the
+submitted PR at the root type check. The native Inkling schemas and the
+tuned prompt-contract bodies matched the submitted PR across the same cases.
+
+| Default profile | First-pass checks, alpha.90 | Submitted PR | Corrected PR | Unrequested changes on holds, corrected PR | Confirmed direct Stops, corrected PR |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Gemma 4 E4B, Simple | 109/122 | 108/122 | 107/122 | 0/52 | 28/28 |
+| Gemma 4 12B, Intermediate | 121/122 | 121/122 | 121/122 | 0/52 | 28/28 |
+| GPT-6.1 Terra, Advanced Low | 132/132 | 132/132 | 132/132 | 0/54 | 30/30 |
+
+Direct Stops bypass inference and are counted separately. Endpoint checks
+allow two percentage points in the compiled trajectory. On alpha.90, E4B
+changed the running plan on one of 52 holds. On the correction it respected
+every hold and read back both short-conversation corrections, but still
+missed requests including a single-endpoint edit and applying a restated
+definition. The 12B miss on the corrected build was a restated definition.
+All three models explained the difference between range and pace in both
+wordings and kept the simulator idle.
+
+To distinguish model variation from a change in the inputs, we replayed the
+baseline answers and fixed the procedural motion seed on both builds. Across
+376 turns, every admitted provider request matched alpha.90 byte for byte
+after serialization, including history, schema, sampling and output budget.
+This covered 128 E4B attempts, 122 12B attempts and 132 Terra attempts,
+including retries. All 376 replay verdicts matched. The fresh live runs
+above used the normal sampling and independently generated histories.
+
+On 22 additional pairs of local inferences, we held the admitted messages,
+sampling seed and runner constant, disabled prompt-cache reuse, and changed
+only the schema root type. Every pair returned identical raw output. Visual
+review of the corrected build showed why spoken acknowledgement is
+insufficient. Asked to apply the restated 18–61 range, both Gemmas kept
+commanding 0–100, while Terra commanded 18–61. Asked to raise only the lower
+endpoint to 20 and keep the top at 77, the observed ranges were 26–83 on E4B,
+21–77 on 12B and 20–77 on Terra.
+
+Run `TestLocalMotionContractsForInklingAndDefaultModels` and
+`TestGemmaKeepsTheLastFittingHistoryMessage` in `./internal/httpapi` for
+the offline regression checks. The default live matrix is
+`python scripts/evaluate-default-motion.py --profiles gemma-e4b gemma-12b terra`
+with the catalog store, managed runner and signed-in profile described in
+the [motion review guide](motion-visual-review.md).
 
 ## Reproducing the comparison
 

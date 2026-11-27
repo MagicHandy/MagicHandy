@@ -1178,8 +1178,10 @@ func (s *Server) chatPatternChoicesFor(capabilities chat.Capabilities) ([]chat.P
 func chatCapabilities(settings config.LLMSettings, active *persona.Persona) chat.Capabilities {
 	resolved := settings.Capabilities()
 	mode := chatMotionMode(settings.MotionGenerationMode)
+	localGuidance, objectRoot := localMotionContract(settings)
 	capabilities := chat.Capabilities{
-		LocalInference:           usesLocalMotionPrompts(settings),
+		LocalInference:           localGuidance,
+		ActionSchemaObjectRoot:   objectRoot,
 		SimpleMotion:             settings.ModelCapabilityLevel() == config.ModelCapabilitySimple,
 		AdvancedMotion:           settings.AdvancedMotion(),
 		IntermediateMotion:       settings.IntermediateMotion(),

@@ -1,5 +1,15 @@
 # Goal Scorecard
 
+## 2026-11-27 — Inkling action schema and Gemma history
+
+On Windows AMD64, the stripped Go core measured 25,641,472 bytes on alpha.90
+(`4286ae43`) and 25,643,008 bytes with the Inkling PR and its scoped schema
+fix (+1,536 bytes). Both builds used Go 1.26.11, `CGO_ENABLED=0`,
+`-buildvcs=false -trimpath` and `-ldflags "-s -w"`. The schema fix restores
+16 bytes of input budget on each default Gemma profile. In a conversation at
+the admission limit this kept the oldest user message available for recall.
+[Regression review](inkling-local-evaluation-2026-11-21.md#gemma-and-gpt-regression-review)
+
 ## 2026-11-25 — ElevenLabs refactor and voice browser
 
 The comparison base is the stylesheet fix at `8d5d9efe`. Binaries used Go

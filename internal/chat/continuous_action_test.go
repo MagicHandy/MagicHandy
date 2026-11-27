@@ -92,7 +92,7 @@ func TestContinuousDecisionSchemaUsesOnlyBackendState(t *testing.T) {
 					Required   []string                   `json:"required"`
 				} `json:"oneOf"`
 			}
-			if err := json.Unmarshal(continuousActionSchema(schema, state, Capabilities{LocalInference: true}), &decoded); err != nil {
+			if err := json.Unmarshal(continuousActionSchema(schema, state, Capabilities{ActionSchemaObjectRoot: true}), &decoded); err != nil {
 				t.Fatal(err)
 			}
 			if decoded.Type != "object" {
