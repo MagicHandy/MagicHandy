@@ -572,6 +572,8 @@ function Test-TTSLocalModel {
 function Invoke-HuggingFaceModelDownload {
     param(
         [Parameter(Mandatory = $true)][string]$Executable,
+        [Parameter(Mandatory = $true)][string]$Python,
+        [Parameter(Mandatory = $true)][string]$Uv,
         [Parameter(Mandatory = $true)][string]$Repository,
         [Parameter(Mandatory = $true)][string]$CacheDirectory,
         [string]$LocalDirectory = ''
@@ -601,8 +603,14 @@ function Invoke-HuggingFaceModelDownload {
         'HF_HUB_DISABLE_SYMLINKS_WARNING',
         [System.EnvironmentVariableTarget]::Process
     )
+    $previousDisableXet = $env:HF_HUB_DISABLE_XET
+    $previousXetCache = $env:HF_XET_CACHE
     $exitCode = 1
     try {
+        if ([string]::IsNullOrWhiteSpace($previousXetCache)) {
+            $cacheRoot = Split-Path -Parent ([System.IO.Path]::GetFullPath($CacheDirectory))
+            $env:HF_XET_CACHE = Join-Path $cacheRoot 'xet'
+        }
         if ($serializeWindowsDownloads) {
             [System.Environment]::SetEnvironmentVariable(
                 'HF_HUB_DISABLE_SYMLINKS_WARNING',
@@ -610,11 +618,30 @@ function Invoke-HuggingFaceModelDownload {
                 [System.EnvironmentVariableTarget]::Process
             )
         }
+        # The optional wheel is checked even when the hf launcher already
+        # exists. Its absence must not become a required setup-stage failure.
+        $previousPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            & $Python -I -B (Join-Path $PSScriptRoot 'tts\hub_xet.py') $Uv
+            if (-not $? -or $LASTEXITCODE -ne 0) { $env:HF_HUB_DISABLE_XET = '1' }
+        } finally {
+            $ErrorActionPreference = $previousPreference
+        }
         for ($attempt = 1; $attempt -le 3; $attempt++) {
             $previousPreference = $ErrorActionPreference
             $ErrorActionPreference = 'Continue'
+            $xetFailure = $false
             try {
-                & $Executable @arguments
+                & $Executable @arguments 2>&1 | ForEach-Object {
+                    $line = $_.ToString()
+                    # The Hub traceback identifies the failing transfer even
+                    # when the nested CAS error text differs between wheels.
+                    if ($line -match '(?m), in xet_get\s*$|\bCAS service error\b|\bFile reconstruction error\b') {
+                        $xetFailure = $true
+                    }
+                    Write-Host $line
+                }
                 $exitCode = $LASTEXITCODE
             } catch {
                 $exitCode = -1
@@ -626,17 +653,19 @@ function Invoke-HuggingFaceModelDownload {
                 return
             }
             if ($attempt -lt 3) {
+                if ($xetFailure -and $env:HF_HUB_DISABLE_XET -notin @('1', 'ON', 'YES', 'TRUE')) {
+                    $env:HF_HUB_DISABLE_XET = '1'
+                    Write-Warning 'The Xet transfer failed. Retrying over HTTP.'
+                }
                 Write-Warning "Model download attempt $attempt failed (exit $exitCode). Retrying with $retryStorage..."
                 Start-Sleep -Seconds (2 * $attempt)
             }
         }
     } finally {
+        $env:HF_HUB_DISABLE_XET = $previousDisableXet
+        $env:HF_XET_CACHE = $previousXetCache
         if ($serializeWindowsDownloads) {
-            [System.Environment]::SetEnvironmentVariable(
-                'HF_HUB_DISABLE_SYMLINKS_WARNING',
-                $previousSymlinkWarning,
-                [System.EnvironmentVariableTarget]::Process
-            )
+            $env:HF_HUB_DISABLE_SYMLINKS_WARNING = $previousSymlinkWarning
         }
     }
 
@@ -1259,7 +1288,7 @@ if ($Module -eq 'faster-qwen3-tts' -and -not $localModel) {
     Initialize-FasterQwenMaterializedModel -Root $InstallRoot -Directory $materializedModel -Repository $modelRepo
 }
 if (-not $localModel) {
-    Invoke-HuggingFaceModelDownload -Executable $hf -Repository $modelRepo -CacheDirectory $modelCache -LocalDirectory $materializedModel
+    Invoke-HuggingFaceModelDownload -Executable $hf -Python $python -Uv $uv -Repository $modelRepo -CacheDirectory $modelCache -LocalDirectory $materializedModel
 } else {
     Write-Host 'Keeping the selected local model directory; no model download is needed.'
 }

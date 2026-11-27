@@ -201,6 +201,7 @@ Write-Host "Auto-launch: $([bool]$state.auto_launch)"
 if ($CheckOnly) {
     $pythonVersion = Assert-InstalledTTSPythonEnvironment -Root $runtimeRoot -Module ([string]$state.module)
     Write-Host "Module state verified. Managed $pythonVersion environment verified." -ForegroundColor Green
+    & (Join-Path $runtimeRoot '.venv\Scripts\python.exe') -I -B (Join-Path $PSScriptRoot 'tts\hub_xet.py')
     return
 }
 
