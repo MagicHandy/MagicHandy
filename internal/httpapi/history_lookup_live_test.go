@@ -4,11 +4,13 @@ package httpapi
 
 import (
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
 func TestLiveSavedUserHistory(t *testing.T) {
@@ -53,32 +55,47 @@ func TestLiveSavedUserHistory(t *testing.T) {
 			if !events.OK || events.Repaired || events.Fallback || len(fake.Commands()) != 0 || events.Action != "none" {
 				t.Fatal("history question did not complete as a text-only turn")
 			}
-			answer := strings.ToLower(events.Reply)
-			if strings.Contains(answer, "38") || strings.Contains(answer, "30") ||
-				(scope == "unavailable" && answer != "unavailable") ||
-				(scope == "partial" && (strings.Count(answer, "25") != 1 || strings.Count(answer, "unavailable") != 2)) ||
-				strings.Contains(answer, "25") != (scope != "unavailable") ||
-				strings.Contains(answer, "35") != (scope == "complete") ||
-				(scope == "complete" && !strings.Contains(answer, "five") && !strings.Contains(answer, ", 5")) ||
-				strings.Contains(answer, "unavailable") != (scope != "complete") {
-				t.Fatal("reply disagrees with available opening evidence")
-			}
+			assertLiveOpeningEvidence(t, scope, events.Reply)
 			if scope == "complete" {
-				named, _ := qualityChat(t, s, "Keep motion off. What was the checkpoint word, and what number did I name my baseline?")
-				t.Logf("named details: %q", named.Reply)
-				if !named.OK || named.Repaired || named.Fallback || len(fake.Commands()) != 0 ||
-					!strings.Contains(strings.ToLower(named.Reply), "juniper") || !strings.Contains(named.Reply, "30") {
-					t.Fatal("named details did not come from the original user messages")
-				}
-				p.attempts = nil
-				control, _ := qualityChat(t, s, "Start steady full sweeps now at exactly 42 percent pace.")
-				state := qualityState(s)
-				t.Logf("current request: %q, running=%t, pace=%d (%d provider calls)", control.Reply, state.Running, state.Target.SpeedPercent, len(p.attempts))
-				if !control.OK || control.Repaired || control.Fallback || !state.Running || state.Target.SpeedPercent != 42 {
-					t.Fatal("current request did not reach the shared engine")
-				}
-				qualityChat(t, s, "Stop.")
+				checkLiveHistoryFollowups(t, s, p, fake)
 			}
 		})
 	}
+}
+
+func assertLiveOpeningEvidence(t *testing.T, scope, reply string) {
+	t.Helper()
+	wants := map[string][]string{
+		"complete":    {`\b25\b`, `\b35\b`, `\b(5|five)\b`},
+		"partial":     {`\b25\b`, `^unavailable$`, `^unavailable$`},
+		"unavailable": {`^unavailable$`},
+	}
+	parts := strings.Split(strings.ToLower(reply), ",")
+	want := wants[scope]
+	if len(parts) != len(want) {
+		t.Fatalf("got %d fields in %q, want %d", len(parts), reply, len(want))
+	}
+	for i, field := range parts {
+		if !regexp.MustCompile(want[i]).MatchString(strings.TrimSpace(field)) {
+			t.Fatalf("incorrect source evidence in field %d: %q", i+1, field)
+		}
+	}
+}
+
+func checkLiveHistoryFollowups(t *testing.T, s *Server, p *qualityProvider, fake *transport.Fake) {
+	t.Helper()
+	named, _ := qualityChat(t, s, "Keep motion off. What was the checkpoint word, and what number did I name my baseline?")
+	t.Logf("named details: %q", named.Reply)
+	if !named.OK || named.Repaired || named.Fallback || len(fake.Commands()) != 0 ||
+		!strings.Contains(strings.ToLower(named.Reply), "juniper") || !strings.Contains(named.Reply, "30") {
+		t.Fatal("named details did not come from the original user messages")
+	}
+	p.attempts = nil
+	control, _ := qualityChat(t, s, "Start steady full sweeps now at exactly 42 percent pace.")
+	state := qualityState(s)
+	t.Logf("current request: %q, running=%t, pace=%d (%d provider calls)", control.Reply, state.Running, state.Target.SpeedPercent, len(p.attempts))
+	if !control.OK || control.Repaired || control.Fallback || !state.Running || state.Target.SpeedPercent != 42 {
+		t.Fatal("current request did not reach the shared engine")
+	}
+	qualityChat(t, s, "Stop.")
 }
