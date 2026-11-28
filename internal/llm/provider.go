@@ -28,6 +28,17 @@ type Message struct {
 	Content string `json:"content"`
 }
 
+// HistoryStage distinguishes the archive router from the evidence-answer generation.
+type HistoryStage uint8
+
+// The zero stage is an ordinary response or its repair.
+const (
+	HistoryNone HistoryStage = iota
+	HistoryRoute
+	HistoryChoice // combined hosted request can choose either a reply or a lookup
+	HistoryAnswer
+)
+
 // ChatRequest is the provider-neutral streaming chat request.
 type ChatRequest struct {
 	Messages      []Message
@@ -51,8 +62,7 @@ type ChatRequest struct {
 	// HistoryMessagesDropped accounts for whole messages removed by the
 	// composer before provider admission (never includes their contents).
 	HistoryMessagesDropped int
-	// HistoryLookup identifies read-only archive work for generation timings.
-	HistoryLookup bool `json:"-"`
+	HistoryStage           HistoryStage `json:"-"`
 }
 
 // Provider streams text from one local LLM runtime.

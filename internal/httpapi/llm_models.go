@@ -46,12 +46,12 @@ func (s *Server) handleBuildManagedLLMRuntime(w http.ResponseWriter, r *http.Req
 	if !decodeModelManagerRequest(w, r, &request) {
 		return
 	}
-	if err := s.closeLLM(); err != nil {
+	build, err := s.installManagedRuntime(r.Context(), request.Backend)
+	if errors.Is(err, errRunnerRetirement) {
 		s.logger.Warn("stop active LLM runner before rebuild", "error", err)
-		writeError(w, http.StatusServiceUnavailable, errors.New("the active LLM runner could not be stopped before rebuilding"))
+		writeError(w, http.StatusServiceUnavailable, errRunnerRetirement)
 		return
 	}
-	build, err := s.managedLLM.StartBuild(request.Backend)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
 		return

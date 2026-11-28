@@ -117,7 +117,10 @@ func (q HistoryLookup) valid() bool {
 		}) {
 		return false
 	}
-	return (q.Scope == "opening" || q.Scope == "matching" && len(q.Terms) > 0) && len(q.Terms) <= 4 && !slices.ContainsFunc(q.Terms, func(term string) bool {
+	if q.Scope == "opening" {
+		return len(q.Terms) == 0
+	}
+	return q.Scope == "matching" && len(q.Terms) > 0 && len(q.Terms) <= 4 && !slices.ContainsFunc(q.Terms, func(term string) bool {
 		return strings.TrimSpace(term) == "" || len(term) > 80
 	})
 }

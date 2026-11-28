@@ -242,6 +242,7 @@ func (p *ManagedLlamaCPPProvider) Unload(ctx context.Context) ProviderStatus {
 	p.stopping = true
 	if err := process.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 		p.stopping = false
+		status.Loaded = true
 		status.Message = err.Error()
 		return status
 	}
@@ -254,7 +255,8 @@ func (p *ManagedLlamaCPPProvider) Unload(ctx context.Context) ProviderStatus {
 			p.releaseProcessLifetimeLocked()
 		case <-waitCtx.Done():
 			p.releaseProcessLifetimeLocked()
-			status.Loaded = false
+			// The process has not confirmed exit. Report it until the waiter reaps it.
+			status.Loaded = true
 			status.Message = "llama.cpp runner termination timed out: " + waitCtx.Err().Error()
 			return status
 		}

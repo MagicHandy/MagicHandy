@@ -17,7 +17,9 @@ const historyLookupGuide = `Choose how to answer the CURRENT message. Named deta
 
 const hostedHistoryLookupGuide = `For the final user's question about what they personally asked, said or named in this chat, read the saved originals before answering. Return only {"action":"read_user_history","scope":"opening","terms":[],"facts":[{"detail":"requested fact","kind":"number"}]} for earliest facts. For named details use scope matching with up to four distinctive search words. List one fact per requested value in question order; use kind text for names and number for amounts. Choose facts from the current question, independently of any previous question. For a fresh instruction to act now, use the ordinary response contract and apply the requested settings.`
 
-const historyLookupBranch = `{"type":"object","properties":{"action":{"type":"string","const":"read_user_history"},"scope":{"type":"string","enum":["opening","matching"]},"terms":{"type":"array","items":{"type":"string"},"maxItems":4},"facts":{"type":"array","items":{"type":"object","properties":{"detail":{"type":"string"},"kind":{"type":"string","enum":["number","text"]}},"required":["detail","kind"],"additionalProperties":false},"minItems":1,"maxItems":8}},"required":["action","scope","terms","facts"],"additionalProperties":false}`
+func historyFactBranch(scope, terms string) json.RawMessage {
+	return json.RawMessage(`{"type":"object","properties":{"action":{"type":"string","const":"read_user_history"},"scope":{"type":"string","const":"` + scope + `"},"terms":` + terms + `,"facts":{"type":"array","items":{"type":"object","properties":{"detail":{"type":"string","minLength":1,"maxLength":180},"kind":{"type":"string","enum":["number","text"]}},"required":["detail","kind"],"additionalProperties":false},"minItems":1,"maxItems":8}},"required":["action","scope","terms","facts"],"additionalProperties":false}`)
+}
 
 const ordinaryHistoryRoute = `{"type":"object","properties":{"ordinary":{"type":"boolean","const":true}},"required":["ordinary"],"additionalProperties":false}`
 
@@ -46,13 +48,14 @@ func (s Service) streamInitial(ctx context.Context, input llm.ChatRequest, reque
 	if lookupEnabled && caps.LocalInference && (caps.SimpleMotion || caps.IntermediateMotion) {
 		// Compact models anchored their decisions to later settings in a full
 		// motion prompt. Let them read the current request in isolation first.
-		route := llm.ChatRequest{Model: s.Model, MaxTokens: 384, ReasoningMode: "off", HistoryLookup: true, HistoryMessagesDropped: input.HistoryMessagesDropped,
-			JSONSchema: withHistoryLookupSchema(json.RawMessage(ordinaryHistoryRoute), true),
+		route := llm.ChatRequest{Model: s.Model, MaxTokens: 384, ReasoningMode: "off", HistoryStage: llm.HistoryRoute, HistoryMessagesDropped: input.HistoryMessagesDropped,
+			JSONSchema: withHistoryLookupSchema(json.RawMessage(ordinaryHistoryRoute), true, caps.ActionSchemaObjectRoot),
 			Messages:   []llm.Message{{Role: "system", Content: historyLookupGuide + ` Route the current message. "Keep motion off" alongside a historical question still calls the archive. For ordinary talk or a new instruction to start or change motion return {"ordinary":true}. Do not answer the question yourself.`}, {Role: "user", Content: request.Message}}}
 		if s.MaxTokens > 0 {
 			route.MaxTokens = min(route.MaxTokens, s.MaxTokens)
 		}
 		raw, err := s.Provider.StreamChat(ctx, route, func(string) error { return ctx.Err() })
+		raw = s.historyJSON(raw)
 		var ordinary map[string]json.RawMessage
 		if err != nil || json.Unmarshal([]byte(raw), &ordinary) != nil || len(ordinary) != 1 || string(ordinary["ordinary"]) != "true" {
 			return s.resolveHistoryLookup(ctx, request, raw, err)
@@ -64,21 +67,43 @@ func (s Service) streamInitial(ctx context.Context, input llm.ChatRequest, reque
 	} else if lookupEnabled {
 		input.Messages = slices.Clone(input.Messages)
 		input.Messages[0].Content += "\n" + hostedHistoryLookupGuide
-		input.JSONSchema = withHistoryLookupSchema(input.JSONSchema, false)
+		input.JSONSchema = withHistoryLookupSchema(input.JSONSchema, false, caps.ActionSchemaObjectRoot)
+		input.HistoryStage = llm.HistoryChoice
 	}
 	raw, err := s.Provider.StreamChat(ctx, input, func(text string) error {
 		return emitEvent(emit, StreamEvent{Type: "delta", Phase: "initial", Text: text})
 	})
-	if !lookupEnabled || !strings.Contains(raw, `"read_user_history"`) {
+	if !lookupEnabled || !RequestsSavedHistory(s.historyJSON(raw)) {
 		return raw, nil, err
 	}
+	return s.resolveHistoryLookup(ctx, request, s.historyJSON(raw), err)
+}
+
+// RequestsSavedHistory recognizes the exclusive lookup or a malformed answer that
+// attempted one. The latter must not fall through to motion-capable repair.
+func RequestsSavedHistory(raw string) bool {
 	var choice struct {
 		Action string `json:"action"`
 	}
-	if json.Unmarshal([]byte(raw), &choice) == nil && choice.Action != "read_user_history" {
-		return raw, nil, err
+	if json.Unmarshal([]byte(raw), &choice) != nil {
+		return strings.Contains(raw, `"read_user_history"`)
 	}
-	return s.resolveHistoryLookup(ctx, request, raw, err)
+	return choice.Action == "read_user_history"
+}
+
+func (s Service) historyJSON(raw string) string {
+	if !s.capabilities().SchemaUnenforced {
+		return raw
+	}
+	first, rest, ok := strings.Cut(strings.TrimSpace(raw), "\n")
+	if !ok || (strings.TrimSpace(first) != "```json" && strings.TrimSpace(first) != "```") {
+		return raw
+	}
+	body, ok := strings.CutSuffix(rest, "\n```")
+	if ok && json.Valid([]byte(body)) {
+		return strings.TrimSpace(body)
+	}
+	return raw
 }
 
 func (s Service) resolveHistoryLookup(ctx context.Context, request Request, raw string, err error) (string, *Result, error) {
@@ -91,10 +116,16 @@ func (s Service) resolveHistoryLookup(ctx context.Context, request Request, raw 
 	if err := ctx.Err(); err != nil {
 		return raw, &result, err
 	}
-	var fields map[string]json.RawMessage
-	var lookup HistoryLookup
-	if json.Unmarshal([]byte(raw), &fields) != nil || len(fields) != 4 || json.Unmarshal([]byte(raw), &lookup) != nil || !lookup.valid() {
-		return raw, &result, errors.New("invalid saved-message lookup response")
+	lookup, err := decodeHistoryLookup(raw)
+	if err != nil {
+		result.InitialMalformed, result.Malformed = true, true
+		return raw, &result, err
+	}
+	if !lookup.valid() {
+		// No archive read took place. Keep this distinguishable from missing evidence.
+		result.InitialMalformed, result.SemanticFallback = true, true
+		result.Response.Reply = historySearchFailed(s.Prompt.ID)
+		return raw, &result, nil
 	}
 	sources, err := request.ReadUserHistory(ctx, lookup)
 	if err == nil {
@@ -107,20 +138,55 @@ func (s Service) resolveHistoryLookup(ctx context.Context, request Request, raw 
 	return raw, &result, err
 }
 
-func withHistoryLookupSchema(schema json.RawMessage, compact bool) json.RawMessage {
+func decodeHistoryLookup(raw string) (HistoryLookup, error) {
+	var lookup HistoryLookup
+	var fields map[string]json.RawMessage
+	errInvalid := errors.New("invalid saved-message lookup response")
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if json.Unmarshal([]byte(raw), &fields) != nil || len(fields) != 4 || decoder.Decode(&lookup) != nil || lookup.Action != "read_user_history" {
+		return lookup, errInvalid
+	}
+	first, second := "terms", "facts"
+	switch lookup.Scope {
+	case "opening_paces":
+		first, second = "count", "following_adjustment"
+	case "opening", "matching":
+		if slices.Contains(lookup.Terms, "") || slices.ContainsFunc(lookup.Facts, func(f historyFact) bool { return f.Detail == "" || f.Kind == "" }) {
+			return lookup, errInvalid
+		}
+	default:
+		return lookup, errInvalid
+	}
+	for _, key := range [...]string{"action", "scope", first, second} {
+		if fields[key] == nil || string(fields[key]) == "null" {
+			return lookup, errInvalid
+		}
+	}
+	return lookup, nil
+}
+
+func withHistoryLookupSchema(schema json.RawMessage, compact, objectRoot bool) json.RawMessage {
 	// Ungrammared motion modes still receive the instruction and validate the
 	// exclusive lookup in Go. Keep their ordinary response formats available.
 	if len(schema) == 0 {
 		return nil
 	}
 	var union struct {
+		Type     string            `json:"type,omitempty"`
 		Branches []json.RawMessage `json:"oneOf"`
 	}
 	_ = json.Unmarshal(schema, &union)
 	if len(union.Branches) == 0 {
 		union.Branches = []json.RawMessage{schema}
 	}
-	union.Branches = slices.Insert(union.Branches, 0, json.RawMessage(historyLookupBranch))
+	union.Type = ""
+	if objectRoot {
+		union.Type = "object"
+	}
+	opening := historyFactBranch("opening", `{"type":"array","items":{"type":"string"},"maxItems":0}`)
+	matching := historyFactBranch("matching", `{"type":"array","items":{"type":"string","minLength":1,"maxLength":80},"minItems":1,"maxItems":4}`)
+	union.Branches = slices.Insert(union.Branches, 0, opening, matching)
 	if compact {
 		union.Branches = slices.Insert(union.Branches, 1, json.RawMessage(paceHistoryBranch))
 	}
@@ -168,7 +234,7 @@ func (s Service) answerFromHistory(ctx context.Context, question string, facts [
 		return "", err
 	}
 	var reply map[string]*historyCitation
-	if err := json.Unmarshal([]byte(raw), &reply); err != nil || len(reply) != len(keys) {
+	if err := json.Unmarshal([]byte(s.historyJSON(raw)), &reply); err != nil || len(reply) != len(keys) {
 		return "", errors.New("invalid saved-message citations")
 	}
 	var words []string
@@ -208,7 +274,7 @@ func (s Service) historyAnswerRequest(schema json.RawMessage) llm.ChatRequest {
 		limit = min(limit, s.MaxTokens)
 	}
 	return llm.ChatRequest{Model: s.Model, ReasoningMode: s.ReasoningMode, ReasoningBudgetTokens: s.ReasoningBudgetTokens,
-		HistoryLookup: true, MaxTokens: limit, JSONSchema: schema}
+		HistoryStage: llm.HistoryAnswer, MaxTokens: limit, JSONSchema: schema}
 }
 
 type quoteSpan struct{ start, end int }
@@ -256,6 +322,21 @@ func hasCitedNumber(quote string) bool {
 		}
 	}
 	return false
+}
+
+func historySearchFailed(promptID string) string {
+	switch promptLocaleForID(promptID) {
+	case promptLocaleSpanish:
+		return "No pude formular la búsqueda en los mensajes guardados."
+	case promptLocalePortugueseBrazil:
+		return "Não consegui formular a busca nas mensagens salvas."
+	case promptLocaleSimplifiedChinese:
+		return "我没能根据这个问题在已保存的消息中进行搜索。"
+	case promptLocaleJapanese:
+		return "この質問に合う検索条件を作れなかったため、保存されたメッセージを検索できませんでした。"
+	default:
+		return "I couldn’t form a search for that question in the saved messages."
+	}
 }
 
 func historyUnavailable(promptID string) string {

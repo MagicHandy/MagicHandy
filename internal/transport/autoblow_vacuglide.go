@@ -278,6 +278,9 @@ func (v *VacuGlide) AppendPoints(ctx context.Context, command AppendPointsComman
 	if v.client == nil {
 		return v.recordLocked(recorded, errAutoblowNotConnected)
 	}
+	if v.stopHolds > 0 || v.state == "stale" {
+		return v.recordLocked(recorded, errAutoblowSuperseded)
+	}
 	if command.StreamID != v.stream.id {
 		v.stream.stop()
 		v.stream.id = command.StreamID

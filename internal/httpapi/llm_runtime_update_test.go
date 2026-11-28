@@ -91,6 +91,65 @@ func TestLLMStateAnnouncesAnOutdatedRuntime(t *testing.T) {
 	}
 }
 
+func TestManualRuntimeInstallDrainsAndFencesLocalRequests(t *testing.T) {
+	s := newTestServer(t)
+	if !s.managedLLM.Snapshot().Runtime.BuildSupported {
+		t.Skip("requires an installable runtime")
+	}
+	s.stopLLMAutoload()
+	saveSettings(t, s.store, func(v config.Settings) config.Settings {
+		v.LLM.ManagedLoadPolicy = config.LLMManagedLoadOnDemand
+		return v
+	})
+	worker := &closeTrackingLLMProvider{}
+	s.llm.cached = worker
+	started := make(chan struct{}, 1)
+	s.runtimeUpdater = func(string) (llm.ManagedLlamaRuntimeBuild, error) {
+		started <- struct{}{}
+		return llm.ManagedLlamaRuntimeBuild{Status: llm.RuntimeBuildStatusQueued}, nil
+	}
+	local, _, release, err := s.llmRequests.acquire(t.Context(), llmRequestInteractive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	if _, err = s.installManagedRuntime(t.Context(), "invalid"); err == nil || local.Err() != nil || worker.closes.Load() != 0 {
+		t.Fatal("invalid install disrupted the worker")
+	}
+	result := make(chan error, 1)
+	go func() { _, err := s.installManagedRuntime(t.Context(), "cpu"); result <- err }()
+	select {
+	case <-local.Done():
+	case <-time.After(3 * time.Second):
+		t.Fatal("install did not cancel active work")
+	}
+	select {
+	case <-started:
+		t.Error("installer started before local generation drained")
+	default:
+	}
+	release()
+	if err := <-result; err != nil || worker.closes.Load() != 1 {
+		t.Fatal("installer failed to retire the worker", err)
+	}
+	if _, err := s.installManagedRuntime(t.Context(), "cpu"); err == nil {
+		t.Error("duplicate install accepted")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)
+	defer cancel()
+	if _, _, got, err := s.llmRequests.acquire(ctx, llmRequestInteractive); err == nil {
+		got()
+		t.Fatal("local generation admitted before installation finished")
+	}
+	ctx2, cancel2 := context.WithTimeout(t.Context(), 4*time.Second)
+	defer cancel2()
+	_, _, ready, err := s.llmRequests.acquire(ctx2, llmRequestInteractive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ready()
+}
+
 func TestRuntimeUpdateModeDefaultsToAutomaticAndValidates(t *testing.T) {
 	settings := config.DefaultSettings()
 	if settings.UI.RuntimeUpdateMode != config.UpdateCheckAutomatic {

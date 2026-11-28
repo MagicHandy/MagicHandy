@@ -227,8 +227,8 @@ func (s *Server) stopLLMAutoload() {
 	s.llmAutoloadWG.Wait()
 }
 
-func (s *Server) applyLLMSettingsTransition(previous, next config.LLMSettings) error {
-	runtimeChanged := llmRuntimeSettingsChanged(previous, next)
+func (s *Server) applyLLMSettingsTransition(ctx context.Context, previous, next config.LLMSettings) error {
+	runtimeChanged := llmRuntimeSettingsChanged(previous, next) || llmRuntimeSettingsChanged(previous.LocalSettings(), next.LocalSettings())
 	loadPolicyChanged := previous.ManagedLoadPolicy != next.ManagedLoadPolicy
 	if !runtimeChanged && !loadPolicyChanged {
 		return nil
@@ -236,6 +236,9 @@ func (s *Server) applyLLMSettingsTransition(previous, next config.LLMSettings) e
 	finishChange := s.llmRequests.beginChange()
 	defer finishChange()
 	s.stopLLMAutoload()
+	if err := s.llmRequests.waitIdle(ctx); err != nil {
+		return err
+	}
 	var transitionErr error
 	if runtimeChanged || next.ManagedLoadPolicy == config.LLMManagedLoadOnDemand {
 		if err := s.closeLLM(); err != nil {
@@ -316,13 +319,31 @@ func (s *Server) llmState(ctx context.Context) any {
 }
 
 func (s *Server) handleLLMStatus(w http.ResponseWriter, r *http.Request) {
-	settings, _ := s.store.Snapshot()
-	settings.LLM = settings.LLM.ConversationSettings()
-	provider, err := s.resolveLLMProvider(r.Context(), settings.LLM, false)
+	settings, ok := s.modelControlSettings(w, r)
+	if ok {
+		s.writeLLMStatus(w, r, settings)
+	}
+}
+
+func (s *Server) modelControlSettings(w http.ResponseWriter, r *http.Request) (config.LLMSettings, bool) {
+	saved, _ := s.store.Snapshot()
+	switch r.URL.Query().Get("role") {
+	case "":
+		return saved.LLM.ConversationSettings(), true
+	case "local":
+		return saved.LLM.LocalSettings(), true
+	default:
+		writeError(w, http.StatusBadRequest, errors.New("unknown model control role"))
+		return config.LLMSettings{}, false
+	}
+}
+
+func (s *Server) writeLLMStatus(w http.ResponseWriter, r *http.Request, settings config.LLMSettings) {
+	provider, err := s.resolveLLMProvider(r.Context(), settings, false)
 	if err != nil {
 		writeJSON(w, http.StatusOK, s.clientProviderStatus(r, llm.ProviderStatus{
-			Provider: settings.LLM.Provider, BaseURL: selectedLLMBaseURL(settings.LLM), Model: settings.LLM.Model,
-			Managed: settings.LLM.Provider == config.LLMProviderLlamaCPP && settings.LLM.LlamaCPPMode == config.LlamaCPPModeManaged,
+			Provider: settings.Provider, BaseURL: selectedLLMBaseURL(settings), Model: settings.Model,
+			Managed: managedLLMSelected(settings),
 			Message: err.Error(),
 		}))
 		return
@@ -334,6 +355,14 @@ func (s *Server) handleLLMLoad(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
+	settings, ok := s.modelControlSettings(w, r)
+	if !ok {
+		return
+	}
+	if settings.IsHosted() {
+		s.writeLLMStatus(w, r, settings)
+		return
+	}
 	ctx, _, release, err := s.llmRequests.acquire(r.Context(), llmRequestInteractive)
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, err)
@@ -341,8 +370,15 @@ func (s *Server) handleLLMLoad(w http.ResponseWriter, r *http.Request) {
 	}
 	defer release()
 	r = r.WithContext(ctx)
-	settings, _ := s.store.Snapshot()
-	provider, err := s.newLLMProvider(r.Context(), settings.LLM)
+	current, ok := s.modelControlSettings(w, r)
+	if !ok {
+		return
+	}
+	if llmRuntimeSettingsChanged(settings, current) {
+		writeError(w, http.StatusConflict, errLLMSettingsChanged)
+		return
+	}
+	provider, err := s.newLLMProvider(r.Context(), current)
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, err)
 		return
@@ -359,27 +395,37 @@ func (s *Server) handleLLMUnload(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
-	s.stopLLMAutoload()
-	s.llmRequests.invalidate()
-	ctx, _, release, err := s.llmRequests.acquire(r.Context(), llmRequestInteractive)
-	if err != nil {
-		writeError(w, http.StatusServiceUnavailable, err)
-		return
-	}
-	defer release()
-	r = r.WithContext(ctx)
-	settings, _ := s.store.Snapshot()
-	provider, err := s.newLLMProvider(r.Context(), settings.LLM)
-	if err != nil {
-		writeError(w, http.StatusServiceUnavailable, err)
-		return
-	}
-	loadable, ok := provider.(llm.LoadableProvider)
+	settings, ok := s.modelControlSettings(w, r)
 	if !ok {
-		writeJSON(w, http.StatusOK, provider.Status(r.Context()))
 		return
 	}
-	writeJSON(w, http.StatusOK, loadable.Unload(r.Context()))
+	if !managedLLMSelected(settings) {
+		s.writeLLMStatus(w, r, settings)
+		return
+	}
+	finish := s.llmRequests.beginChange()
+	defer finish()
+	s.stopLLMAutoload()
+	if err := s.llmRequests.waitIdle(r.Context()); err != nil {
+		writeError(w, http.StatusServiceUnavailable, err)
+		return
+	}
+	s.llm.mu.Lock()
+	provider := s.llm.cached
+	if s.llm.provider != nil {
+		provider = s.llm.provider
+	}
+	s.llm.mu.Unlock()
+	if loadable, ok := provider.(llm.LoadableProvider); ok {
+		status := s.clientProviderStatus(r, loadable.Unload(r.Context()))
+		if status.Loaded || status.Loading {
+			writeError(w, http.StatusServiceUnavailable, errors.New(status.Message))
+			return
+		}
+		writeJSON(w, http.StatusOK, status)
+		return
+	}
+	s.writeLLMStatus(w, r, settings)
 }
 
 func (s *Server) closeLLM() error {

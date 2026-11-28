@@ -788,7 +788,7 @@ export const api = {
   deletePromptSet: (id: string) => request<PromptSetsPayload>("DELETE", `/api/prompt-sets/${encodeURIComponent(id)}`),
 
   // LLM runtime.
-  llmStatus: () => request<LLMProviderStatus>("GET", "/api/llm/status"),
+  llmStatus: (role?: "local") => request<LLMProviderStatus>("GET", `/api/llm/status${role ? "?role=local" : ""}`),
   cloudPlanningStatus: () => request<CloudPlanningStatus>("GET", "/api/llm/cloud").then(checkedCloudStatus),
   modelConnectionKey: (connection: ModelConnection, api_key: string) => request<{ key_set: boolean }>("POST", "/api/llm/connections/key", { connection, api_key }),
   modelConnectionKeyStatus: (connection: ModelConnection) => request<{ key_set: boolean }>("POST", "/api/llm/connections/key", { connection }),
@@ -803,9 +803,9 @@ export const api = {
   cloudTest: (provider: string, model: string) => request<CloudPlanningStatus>("POST", "/api/llm/cloud/test", { provider, model }).then(checkedCloudStatus),
   cloudWelcome: () => request<CloudPlanningStatus>("POST", "/api/llm/cloud/welcome", {}).then(checkedCloudStatus),
   cloudResetCredentials: () => request<CloudPlanningStatus>("POST", "/api/llm/cloud/reset-credentials", { confirm: true }).then(checkedCloudStatus),
-  llmLoad: () => request<LLMProviderStatus>("POST", "/api/llm/load", {}),
+  llmLoad: (role?: "local") => request<LLMProviderStatus>("POST", `/api/llm/load${role ? "?role=local" : ""}`, {}),
   checkSetupLocalModel: () => request<{ ready: boolean; message: string; model: string }>("POST", "/api/llm/local/test", {}),
-  llmUnload: () => request<LLMProviderStatus>("POST", "/api/llm/unload", {}),
+  llmUnload: (role?: "local") => request<LLMProviderStatus>("POST", `/api/llm/unload${role ? "?role=local" : ""}`, {}),
   llmDuplicates: () => request<ManagedLLMDuplicateSnapshot>("GET", "/api/llm/duplicates"),
   terminateLLMDuplicates: (pids: number[]) =>
     request<ManagedLLMDuplicateSnapshot>("POST", "/api/llm/duplicates/terminate", { pids }),

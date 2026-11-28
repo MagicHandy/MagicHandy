@@ -13,6 +13,7 @@ vi.mock("../api/client", () => ({
   api: {
     llmModels: vi.fn(),
     llmStatus: vi.fn(),
+    llmUnload: vi.fn(),
     ollamaModels: vi.fn(),
     voiceStatus: vi.fn(),
     setupStatus: vi.fn(() => new Promise(() => undefined)),
@@ -230,6 +231,18 @@ describe("runtime panels", () => {
     view.rerender(modelPanel({ ...initial, llama_cpp_context_size: 65536 }));
 
     await waitFor(() => expect(llmStatus).toHaveBeenCalledOnce());
+  });
+
+  it("unloads the assigned local worker while chat uses a different connection", async () => {
+    llmModels.mockResolvedValue(emptyManager);
+    llmStatus.mockResolvedValue({ ...providerStatus, loaded: true });
+    vi.mocked(api.llmUnload).mockResolvedValue(providerStatus);
+    render(modelPanel(llmSettings, vi.fn(), [32768], "local"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Unload" })).toBeEnabled());
+    expect(llmStatus).toHaveBeenCalledWith("local");
+    expect(screen.queryByRole("button", { name: "Test model" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Unload" }));
+    expect(api.llmUnload).toHaveBeenCalledWith("local");
   });
 
   it("keeps polling while a managed llama.cpp model is loading", async () => {
@@ -600,9 +613,10 @@ describe("runtime panels", () => {
   });
 });
 
-function modelPanel(settings: PublicSettings["llm"] = llmSettings, patch = vi.fn(), contextSizes = [16384, 32768, 65536, 131072]) {
+function modelPanel(settings: PublicSettings["llm"] = llmSettings, patch = vi.fn(), contextSizes = [16384, 32768, 65536, 131072], runtimeRole?: "local") {
   return (
     <ModelSettingsPanel
+      runtimeRole={runtimeRole}
       settings={settings}
       saved={settings}
       providers={["llama_cpp", "ollama"]}
