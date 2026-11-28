@@ -281,6 +281,10 @@ func (c *Coyote) arm(ctx context.Context, link estim.Link) error {
 func (c *Coyote) Disconnect() (CoyoteStatus, error) {
 	c.opMu.Lock()
 	defer c.opMu.Unlock()
+	return c.disconnectLocked()
+}
+
+func (c *Coyote) disconnectLocked() (CoyoteStatus, error) {
 	c.mu.Lock()
 	link := c.link
 	c.mu.Unlock()
@@ -294,10 +298,12 @@ func (c *Coyote) Disconnect() (CoyoteStatus, error) {
 
 // Close disconnects and refuses later connections.
 func (c *Coyote) Close() error {
-	_, err := c.Disconnect()
+	c.opMu.Lock()
+	defer c.opMu.Unlock()
 	c.mu.Lock()
 	c.closed = true
 	c.mu.Unlock()
+	_, err := c.disconnectLocked()
 	return err
 }
 

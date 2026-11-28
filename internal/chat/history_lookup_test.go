@@ -122,6 +122,61 @@ func TestHistoryLookupHonorsBudgetsAndOrdinaryTurns(t *testing.T) {
 	}
 }
 
+func TestLongChatLookupContractPreservesModelRootAndBounds(t *testing.T) {
+	for _, root := range []bool{false, true} {
+		schema := withHistoryLookupSchema(json.RawMessage(ordinaryHistoryRoute), true, root)
+		var union struct {
+			Type  string
+			OneOf []struct {
+				Properties struct {
+					Scope struct{ Const string }
+					Terms struct {
+						MinItems, MaxItems int
+						Items              struct{ MinLength, MaxLength int }
+					}
+				}
+			}
+		}
+		if err := json.Unmarshal(schema, &union); err != nil || (union.Type == "object") != root || len(union.OneOf) != 4 {
+			t.Fatalf("wrong root or branches: %s, %v", schema, err)
+		}
+		opening, matching := union.OneOf[0].Properties, union.OneOf[2].Properties
+		if opening.Scope.Const != "opening" || opening.Terms.MaxItems != 0 || matching.Scope.Const != "matching" || matching.Terms.MinItems != 1 || matching.Terms.MaxItems != 4 || matching.Terms.Items.MinLength != 1 || matching.Terms.Items.MaxLength != 80 {
+			t.Fatalf("invalid lookup allowed by schema: %s", schema)
+		}
+	}
+}
+
+func TestLongChatRouterKeepsMalformedOrMixedLookupsReadOnly(t *testing.T) {
+	const invalid = `{"action":"read_user_history","scope":"matching","terms":[],"facts":[{"detail":"checkpoint","kind":"text"}]}`
+	const ordinary = `{"ordinary":true}`
+	fenced := func(raw string) string { return "```json\r\n" + raw + "\r\n```" }
+	for _, tc := range []struct {
+		name, raw, reply string
+		unenforced       bool
+	}{
+		{"invalid typed", invalid, "No disponible", false},
+		{"one whole fence", fenced(invalid), "No disponible", true},
+		{"ordinary choice", fenced(ordinary), "Ready", true},
+		{"enforced fence", fenced(ordinary), "", false},
+		{"outside prose", "Here you go:\n" + fenced(ordinary), "", true},
+		{"extra command", strings.Replace(invalid, `"terms":[]`, `"motion":{"action":"start"}`, 1), "", true},
+		{"truncated", invalid[:50], "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := &scriptedProvider{responses: []string{tc.raw, `{"reply":"Ready"}`}}
+			s := Service{Provider: p, Prompt: PromptSet{ID: "magichandy_motion_v1_es"}, Capabilities: &Capabilities{LocalInference: true, SimpleMotion: true, SchemaUnenforced: tc.unenforced}}
+			r, err := s.Complete(t.Context(), Request{Message: "Earlier in this chat?", HistoryMessagesDropped: 3, ReadUserHistory: func(context.Context, HistoryLookup) ([]HistorySource, error) {
+				t.Fatal("invalid selection read the archive")
+				return nil, nil
+			}}, nil)
+			if (err != nil) != (tc.reply == "") || r.Response.Reply != tc.reply || r.Response.Motion != nil || r.RepairAttempted || (len(p.requests) == 2) != (tc.reply == "Ready") {
+				t.Fatalf("%+v, %v, calls=%d", r, err, len(p.requests))
+			}
+		})
+	}
+}
+
 func TestOpeningPaceEvidenceStopsAtUnverifiedOrReplacedSetting(t *testing.T) {
 	source := []HistorySource{{11, "Set 25 percent"}, {13, "Set 35 percent"}, {15, "Five points faster"}}
 	v25, v35, v5 := 25.0, 35.0, 5.0

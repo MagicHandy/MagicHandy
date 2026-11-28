@@ -1,6 +1,11 @@
 package httpapi
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
@@ -35,25 +40,70 @@ func (s *Server) startManagedRuntimeUpdate(settings config.Settings) bool {
 	if !managedRuntimeUpdateDue(settings, snapshot.Runtime) || managedRuntimeBuildInProgress(snapshot.Build) {
 		return false
 	}
-	if err := s.closeLLM(); err != nil {
-		s.logger.Warn("automatic llama.cpp update could not stop the runner", "error", err)
-		return false
-	}
-	if _, err := s.runtimeUpdater(snapshot.Runtime.Backend); err != nil {
+	if _, err := s.installManagedRuntime(s.lifecycleCtx, snapshot.Runtime.Backend); err != nil {
 		s.logger.Warn("automatic llama.cpp update did not start", "error", err)
 		return false
 	}
 	s.logger.Info("updating the managed llama.cpp runtime",
 		"installed", snapshot.Runtime.Version, "pinned", llm.ManagedLlamaVersion, "backend", snapshot.Runtime.Backend)
-	s.runtimeUpdateWG.Add(1)
-	go s.autoloadAfterRuntimeUpdate()
 	return true
+}
+
+var errRunnerRetirement = errors.New("the active LLM runner could not be stopped before rebuilding")
+
+func (s *Server) installManagedRuntime(ctx context.Context, backend string) (llm.ManagedLlamaRuntimeBuild, error) {
+	s.runtimeUpdateMu.Lock()
+	defer s.runtimeUpdateMu.Unlock()
+	var empty llm.ManagedLlamaRuntimeBuild
+	if err := s.lifecycleCtx.Err(); err != nil {
+		return empty, err
+	}
+	snapshot := s.managedLLM.Snapshot()
+	backend = strings.ToLower(strings.TrimSpace(backend))
+	if backend == "" {
+		backend = "auto"
+	}
+	if !slices.Contains(snapshot.Runtime.SupportedBackends, backend) {
+		return empty, errors.New("managed llama.cpp backend must be auto, cpu, or cuda")
+	}
+	if !snapshot.Runtime.BuildSupported {
+		return empty, errors.New("managed llama.cpp installation is currently supported on Windows/amd64 only")
+	}
+	if s.runtimeUpdateDone != nil || managedRuntimeBuildInProgress(snapshot.Build) {
+		return empty, errors.New("a managed llama.cpp installation is already running")
+	}
+	finish := s.llmRequests.beginChange()
+	s.stopLLMAutoload()
+	if err := s.llmRequests.waitIdle(ctx); err != nil {
+		finish()
+		return empty, err
+	}
+	if err := s.closeLLM(); err != nil {
+		finish()
+		return empty, fmt.Errorf("%w: %w", errRunnerRetirement, err)
+	}
+	build, err := s.runtimeUpdater(backend)
+	if err != nil {
+		finish()
+		settings, _ := s.store.Snapshot()
+		s.startLLMAutoload(settings.LLM)
+		return empty, err
+	}
+	s.runtimeUpdateDone = make(chan struct{})
+	go s.autoloadAfterRuntimeUpdate(finish)
+	return build, nil
 }
 
 // autoloadAfterRuntimeUpdate waits for the update to finish, then applies the
 // saved load policy as startup would have.
-func (s *Server) autoloadAfterRuntimeUpdate() {
-	defer s.runtimeUpdateWG.Done()
+func (s *Server) autoloadAfterRuntimeUpdate(finish func()) {
+	defer func() {
+		s.runtimeUpdateMu.Lock()
+		finish()
+		close(s.runtimeUpdateDone)
+		s.runtimeUpdateDone = nil
+		s.runtimeUpdateMu.Unlock()
+	}()
 	ticker := time.NewTicker(runtimeUpdatePollInterval)
 	defer ticker.Stop()
 	for {

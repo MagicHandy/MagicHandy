@@ -140,7 +140,8 @@ type Server struct {
 	// runtimeUpdater starts a managed llama.cpp install; tests replace it so
 	// nothing downloads a runtime.
 	runtimeUpdater        func(backend string) (llm.ManagedLlamaRuntimeBuild, error)
-	runtimeUpdateWG       sync.WaitGroup
+	runtimeUpdateMu       sync.Mutex
+	runtimeUpdateDone     chan struct{}
 	models                *llm.ModelManager
 	managedLLM            *llm.ManagedLlamaRuntimeManager
 	setup                 *setupManager

@@ -138,6 +138,23 @@ func (c *llmRequestCoordinator) beginChange() func() {
 	}
 }
 
+// waitIdle drains the canceled lease while beginChange holds admission closed.
+func (c *llmRequestCoordinator) waitIdle(ctx context.Context) error {
+	for {
+		c.mu.Lock()
+		active, changed := c.active, c.changed
+		c.mu.Unlock()
+		if !active {
+			return ctx.Err()
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-changed:
+		}
+	}
+}
+
 func (c *llmRequestCoordinator) signalLocked() {
 	if c.changed != nil {
 		close(c.changed)
@@ -146,7 +163,7 @@ func (c *llmRequestCoordinator) signalLocked() {
 }
 
 type llmCallTiming struct {
-	historyLookup bool
+	historyStage  llm.HistoryStage
 	started       time.Time
 	firstToken    time.Time
 	finished      time.Time
@@ -173,7 +190,7 @@ func (p *timedLLMProvider) StreamChat(
 	request llm.ChatRequest,
 	onDelta func(string) error,
 ) (string, error) {
-	call := llmCallTiming{started: time.Now(), historyLookup: request.HistoryLookup}
+	call := llmCallTiming{started: time.Now(), historyStage: request.HistoryStage}
 	previousProgress := request.OnProgress
 	request.OnProgress = func(progress llm.ProviderProgress) {
 		if progress.Activity && call.firstActivity.IsZero() {
@@ -205,11 +222,17 @@ func (p *timedLLMProvider) StreamChat(
 	}
 	raw, err := p.provider.StreamChat(ctx, request, wrappedDelta)
 	call.finished = time.Now()
+	if call.historyStage == llm.HistoryChoice {
+		call.historyStage = llm.HistoryNone
+		if chat.RequestsSavedHistory(raw) {
+			call.historyStage = llm.HistoryRoute
+		}
+	}
 	if call.firstToken.IsZero() && raw != "" {
 		call.firstToken = call.finished
 	}
 	p.mu.Lock()
-	if p.initialRequest == nil || (p.initialRequest.HistoryLookup && !request.HistoryLookup) {
+	if p.initialRequest == nil || (p.initialRequest.HistoryStage == llm.HistoryRoute && call.historyStage == llm.HistoryNone) {
 		request.OnProgress, request.OnBudget = nil, nil
 		p.initialRequest = &request
 	}
@@ -243,20 +266,21 @@ func (p *timedLLMProvider) applyDiagnostics(
 	}
 	preparationMillis := calls[0].started.Sub(requestStarted).Milliseconds() - diagnostics.SchedulerWaitMillis
 	diagnostics.PreparationMillis = max(0, preparationMillis)
-	if !calls[0].firstToken.IsZero() {
-		diagnostics.FirstTokenMillis = calls[0].firstToken.Sub(requestStarted).Milliseconds()
-	}
-	if !calls[0].firstActivity.IsZero() {
-		diagnostics.FirstActivityMillis = calls[0].firstActivity.Sub(requestStarted).Milliseconds()
-	}
+	var firstActivity, firstAnswer time.Time
 	ordinaryCallSeen := false
 	for _, call := range calls {
+		if firstActivity.IsZero() {
+			firstActivity = call.firstActivity
+		}
 		millis := call.finished.Sub(call.started).Milliseconds()
-		if !call.historyLookup && ordinaryCallSeen {
+		if call.historyStage == llm.HistoryNone && ordinaryCallSeen {
 			diagnostics.RepairMillis += millis
 			continue
 		}
-		ordinaryCallSeen = ordinaryCallSeen || !call.historyLookup
+		ordinaryCallSeen = ordinaryCallSeen || call.historyStage == llm.HistoryNone
+		if firstAnswer.IsZero() && call.historyStage != llm.HistoryRoute {
+			firstAnswer = call.firstToken
+		}
 		diagnostics.GenerationMillis += millis
 		diagnostics.ModelLoadMillis += call.progress.LoadMillis
 		diagnostics.PromptEvalMillis += call.progress.PromptEvalMillis
@@ -268,5 +292,11 @@ func (p *timedLLMProvider) applyDiagnostics(
 			diagnostics.PromptBytes = call.budget.InputBytes
 			diagnostics.PromptLimitBytes = call.budget.LimitBytes
 		}
+	}
+	if !firstActivity.IsZero() {
+		diagnostics.FirstActivityMillis = firstActivity.Sub(requestStarted).Milliseconds()
+	}
+	if !firstAnswer.IsZero() {
+		diagnostics.FirstTokenMillis = firstAnswer.Sub(requestStarted).Milliseconds()
 	}
 }

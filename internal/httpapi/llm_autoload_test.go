@@ -52,7 +52,7 @@ func TestManagedLLMOnDemandTransitionReleasesCachedProvider(t *testing.T) {
 	next := previous
 	next.ManagedLoadPolicy = config.LLMManagedLoadOnDemand
 
-	if err := server.applyLLMSettingsTransition(previous, next); err != nil {
+	if err := server.applyLLMSettingsTransition(t.Context(), previous, next); err != nil {
 		t.Fatal(err)
 	}
 	if provider.closed.Load() != 1 {

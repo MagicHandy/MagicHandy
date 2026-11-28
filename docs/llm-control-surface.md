@@ -675,6 +675,24 @@ lookup in their ordinary response. The extra generation cost applies to local
 long-chat routing and to retrieving evidence, and is reported as generation
 time in response diagnostics.
 
+Named lookups require one to four nonempty search terms. Opening lookups
+carry an empty term list. A completed read-only choice with unusable fields
+returns the localized unavailable answer. A mixed lookup and device command
+is rejected. A compact router authorizes the ordinary prompt only with its
+explicit ordinary choice. For providers configured without schema enforcement,
+the reader also accepts one complete JSON object inside a Markdown code fence.
+
+First provider activity includes archive routing. First token measures the
+first token from the ordinary answer or the evidence reader, measured from
+the start of the turn. An archive lookup that ends before answer generation
+has no answer token. Citation checks can add time before the answer appears.
+
+When chat uses a hosted connection, an assigned local Autopilot or refusal
+fallback model has its own status and managed Load and Unload controls. The
+local editor targets the saved local runtime. Changing the worker retires it
+after its active request drains. A managed runtime installation reserves the
+local request slot through completion, then reapplies the saved load policy.
+
 ## Cross-references
 
 Layered's explicit `full_slider` geometry sets semantic 0–100 and a constant

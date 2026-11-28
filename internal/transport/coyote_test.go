@@ -318,6 +318,52 @@ func TestCoyoteDisconnectZeroesAndCloseRefusesReconnect(t *testing.T) {
 	}
 }
 
+type blockingCloseConnector struct {
+	*estim.SimulatedConnector
+	entered, resume chan struct{}
+}
+
+func (c blockingCloseConnector) Connect(ctx context.Context, req estim.ConnectRequest) (estim.Link, error) {
+	link, err := c.SimulatedConnector.Connect(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return &blockingCloseLink{link, c.entered, c.resume}, nil
+}
+
+type blockingCloseLink struct {
+	estim.Link
+	entered, resume chan struct{}
+}
+
+func (l *blockingCloseLink) Close() error {
+	close(l.entered)
+	<-l.resume
+	return l.Link.Close()
+}
+
+func TestCoyoteCloseFencesReconnectThroughoutTeardown(t *testing.T) {
+	f := newCoyoteFixture(t)
+	gate := blockingCloseConnector{f.connector, make(chan struct{}), make(chan struct{})}
+	f.owner.connector = gate
+	link := f.connect()
+	done := make(chan error, 1)
+	go func() { done <- f.owner.Close() }()
+	<-gate.entered
+	f.owner.mu.Lock()
+	closed := f.owner.closed
+	f.owner.mu.Unlock()
+	queued := make(chan error, 1)
+	go func() { _, err := f.owner.Connect(t.Context()); queued <- err }()
+	close(gate.resume)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-queued; !errors.Is(err, errCoyoteClosed) || !closed || !link.Snapshot().Closed {
+		t.Fatalf("closed during teardown = %t, queued Connect = %v", closed, err)
+	}
+}
+
 func TestCoyoteConfigureRewritesCeilingsLive(t *testing.T) {
 	fixture := newCoyoteFixture(t)
 	link := fixture.connect()

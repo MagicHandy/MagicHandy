@@ -28,6 +28,7 @@ type LLMSettings = PublicSettings["llm"];
 
 interface ModelSettingsPanelProps {
   configurationOnly?: boolean;
+  runtimeRole?: "local";
   settings: LLMSettings;
   saved?: LLMSettings;
   providers: string[];
@@ -55,7 +56,7 @@ const runtimeOf = (settings: LLMSettings): Runtime => settings.provider === "oll
 const runtimePatch = (runtime: Runtime): Partial<LLMSettings> => runtime === "ollama" ? { provider: "ollama" } : { provider: "llama_cpp", llama_cpp_mode: runtime };
 const runtimeLabel = (runtime: Runtime) => runtime === "managed" ? "Managed llama.cpp" : runtime === "ollama" ? "Ollama" : "External llama.cpp server";
 
-export function ModelSettingsPanel({ settings, saved, providers, llamaModes, managedLoadPolicies = [], llamaContextSizes, reasoningModes, maxOutputOptions, capabilityOptions = [], locked, patch, configurationOnly = false, onStatus }: ModelSettingsPanelProps) {
+export function ModelSettingsPanel({ settings, saved, providers, llamaModes, managedLoadPolicies = [], llamaContextSizes, reasoningModes, maxOutputOptions, capabilityOptions = [], locked, patch, configurationOnly = false, runtimeRole, onStatus }: ModelSettingsPanelProps) {
   const { show } = useToast();
   const [manager, setManager] = useState<LLMModelManagerSnapshot | null>(null);
   const [catalog, setCatalog] = useState<LLMCatalog | null>(null);
@@ -133,7 +134,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
     const generation = ++statusGeneration.current;
     if (configurationOnly) { setStatus(null); return; }
     try {
-      const next = await api.llmStatus();
+      const next = await api.llmStatus(runtimeRole);
       if (mounted.current && generation === statusGeneration.current) setStatus(next);
     } catch (error) {
       if (!mounted.current || generation !== statusGeneration.current) return;
@@ -145,7 +146,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
         message: message(error),
       });
     }
-  }, [statusContextSize, statusModel, statusProvider, configurationOnly]);
+  }, [statusContextSize, statusModel, statusProvider, configurationOnly, runtimeRole]);
 
   const refreshOllamaModels = useCallback(async () => {
     const generation = ++ollamaGeneration.current;
@@ -223,7 +224,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
   async function runtimeAction(action: "load" | "unload") {
     setBusy(action);
     try {
-      const next = await (action === "load" ? api.llmLoad() : api.llmUnload());
+      const next = await (action === "load" ? api.llmLoad(runtimeRole) : api.llmUnload(runtimeRole));
       setStatus(next);
       if (action === "unload") {
         show(t("Model unloaded."));
@@ -454,7 +455,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
               <button type="button" className="btn btn-secondary" disabled={locked || dirty || runtimeBuildActive || busy !== "" || !status?.loaded} onClick={() => void runtimeAction("unload")}>{busy === "unload" ? t("Unloading...") : t("Unload")}</button>
             </>
           )}
-          <button type="button" className="btn btn-secondary" title={t("Check the selected model for common problems")} disabled={locked || dirty || runtimeBuildActive || busy !== ""} onClick={() => setShowCheck(true)}>{t("Test model")}</button>
+          {!runtimeRole && <button type="button" className="btn btn-secondary" title={t("Check the selected model for common problems")} disabled={locked || dirty || runtimeBuildActive || busy !== ""} onClick={() => setShowCheck(true)}>{t("Test model")}</button>}
           {dirty && <span className="form-status">{t("Save settings before runtime actions.")}</span>}
         </div>}
         {showCheck && <ModelCheckDialog locked={locked} onClose={() => { setShowCheck(false); void refreshStatus(); }} onModelChanged={() => void refreshManager()} />}

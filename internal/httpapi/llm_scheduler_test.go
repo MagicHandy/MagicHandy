@@ -200,7 +200,7 @@ func TestTimedLLMProviderAttributesInitialAndRepairCalls(t *testing.T) {
 func TestTimedLLMProviderCountsArchiveReadsAsGeneration(t *testing.T) {
 	at := time.Now()
 	calls := []llmCallTiming{
-		{started: at, finished: at.Add(10 * time.Millisecond), historyLookup: true},
+		{started: at, finished: at.Add(10 * time.Millisecond), historyStage: llm.HistoryRoute},
 		{started: at, finished: at.Add(20 * time.Millisecond), budget: llm.PromptBudget{InputBytes: 4000, LimitBytes: 16000}},
 		{started: at, finished: at.Add(5 * time.Millisecond)},
 	}
@@ -209,5 +209,24 @@ func TestTimedLLMProviderCountsArchiveReadsAsGeneration(t *testing.T) {
 	p.applyDiagnostics(&info, at, 0, 0)
 	if info.ProviderCalls != 3 || info.GenerationMillis != 30 || info.RepairMillis != 5 || info.PromptBytes != 4000 {
 		t.Fatalf("archive, ordinary and repair timings: %+v", info)
+	}
+}
+
+func TestHiddenRouterTokenIsNeverTheAnswerToken(t *testing.T) {
+	at := time.Now()
+	route := llmCallTiming{historyStage: llm.HistoryRoute, started: at, firstActivity: at.Add(time.Millisecond), firstToken: at.Add(2 * time.Millisecond), finished: at.Add(3 * time.Millisecond)}
+	for _, stage := range []llm.HistoryStage{llm.HistoryNone, llm.HistoryAnswer, llm.HistoryRoute} {
+		calls := []llmCallTiming{route}
+		want := int64(0)
+		if stage != llm.HistoryRoute {
+			calls = append(calls, llmCallTiming{historyStage: stage, started: route.finished, firstActivity: at.Add(4 * time.Millisecond), firstToken: at.Add(5 * time.Millisecond), finished: at.Add(6 * time.Millisecond)})
+			want = 5
+		}
+		p := &timedLLMProvider{calls: calls}
+		var info chat.MessageDiagnostics
+		p.applyDiagnostics(&info, at, 0, 0)
+		if info.FirstActivityMillis != 1 || info.FirstTokenMillis != want || info.RepairMillis != 0 {
+			t.Fatalf("stage %v: %+v", stage, info)
+		}
 	}
 }

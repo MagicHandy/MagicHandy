@@ -694,7 +694,7 @@ func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous co
 			runtimeErr = errors.Join(runtimeErr, fmt.Errorf("apply media library settings: %w", err))
 		}
 	}
-	runtimeErr = errors.Join(runtimeErr, s.applyLLMSettingsTransition(previous.LLM, next.LLM))
+	runtimeErr = errors.Join(runtimeErr, s.applyLLMSettingsTransition(ctx, previous.LLM, next.LLM))
 	stoppedForDevice, deviceErr := s.applyDeviceSettingsTransition(ctx, previous, next)
 	runtimeErr = errors.Join(runtimeErr, deviceErr)
 	if stoppedForDevice {
@@ -757,10 +757,29 @@ func (s *Server) applyDeviceSettingsTransition(ctx context.Context, previous, ne
 }
 
 func (s *Server) applyPlanningSettingsTransition(previous, next config.Settings) {
-	if !reflect.DeepEqual(previous.LLM, next.LLM) || previous.Motion != next.Motion || previous.Autopilot != next.Autopilot || !reflect.DeepEqual(previous.Device, next.Device) {
+	deviceOrModeChanged := previous.Motion != next.Motion || previous.Autopilot != next.Autopilot || !reflect.DeepEqual(previous.Device, next.Device)
+	if !deviceOrModeChanged && localRuntimeEditOnly(previous.LLM, next.LLM) {
+		s.motionReview.invalidate()
+		if s.modes != nil {
+			s.modes.NotifyAutopilotSettingsChanged()
+		}
+	} else if deviceOrModeChanged || !reflect.DeepEqual(previous.LLM, next.LLM) {
 		s.invalidateCloudPlanning()
 	}
 	s.removeDeletedConnectionKeys(previous.LLM.Connections, next.LLM.Connections)
+}
+
+// A saved local worker can change while named connections continue serving chat.
+// Shared prompt, role and motion settings still invalidate all affected work.
+func localRuntimeEditOnly(previous, next config.LLMSettings) bool {
+	if !next.ConversationSettings().IsHosted() || reflect.DeepEqual(previous, next) {
+		return false
+	}
+	previous.Provider, previous.Model, previous.LocalCapabilityLevel = next.Provider, next.Model, next.LocalCapabilityLevel
+	previous.ManagedLoadPolicy, previous.LlamaCPPMode = next.ManagedLoadPolicy, next.LlamaCPPMode
+	previous.LlamaCPPBaseURL, previous.LlamaCPPContextSize = next.LlamaCPPBaseURL, next.LlamaCPPContextSize
+	previous.OllamaBaseURL, previous.OllamaModelsPath = next.OllamaBaseURL, next.OllamaModelsPath
+	return reflect.DeepEqual(previous, next)
 }
 
 // removeDeletedConnectionKeys runs only after a successful save, so a
@@ -926,7 +945,13 @@ func (s *Server) Close() {
 		}
 		s.closeAccessWorkers()
 		s.stopModelCheck()
-		s.runtimeUpdateWG.Wait()
+		// An admitted install may still be registering its completion worker.
+		s.runtimeUpdateMu.Lock()
+		updateDone := s.runtimeUpdateDone
+		s.runtimeUpdateMu.Unlock()
+		if updateDone != nil {
+			<-updateDone
+		}
 		s.stopLLMAutoload()
 		if s.setup != nil {
 			s.setup.Close()

@@ -179,21 +179,44 @@ func TestLinkedDisconnectedLeaseKeepsStopUnconfirmed(t *testing.T) {
 type appendReceiptOwner struct {
 	*Fake
 	receipt CommandResult
+	err     error
 }
 
 func (o appendReceiptOwner) AppendPoints(context.Context, AppendPointsCommand) (CommandResult, error) {
-	return o.receipt, nil
+	return o.receipt, o.err
 }
 
 func TestLinkedAppendRequiresEveryParticipatingReceipt(t *testing.T) {
 	for _, incomplete := range []CommandResult{{Kind: CommandKindPointsAdd}, {Kind: CommandKindPointsPlay, OK: true}} {
-		owner := appendReceiptOwner{NewFake(), incomplete}
+		owner := appendReceiptOwner{Fake: NewFake(), receipt: incomplete}
 		for _, peers := range [][]Transport{{owner, NewFake()}, {NewFake(), owner}} {
 			linked := NewFanOut(peers[0], peers[1])
 			receipt, err := linked.AppendPoints(t.Context(), strokeCommand("s", 5000))
 			if err != nil || receipt.OK {
 				t.Fatalf("partial append was confirmed: %+v %v", receipt, err)
 			}
+		}
+	}
+}
+
+func TestLinkedSupersededAppendDoesNotRetireDevice(t *testing.T) {
+	owner := &appendReceiptOwner{Fake: NewFake(), receipt: CommandResult{Kind: CommandKindPointsAdd, OK: true}}
+	for _, continuing := range []bool{true, false} {
+		linked := NewFanOutWithPolicy(NewFake(), owner, continuing)
+		if _, err := linked.Play(t.Context(), PlayCommand{StreamID: "s"}); err != nil {
+			t.Fatal(err)
+		}
+		owner.err = errAutoblowSuperseded
+		if _, err := linked.AppendPoints(t.Context(), strokeCommand("s", 5000)); !errors.Is(err, errAutoblowSuperseded) {
+			t.Fatal(err)
+		}
+		owner.err = nil
+		participants := linked.(MotionStartupParticipantsProvider).MotionStartupParticipants()
+		if len(participants) != 2 || linked.Diagnostics().LastError != "" {
+			t.Fatal("supersession retired or faulted an available device")
+		}
+		if result, err := linked.AppendPoints(t.Context(), strokeCommand("s", 6000)); err != nil || !result.Confirms(CommandKindPointsAdd) {
+			t.Fatal(result, err)
 		}
 	}
 }
