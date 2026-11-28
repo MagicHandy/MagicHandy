@@ -233,19 +233,8 @@ func (f *FanOut) dispatchSelected(ctx context.Context, only scalarSelection, kin
 	if fault != nil {
 		return CommandResult{}, fault
 	}
-	scalarOnly := only != scalarAll
-	if scalarOnly {
-		active := false
-		for index := range f.participants {
-			retired[index] = retired[index] || !f.playsScalar(index, only)
-			active = active || !retired[index]
-		}
-		if !active && only == scalarTempo {
-			return CommandResult{}, ErrTempoUnavailable
-		}
-		if !active {
-			return CommandResult{}, ErrVibrationUnavailable
-		}
+	if err := f.selectOutputs(retired, only); err != nil {
+		return CommandResult{}, err
 	}
 	results := make([]CommandResult, len(f.participants))
 	errs := make([]error, len(f.participants))
@@ -266,12 +255,12 @@ func (f *FanOut) dispatchSelected(ctx context.Context, only scalarSelection, kin
 			continue
 		}
 		if err := errs[index]; err != nil {
-			if errors.Is(err, ErrAirRejected) {
-				// A permission or per-session bound is a rejected adjustment,
-				// not evidence that a healthy participant was lost.
+			if errors.Is(err, ErrAirRejected) || errors.Is(err, errAutoblowSuperseded) {
+				// Permission limits and Stop superseding a queued write leave
+				// the participant available for a later run.
 				return results[index], err
 			}
-			if scalarOnly && ctx.Err() != nil {
+			if only != scalarAll && ctx.Err() != nil {
 				return results[index], ctx.Err()
 			}
 			if f.retire(ctx, index, err) {
@@ -288,6 +277,24 @@ func (f *FanOut) dispatchSelected(ctx context.Context, only scalarSelection, kin
 	result.LatencyMillis = max(result.LatencyMillis, latency, time.Since(started).Milliseconds())
 	result.OK = result.OK && allConfirmed
 	return result, nil
+}
+
+func (f *FanOut) selectOutputs(inactive []bool, only scalarSelection) error {
+	if only == scalarAll {
+		return nil
+	}
+	active := false
+	for index := range f.participants {
+		inactive[index] = inactive[index] || !f.playsScalar(index, only)
+		active = active || !inactive[index]
+	}
+	if active {
+		return nil
+	}
+	if only == scalarTempo {
+		return ErrTempoUnavailable
+	}
+	return ErrVibrationUnavailable
 }
 
 // Play establishes one clock, then starts the companions concurrently at its

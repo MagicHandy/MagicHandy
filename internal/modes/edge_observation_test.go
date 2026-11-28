@@ -90,12 +90,14 @@ func (e failedEdgeApply) ApplyTargetIfCurrent(ctx context.Context, target motion
 		}
 	case "stopped":
 		e.setState(false, false)
+	case "admission changed":
+		return motion.ActiveMotionState{}, motion.ErrEdgeUnavailable
 	}
 	return e.Snapshot(), errors.New("simulated target application failure")
 }
 
 func TestEdgeApplyFailureReflectsEngineOutcome(t *testing.T) {
-	for _, outcome := range []string{"original still running", "installed", "stopped"} {
+	for _, outcome := range []string{"unconfirmed while running", "admission changed", "installed", "stopped"} {
 		t.Run(outcome, func(t *testing.T) {
 			m, base, _ := edgeManager(t)
 			m.options.Current = func() Engine { return failedEdgeApply{base, outcome} }
@@ -121,7 +123,7 @@ func TestEdgeApplyFailureReflectsEngineOutcome(t *testing.T) {
 			if m.tickEdge(t.Context()) || m.Status().EdgeHold != nil {
 				t.Fatal("failed entry blocks subsequent mode ticks")
 			}
-			if m.user.stopped != (outcome == "stopped") || m.chat.keepalive != (outcome != "stopped") {
+			if m.user.stopped != (outcome != "admission changed") || m.chat.keepalive != (outcome == "admission changed") {
 				t.Fatal("failed entry restored the wrong playback ownership")
 			}
 		})

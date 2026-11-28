@@ -31,6 +31,11 @@ type loopRecoveryContextKey struct{}
 
 var errRunInvalidated = errors.New("motion run was invalidated")
 
+// TargetSuperseded reports that a guarded edit lost admission to the requested run.
+func TargetSuperseded(err error) bool {
+	return errors.Is(err, errRunInvalidated) || errors.Is(err, ErrEdgeUnavailable)
+}
+
 // EngineOptions configures a motion engine instance.
 type EngineOptions struct {
 	Transport        transport.Transport

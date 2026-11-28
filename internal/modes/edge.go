@@ -52,15 +52,16 @@ type EdgeStatus struct {
 }
 
 type edgeState struct {
-	status    EdgeStatus
-	previous  motion.MotionTarget
-	holding   motion.MotionTarget
-	planID    string
-	input     EdgeInput
-	decision  *EdgeDecision
-	resumeAt  time.Time
-	applied   bool
-	keepalive bool
+	status      EdgeStatus
+	previous    motion.MotionTarget
+	holding     motion.MotionTarget
+	planID      string
+	input       EdgeInput
+	decision    *EdgeDecision
+	resumeAt    time.Time
+	applied     bool
+	keepalive   bool
+	chatVersion uint64
 }
 
 type guardedEdgeEngine interface {
@@ -120,7 +121,7 @@ func (m *Manager) ActivateChatEdge(ctx context.Context, sessionID string, afterS
 	m.motion.deadline, m.motion.planAt = time.Time{}, time.Time{}
 	m.speech.deadline, m.speech.waitingID = time.Time{}, ""
 	automatic := m.loop.mode == ModeAutopilot && m.options.DecideEdge != nil
-	e := &edgeState{status: EdgeStatus{Active: true, Phase: "applying", Automatic: automatic}, previous: cloneTarget(before.Target), holding: holding, keepalive: keepalive}
+	e := &edgeState{status: EdgeStatus{Active: true, Phase: "applying", Automatic: automatic}, previous: cloneTarget(before.Target), holding: holding, keepalive: keepalive, chatVersion: m.chat.version}
 	e.input = edgeInput(before, holding, settings.SpeedMinPercent, settings.SpeedMaxPercent)
 	e.input.ChatSessionID, e.input.AfterSeq, e.input.PressedAt = sessionID, afterSeq, m.options.Now()
 	e.status.ChatSessionID, e.status.PressedAt = sessionID, e.input.PressedAt
@@ -131,18 +132,21 @@ func (m *Manager) ActivateChatEdge(ctx context.Context, sessionID string, afterS
 		m.options.EdgeAdmitted()
 	}
 	state, err := engine.ApplyTargetIfCurrent(ctx, holding, "edge_hold", before.PlanID)
+	if err != nil {
+		state = engine.Snapshot()
+	}
 	if err == nil && m.options.EdgeApplied != nil {
 		m.options.EdgeApplied(ctx, e.input)
 	}
 	m.mu.Lock()
 	if m.edge == e {
-		m.finishEdgeApplyLocked(e, before.PlanID, generation, state, err)
+		m.finishEdgeApplyLocked(ctx, e, before.PlanID, generation, state, err)
 	}
 	m.mu.Unlock()
 	return m.Status(), err
 }
 
-func (m *Manager) finishEdgeApplyLocked(e *edgeState, previousPlan string, generation uint64, state motion.ActiveMotionState, err error) {
+func (m *Manager) finishEdgeApplyLocked(ctx context.Context, e *edgeState, previousPlan string, generation uint64, state motion.ActiveMotionState, err error) {
 	if err != nil {
 		if state.Running && state.Target.Source == "edge" && state.PlanID != previousPlan {
 			e.applied, e.planID = true, state.PlanID
@@ -150,11 +154,20 @@ func (m *Manager) finishEdgeApplyLocked(e *edgeState, previousPlan string, gener
 			return
 		}
 		m.edge = nil
+		if m.loop.generation != generation || m.chat.version != e.chatVersion {
+			return
+		}
 		if !state.Running && !state.Paused {
 			m.user.stopped = true
 			m.chat.target, m.chat.keepalive = nil, false
-		} else if state.PlanID == previousPlan && m.loop.generation == generation && !m.user.stopped {
-			m.chat.keepalive = e.keepalive
+		} else if state.Running && state.PlanID == previousPlan && !m.user.stopped {
+			if motion.TargetSuperseded(err) || (ctx.Err() != nil && errors.Is(err, ctx.Err())) {
+				m.chat.keepalive = e.keepalive
+			} else {
+				// Unconfirmed delivery cannot authorize a later recovery Start.
+				m.user.stopped = true
+				m.chat.target, m.chat.keepalive = nil, false
+			}
 		}
 		return
 	}
