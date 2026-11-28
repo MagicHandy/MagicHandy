@@ -59,9 +59,23 @@ test inspects the request to a separately selected compatible model with a
 Simple conversation model, then checks limited sharing, a lower-tier planner,
 and a chat switch. Each role uses its own configured capability.
 
+Manually assigning the catalog Gemma 4 12B to Advanced also enabled feedback.
+On the native llama.cpp route it passed five of six conversation checks,
+including the 76-second hold with a 24% return, compared with one of six in
+the matched baseline. Its first feedback acknowledgment produced an invalid
+motion edit which the app rejected. On the same 32K server using a compatible
+connection, automatic structured output passed two of six checks. Prompt-only
+output passed zero of six. The automatic run acknowledged the exact request
+but never produced an accepted return plan. These runs explain why the catalog
+continues to recommend Intermediate for 12B.
+
 The fixtures cover implicit relief, exact requests, later corrections,
 read-backs, unrelated numbers, and a present-tense request to set the current
-pace. Terra's feedback evaluation used one planner generation. A valid
+pace. With the 76-second, 24% plan active, the only new human message in a
+three-press trial was “That was too close.” Both Terra and Sol acknowledged
+it without changing the running plan. After an early manual Return, both chose
+110 seconds and a gentle 20% return on the next press. These were model choices
+observed in this trial. Terra's feedback evaluation used one planner generation. A valid
 answer is applied directly within the existing bounds. Returning early,
 asking for the same duration, and choosing a different duration are all valid.
 The model uses previous settings as evidence when the person comments on them.
@@ -78,8 +92,10 @@ tag and `TestLiveEdgeConversation` with `liveeval,magichandy_labs`. Set
 assert the qualified behavior. `MAGICHANDY_EXPERIMENT_CAPTURE` selects a local
 output file. For another signed-in model, set `MAGICHANDY_EDGE_HOSTED_MODEL`
 for the conversation fixture and `MAGICHANDY_LIVE_MODEL` for the planner
-fixture. The conversation fixture drives the streaming chat endpoint and
-both moving button presses against a fake transport.
+fixture. Set `MAGICHANDY_EDGE_REPEAT_PRESS=1` to test a third press after
+the user replies “That was too close.” The conversation fixture drives the
+streaming chat endpoint, the real planning adapter and the shared engine
+against a fake transport.
 
 Across the prompt experiments, 423 decisions were retained, including three
 rejected outputs. Grouping identical compiled geometry yielded 47 atlas entries
