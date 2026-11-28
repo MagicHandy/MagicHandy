@@ -3,6 +3,8 @@ package transport
 import (
 	"context"
 	"errors"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/mapledaemon/MagicHandy/internal/estim"
@@ -135,6 +137,87 @@ func TestLinkedContinuationHandlesAppendFailureAndStopErrors(t *testing.T) {
 	}
 	if len(a.stops) == 0 {
 		t.Fatal("failed companion blocked primary Stop")
+	}
+}
+
+func TestLinkedDisconnectedLeaseKeepsStopUnconfirmed(t *testing.T) {
+	for _, continueHealthy := range []bool{true, false} {
+		var live atomic.Bool
+		live.Store(true)
+		primary := NewFake()
+		linked := NewLinkedSession([]LinkedParticipant{
+			{ID: "one", Label: "First", Transport: primary},
+			{ID: "two", Label: "Second", Transport: NewLeasedTransport(NewFake(), live.Load)},
+		}, continueHealthy)
+		ctx := t.Context()
+		if _, err := linked.AppendPoints(ctx, strokeCommand("s", 5000)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := linked.Play(ctx, PlayCommand{StreamID: "s"}); err != nil {
+			t.Fatal(err)
+		}
+		live.Store(false)
+		result, err := linked.AppendPoints(ctx, strokeCommand("s", 6000))
+		if continueHealthy {
+			if err != nil || !result.OK || !strings.Contains(linked.Diagnostics().LastError, "Stop could not be confirmed") {
+				t.Fatalf("retired lease: result=%+v err=%v warning=%q", result, err, linked.Diagnostics().LastError)
+			}
+			continue
+		}
+		if err == nil {
+			t.Fatal("stop-all policy accepted append to a disconnected lease")
+		}
+		result, err = linked.Stop(ctx, StopCommand{Reason: "retry"})
+		commands := primary.Commands()
+		last := commands[len(commands)-1]
+		if err != nil || result.ConfirmsStop() || last.Stop == nil || !last.Stop.Fault {
+			t.Fatalf("unconfirmed fault was not retried: result=%+v err=%v last=%+v", result, err, last)
+		}
+	}
+}
+
+type appendReceiptOwner struct {
+	*Fake
+	receipt CommandResult
+	err     error
+}
+
+func (o appendReceiptOwner) AppendPoints(context.Context, AppendPointsCommand) (CommandResult, error) {
+	return o.receipt, o.err
+}
+
+func TestLinkedAppendRequiresEveryParticipatingReceipt(t *testing.T) {
+	for _, incomplete := range []CommandResult{{Kind: CommandKindPointsAdd}, {Kind: CommandKindPointsPlay, OK: true}} {
+		owner := appendReceiptOwner{Fake: NewFake(), receipt: incomplete}
+		for _, peers := range [][]Transport{{owner, NewFake()}, {NewFake(), owner}} {
+			linked := NewFanOut(peers[0], peers[1])
+			receipt, err := linked.AppendPoints(t.Context(), strokeCommand("s", 5000))
+			if err != nil || receipt.OK {
+				t.Fatalf("partial append was confirmed: %+v %v", receipt, err)
+			}
+		}
+	}
+}
+
+func TestLinkedSupersededAppendDoesNotRetireDevice(t *testing.T) {
+	owner := &appendReceiptOwner{Fake: NewFake(), receipt: CommandResult{Kind: CommandKindPointsAdd, OK: true}}
+	for _, continuing := range []bool{true, false} {
+		linked := NewFanOutWithPolicy(NewFake(), owner, continuing)
+		if _, err := linked.Play(t.Context(), PlayCommand{StreamID: "s"}); err != nil {
+			t.Fatal(err)
+		}
+		owner.err = errAutoblowSuperseded
+		if _, err := linked.AppendPoints(t.Context(), strokeCommand("s", 5000)); !errors.Is(err, errAutoblowSuperseded) {
+			t.Fatal(err)
+		}
+		owner.err = nil
+		participants := linked.(MotionStartupParticipantsProvider).MotionStartupParticipants()
+		if len(participants) != 2 || linked.Diagnostics().LastError != "" {
+			t.Fatal("supersession retired or faulted an available device")
+		}
+		if result, err := linked.AppendPoints(t.Context(), strokeCommand("s", 6000)); err != nil || !result.Confirms(CommandKindPointsAdd) {
+			t.Fatal(result, err)
+		}
 	}
 }
 

@@ -46,6 +46,44 @@ func TestSamplingFailureAfterPlayStopsRun(t *testing.T) {
 	}
 }
 
+func TestRetiredDispatchTickPreservesFault(t *testing.T) {
+	for _, running := range []bool{false, true} {
+		owner := transport.NewFake()
+		engine, err := NewEngine(EngineOptions{Transport: owner, DispatchInterval: time.Millisecond})
+		if err != nil {
+			t.Fatal(err)
+		}
+		const cause = "owner rejected the command interval"
+		engine.runEpoch, engine.running, engine.lastError = 2, running, cause
+		tick := make(chan struct{}, 1)
+		engine.now = func() time.Time {
+			select {
+			case tick <- struct{}{}:
+			default:
+			}
+			return time.Now()
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			engine.runLoop(ctx, 1)
+		}()
+		select {
+		case <-tick:
+		case <-time.After(2 * time.Second):
+			cancel()
+			<-done
+			t.Fatal("the retired loop never entered its queued tick")
+		}
+		cancel()
+		<-done
+		if engine.lastError != cause || len(owner.Commands()) != 0 {
+			t.Fatalf("retired tick with running=%t: error=%q commands=%d", running, engine.lastError, len(owner.Commands()))
+		}
+	}
+}
+
 func TestBurstRetargetsUseFirstUncommittedHandoff(t *testing.T) {
 	start := time.Now()
 	var elapsed atomic.Int64

@@ -1,5 +1,40 @@
 # Goal Scorecard
 
+## 2026-11-27 — Saved-chat recall and worker lifecycle review
+
+With Go 1.26.11 on Windows amd64, the stripped core grew from 25,788,416
+bytes on the reviewed Edge branch (`a0f6005b`) to 25,812,480 bytes. Both
+builds used `CGO_ENABLED=0`, `-buildvcs=false -trimpath -ldflags "-s -w"`.
+The main browser entry grew from 838,321 to 838,381 bytes, or 226,270 to
+226,286 bytes with gzip. The stylesheet measured 196,888 bytes raw and
+33,993 bytes with gzip on both builds. The model and simulator results are
+in the [peer review](app-peer-review-2026-11-27.md).
+
+The release candidate's check for stale motion-loop errors brought the
+stripped core to 25,814,016 bytes using the same build settings.
+
+## 2026-11-27 — Edge admission, responsiveness and feedback
+
+Matched Windows amd64 builds used Go 1.26.11, `CGO_ENABLED=0`,
+`-buildvcs=false -trimpath` and `-ldflags "-s -w"`. Asset sizes refer to the
+main entry loaded by the embedded release UI.
+
+| Measurement | Alpha.91 | Edge update |
+| --- | ---: | ---: |
+| Stripped Go core | 25,712,128 bytes | 25,786,880 bytes |
+| Main JavaScript, raw / gzip | 836,187 / 225,705 bytes | 838,321 / 226,270 bytes |
+| Main CSS, raw / gzip | 196,634 / 33,953 bytes | 196,888 / 33,993 bytes |
+| Prepare a 35% full sweep's holding target | 2.12 ms | 0.13 ms |
+| Allocated per hold preparation | 331,683 bytes | 26,976 bytes |
+
+The recipe benchmark used five runs of 250 presses. Its median includes
+validation of the fitted hold. The optional feedback table retains two moving
+observations and the latest still pause per qualifying chat. In a 1,000-message
+SQLite fixture, checking the planner's conversation revision with a 48 KiB
+last message cost 10.7 µs and 1,160 bytes per check, down from 126.4 µs and
+51,206 bytes. These are medians from five runs of 500 checks on one CPU.
+[Motion, transport and model trials](edge-feedback-review.md)
+
 ## 2026-11-27 — Cloud refill timing and saved chat evidence
 
 On Windows amd64 with Go 1.26.11, the stripped pure-Go core measured

@@ -72,6 +72,8 @@ export interface RemoteSession {
   paused?: boolean;
   /** Edge can act now: live motion, not a video or a timed program. */
   edge_allowed?: boolean;
+  edge_phase?: string;
+  still_hold?: boolean;
   edge?: RemoteEdgeHold;
 }
 

@@ -49,7 +49,7 @@ func (p *preparedLLMProvider) StreamChat(ctx context.Context, request llm.ChatRe
 	p.server.llm.mu.Lock()
 	retired := p.generation != p.server.llm.generation
 	p.server.llm.mu.Unlock()
-	if retired {
+	if retired && !p.settings.IsHosted() {
 		return "", context.Canceled
 	}
 	// Settings may have changed before this handle was prepared. Validate the

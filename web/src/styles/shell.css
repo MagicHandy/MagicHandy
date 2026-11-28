@@ -112,6 +112,7 @@
 }
 .edge-control { display: grid; gap: 4px; margin-bottom: 8px; min-width: 0; }
 .edge-actions { display: flex; gap: 6px; }
+.edge-still { display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-width: 32px; flex: 0 0 auto; padding: 0 5px; background: transparent; color: var(--accent); border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: var(--fs-label); }
 .edge-return { flex: 0 0 auto; min-height: 40px; padding: 4px 6px; color: var(--accent); background: transparent; border: 0; font-size: var(--fs-label); }
 .edge-return:disabled { opacity: .5; cursor: not-allowed; }
 .edge-return:not(:disabled):hover { background: var(--accent-tint); }

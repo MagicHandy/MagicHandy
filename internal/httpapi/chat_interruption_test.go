@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
+	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/motion"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
@@ -188,12 +190,19 @@ func interruptHostedReply(t *testing.T, interrupt func(*Server)) (string, chat.R
 // reply says so and records Edge, not a settings change or Emergency Stop.
 func TestEdgeInterruptsHostedReplyWithItsOwnExplanation(t *testing.T) {
 	stream, failure, fake := interruptHostedReply(t, func(s *Server) {
-		// No motion runs here, so the hold itself is refused after the
-		// cancellation; only the interrupted reply is under test.
-		_, _ = s.activateEdge(t.Context())
+		engine, admission, err := s.motionEngineForStart()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = engine.StartAtGeneration(t.Context(), motion.MotionTarget{PatternID: motion.PatternFullSweeps, SpeedPercent: 35}, config.DefaultSettings().Motion, admission); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = s.activateEdge(t.Context()); err != nil {
+			t.Fatal(err)
+		}
 	})
 	if !strings.Contains(stream, chatEdgeMessage) || strings.Contains(stream, chatChangedMessage) ||
-		strings.Contains(stream, "Emergency Stop") || strings.Contains(stream, "event: motion") || len(fake.Commands()) != 0 {
+		strings.Contains(stream, "Emergency Stop") || strings.Contains(stream, "event: motion") || countModeCommands(fake.Commands()).plays != 1 {
 		t.Fatalf("wrong interruption: %s", stream)
 	}
 	if !strings.HasPrefix(failure.Error, "edge") {

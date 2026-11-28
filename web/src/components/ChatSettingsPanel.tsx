@@ -59,6 +59,10 @@ export function ChatSettingsPanel({ section, settings: s, saved, activeLLM, mode
   const [localStatus, setLocalStatus] = useState<LLMProviderStatus | null>(null);
   const promptIDs = promptSets.length ? promptSets.map(set => set.id) : opt.prompt_sets ?? [];
   const promptOptions = [...new Set([...promptIDs, s.llm.prompt_set])];
+  const routing = modelRouting ?? saved?.model_routing;
+  const chatUsesLocal = (s.llm.conversation_connection_id || "local") === "local"
+    && (saved?.llm.conversation_connection_id || "local") === "local";
+  const separateLocalRole = routing?.autopilot.kind === "local" || routing?.local_retry?.kind === "local";
   return <>
     <h2 className="section-title">{t("Chat")}</h2>
     <div className="settings-split">
@@ -68,9 +72,10 @@ export function ChatSettingsPanel({ section, settings: s, saved, activeLLM, mode
       <div className="settings-content">
         {section === "model" && <>
           <h3 className="section-title">{t("Model")}</h3>
-          <ModelConnectionsPanel routing={modelRouting ?? saved?.model_routing} saved={activeLLM ?? saved?.llm} settings={s.llm} locked={locked} patch={patchLLM}
+          <ModelConnectionsPanel routing={routing} saved={activeLLM ?? saved?.llm} settings={s.llm} locked={locked} patch={patchLLM}
             capabilityOptions={opt.local_model_capabilities ?? []} localStatus={localStatus} localEditor={<ModelSettingsPanel
-            configurationOnly={(s.llm.conversation_connection_id || "local") !== "local"}
+            configurationOnly={!chatUsesLocal && !separateLocalRole}
+            runtimeRole={chatUsesLocal ? undefined : "local"}
             settings={s.llm}
             saved={saved?.llm}
             providers={opt.llm_providers ?? []}

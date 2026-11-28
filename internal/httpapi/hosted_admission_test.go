@@ -55,6 +55,46 @@ func TestCloudAdmissionRejectsRetiredStopSettingsConversationAndSession(t *testi
 	}
 }
 
+func TestPlanningAdmissionTracksCommittedEditsBelowLatestMessage(t *testing.T) {
+	for _, change := range []string{"delete earlier instruction", "publish earlier pending reply"} {
+		t.Run(change, func(t *testing.T) {
+			s := newTestServer(t)
+			ctx := t.Context()
+			id, err := s.chatLog.ActiveSessionIDContext(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			older, err := s.chatLog.Append(chat.MessageRoleUser, "Use a 40 percent return next time.", "test")
+			if err != nil {
+				t.Fatal(err)
+			}
+			pending, err := s.chatLog.AppendPendingAssistantTo(id, "An earlier response.", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = s.chatLog.Append(chat.MessageRoleUser, "What was the last setting?", "test"); err != nil {
+				t.Fatal(err)
+			}
+			settings, _ := s.store.Snapshot()
+			admission, err := s.captureCloudAdmission(ctx, settings)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if change == "delete earlier instruction" {
+				err = s.chatLog.Delete(older)
+			} else {
+				err = s.chatLog.CommitPending(pending)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = s.validateCloudAdmission(ctx, admission); err == nil {
+				t.Fatal("accepted a plan using an older conversation revision")
+			}
+		})
+	}
+}
+
 func TestHostedChatDiscardsLateResultAfterProviderChange(t *testing.T) {
 	entered := make(chan struct{})
 	release := make(chan struct{})

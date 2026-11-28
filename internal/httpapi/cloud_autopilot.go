@@ -24,23 +24,12 @@ type cloudPlanAdmission struct {
 	personalization [32]byte
 }
 
-func (s *Server) latestCloudIntentRevision(ctx context.Context, session string) (int64, error) {
-	messages, err := s.chatLog.RecentSessionContext(ctx, session, 1)
-	if err != nil {
-		return 0, err
-	}
-	if len(messages) == 0 {
-		return 0, nil
-	}
-	return messages[0].Seq, nil
-}
-
 func (s *Server) captureCloudAdmission(ctx context.Context, settings config.Settings) (cloudPlanAdmission, error) {
 	session, err := s.chatLog.ActiveSessionIDContext(ctx)
 	if err != nil {
 		return cloudPlanAdmission{}, err
 	}
-	revision, err := s.latestCloudIntentRevision(ctx, session)
+	_, revision, err := s.chatLog.ConversationHeadContext(ctx, session)
 	if err != nil {
 		return cloudPlanAdmission{}, err
 	}
@@ -60,7 +49,7 @@ func (s *Server) validateCloudAdmission(ctx context.Context, admission cloudPlan
 	if err != nil || session != admission.session {
 		return &llm.CloudError{Kind: "stale"}
 	}
-	revision, err := s.latestCloudIntentRevision(ctx, session)
+	_, revision, err := s.chatLog.ConversationHeadContext(ctx, session)
 	if err != nil || revision != admission.chatRevision {
 		return &llm.CloudError{Kind: "stale"}
 	}

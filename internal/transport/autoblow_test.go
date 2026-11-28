@@ -69,6 +69,34 @@ func connectedVacuGlide(t *testing.T, f *autoblowFixture, config AutoblowConfig)
 	return device
 }
 
+func TestVacuGlideRefusesAppendsDuringStopOrAfterLoss(t *testing.T) {
+	v := connectedVacuGlide(t, newAutoblowFixture(t), AutoblowConfig{})
+	frame := &TempoFrame{Revision: 1, Points: []TimedLevel{{TimeMillis: 0, LevelPercent: 30}}}
+	if _, err := v.AppendPoints(t.Context(), AppendPointsCommand{StreamID: "original", Tempo: frame}); err != nil {
+		t.Fatal(err)
+	}
+	for _, state := range []string{"stopping", "stale"} {
+		v.mu.Lock()
+		v.state, v.stopHolds = state, 0
+		if state == "stopping" {
+			v.stopHolds++
+		}
+		v.mu.Unlock()
+		for _, next := range []*TempoFrame{nil, frame} {
+			result, err := v.AppendPoints(t.Context(), AppendPointsCommand{StreamID: "new", Tempo: next})
+			if !errors.Is(err, errAutoblowSuperseded) || result.OK {
+				t.Errorf("append in %s returned %+v, %v", state, result, err)
+			}
+		}
+		v.mu.Lock()
+		id, revision := v.stream.id, v.stream.revision
+		v.mu.Unlock()
+		if id != "original" || revision != 1 {
+			t.Errorf("refused append changed stream to %q, revision %d", id, revision)
+		}
+	}
+}
+
 func waitFor(t *testing.T, what string, condition func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)

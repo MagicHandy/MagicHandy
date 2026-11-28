@@ -277,6 +277,14 @@ about building new motion.
 
 ## Capability gates and live-provider evidence
 
+The Edge button requests a hold through the shared engine. Any model assigned
+to **Advanced (with reasoning)** can use a same-chat button observation and
+human feedback when it plans the next automatic moving hold. The selected
+planner's conversation-sharing policy governs access. An Advanced conversation
+model can describe the last button press and whether its planner can use the
+feedback. A request for the next hold leaves current playback alone.
+[Edge feedback and model routing](decisions/0076-edge-feedback-in-the-planning-role.md)
+
 The sidebar and Settings > Model expose the persisted Dynamic / Pattern Library
 / Off mode list. Pattern mode additionally exposes area focus and experimental
 patterns. Disabled methods are absent from the prompt and stripped from model
@@ -666,6 +674,26 @@ resolve the requested settings and following change. Other models choose the
 lookup in their ordinary response. The extra generation cost applies to local
 long-chat routing and to retrieving evidence, and is reported as generation
 time in response diagnostics.
+
+Named lookups require one to four nonempty search terms. Opening lookups
+carry an empty term list. An incomplete or mixed lookup is rejected. A
+complete read-only choice with unusable search terms gives a localized
+message explaining that the search could not run, and the diagnostics mark
+the fallback. “Unavailable” identifies evidence the reader could not verify.
+A compact router authorizes the ordinary prompt only with its
+explicit ordinary choice. For providers configured without schema enforcement,
+the reader also accepts one complete JSON object inside a Markdown code fence.
+
+First provider activity includes archive routing. First token measures the
+first token from the ordinary answer or the evidence reader, measured from
+the start of the turn. An archive lookup that ends before answer generation
+has no answer token. Citation checks can add time before the answer appears.
+
+When chat uses a hosted connection, an assigned local Autopilot or refusal
+fallback model has its own status and managed Load and Unload controls. The
+local editor targets the saved local runtime. Changing the worker retires it
+after its active request drains. A managed runtime installation reserves the
+local request slot through completion, then reapplies the saved load policy.
 
 ## Cross-references
 

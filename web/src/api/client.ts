@@ -589,6 +589,8 @@ export const api = {
   resumeMotion: () => request("POST", "/api/motion/resume", {}),
   resetMotionPosition: (failureID: string) => request<import("./types").MotionInfo>("POST", "/api/motion/reset-position", { failure_id: failureID }),
   activateEdge: () => request("POST", "/api/motion/edge", {}),
+  holdStill: () => request("POST", "/api/motion/edge?style=still", {}),
+  resumeStillHold: () => request("POST", "/api/motion/edge/resume?style=still", {}),
   resumeEdge: () => request("POST", "/api/motion/edge/resume", {}),
   applyQuick: (patch: Partial<{
     speed_min_percent: number;
@@ -664,10 +666,10 @@ export const api = {
   remoteEventsURL: () => `/api/remote/events?client_id=${encodeURIComponent(clientId)}`,
   remoteKeepalive: (signal?: AbortSignal) =>
     request<{ keepalive: { renewed: boolean; lease_expires_in_ms?: number } }>("POST", "/api/remote/keepalive", {}, signal),
-  remoteEdge: (stopSequence: number) =>
-    request<{ session: RemoteSession }>("POST", "/api/remote/edge", {}, undefined, { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
-  remoteEdgeResume: (stopSequence: number) =>
-    request<{ session: RemoteSession }>("POST", "/api/remote/edge/resume", {}, undefined, { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  remoteEdge: (stopSequence: number, still = false) =>
+    request<{ session: RemoteSession }>("POST", still ? "/api/remote/edge?style=still" : "/api/remote/edge", {}, undefined, { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  remoteEdgeResume: (stopSequence: number, still = false) =>
+    request<{ session: RemoteSession }>("POST", still ? "/api/remote/edge/resume?style=still" : "/api/remote/edge/resume", {}, undefined, { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
   saveMediaPlayback: (patch: Partial<{
     script_smoothing_percent: number;
     peak_rounding_ms: number;
@@ -786,7 +788,7 @@ export const api = {
   deletePromptSet: (id: string) => request<PromptSetsPayload>("DELETE", `/api/prompt-sets/${encodeURIComponent(id)}`),
 
   // LLM runtime.
-  llmStatus: () => request<LLMProviderStatus>("GET", "/api/llm/status"),
+  llmStatus: (role?: "local") => request<LLMProviderStatus>("GET", `/api/llm/status${role ? "?role=local" : ""}`),
   cloudPlanningStatus: () => request<CloudPlanningStatus>("GET", "/api/llm/cloud").then(checkedCloudStatus),
   modelConnectionKey: (connection: ModelConnection, api_key: string) => request<{ key_set: boolean }>("POST", "/api/llm/connections/key", { connection, api_key }),
   modelConnectionKeyStatus: (connection: ModelConnection) => request<{ key_set: boolean }>("POST", "/api/llm/connections/key", { connection }),
@@ -801,9 +803,9 @@ export const api = {
   cloudTest: (provider: string, model: string) => request<CloudPlanningStatus>("POST", "/api/llm/cloud/test", { provider, model }).then(checkedCloudStatus),
   cloudWelcome: () => request<CloudPlanningStatus>("POST", "/api/llm/cloud/welcome", {}).then(checkedCloudStatus),
   cloudResetCredentials: () => request<CloudPlanningStatus>("POST", "/api/llm/cloud/reset-credentials", { confirm: true }).then(checkedCloudStatus),
-  llmLoad: () => request<LLMProviderStatus>("POST", "/api/llm/load", {}),
+  llmLoad: (role?: "local") => request<LLMProviderStatus>("POST", `/api/llm/load${role ? "?role=local" : ""}`, {}),
   checkSetupLocalModel: () => request<{ ready: boolean; message: string; model: string }>("POST", "/api/llm/local/test", {}),
-  llmUnload: () => request<LLMProviderStatus>("POST", "/api/llm/unload", {}),
+  llmUnload: (role?: "local") => request<LLMProviderStatus>("POST", `/api/llm/unload${role ? "?role=local" : ""}`, {}),
   llmDuplicates: () => request<ManagedLLMDuplicateSnapshot>("GET", "/api/llm/duplicates"),
   terminateLLMDuplicates: (pids: number[]) =>
     request<ManagedLLMDuplicateSnapshot>("POST", "/api/llm/duplicates/terminate", { pids }),

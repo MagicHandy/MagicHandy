@@ -52,6 +52,7 @@ func (e *Engine) dispatchThrough(
 		Points:   points,
 	}
 	e.mu.Lock()
+	edgeFrame := e.plan.Target.Source == "edge"
 	appendCommand.VibrationOnly = e.plan.Target.VibrationOnly
 	appendCommand.TempoOnly = e.plan.Target.TempoOnly
 	appendCommand.SpeedPercent = e.plan.Target.SpeedPercent
@@ -61,6 +62,9 @@ func (e *Engine) dispatchThrough(
 	e.mu.Unlock()
 	result, err := e.transport.AppendPoints(commandCtx, appendCommand)
 	cleanup()
+	if err == nil && edgeFrame {
+		e.acknowledgeEdgeFrame(runEpoch, result, appendCommand.Tempo, lastSample)
+	}
 	e.recordTransportResult(reason, lastSample, transport.Command{
 		Kind:      transport.CommandKindPointsAdd,
 		PointsAdd: &appendCommand,
@@ -328,6 +332,21 @@ func (e *Engine) rememberError(err error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.lastError = err.Error()
+}
+
+// A tick can race Stop or retire its own run during recovery. Only its current
+// owner may publish a dispatch error. Recovery already recorded its stop cause.
+func (e *Engine) continueAfterDispatch(runEpoch uint64, err error) bool {
+	if err == nil {
+		return true
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.validateRunLocked(runEpoch) != nil {
+		return false
+	}
+	e.lastError = err.Error()
+	return true
 }
 
 // forceStopped abandons a start/resume that failed during transport setup. It

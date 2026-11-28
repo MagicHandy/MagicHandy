@@ -75,7 +75,10 @@ type Options struct {
 	// start without it; Freestyle and chat keepalive never use it.
 	Decide DecideFunc
 	// DecideEdge plans only the duration and return after an immediate hold.
-	DecideEdge func(context.Context, EdgeInput) (EdgeDecision, error)
+	DecideEdge   func(context.Context, EdgeInput) (EdgeDecision, error)
+	EdgeAdmitted func()
+	EdgeApplied  func(context.Context, EdgeInput)
+	EdgePlanned  func(context.Context, EdgeInput, EdgeDecision)
 	// DecideSpeech runs the independent autonomous speech contract.
 	DecideSpeech DecideFunc
 	// CanAnnounce is false while autonomous speech would deepen a TTS backlog.

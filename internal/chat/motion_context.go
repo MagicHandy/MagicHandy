@@ -11,6 +11,8 @@ import (
 // turn. It contains only semantic state and the user's configured speed band;
 // the model never receives device or transport details.
 type MotionContext struct {
+	RecentEdge               *EdgeObservation `json:"-"`
+	EdgePlannerReadsFeedback bool             `json:"-"`
 	// Intermediate/Advanced composition uses output facts. Simple stays compact.
 	Outputs      *OutputContext
 	UserRequests []string

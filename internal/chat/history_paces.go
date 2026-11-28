@@ -70,7 +70,7 @@ func (s Service) readPaceRows(ctx context.Context, sources []HistorySource) ([]c
 			return nil, false, err
 		}
 		var cited map[string][]citedPace
-		if json.Unmarshal([]byte(raw), &cited) != nil || len(cited) != len(keys) {
+		if json.Unmarshal([]byte(s.historyJSON(raw)), &cited) != nil || len(cited) != len(keys) {
 			return nil, false, errors.New("invalid archived pace evidence")
 		}
 		events, intact, err := verifiedPacePrefix(sources, keys, cited)

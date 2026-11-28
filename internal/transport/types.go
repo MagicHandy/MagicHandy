@@ -268,8 +268,11 @@ type CommandResult struct {
 	CompletedAt   string      `json:"completed_at"`
 }
 
-// ConfirmsStop reports an actual acknowledgement from an owner that received Stop.
-func (r CommandResult) ConfirmsStop() bool { return r.Kind == CommandKindStop && r.OK }
+// Confirms reports an acknowledgment for the command the owner was asked to perform.
+func (r CommandResult) Confirms(kind CommandKind) bool { return r.Kind == kind && r.OK }
+
+// ConfirmsStop reports whether the owner acknowledged the requested Stop.
+func (r CommandResult) ConfirmsStop() bool { return r.Confirms(CommandKindStop) }
 
 // TransportDiagnostics is a safe snapshot of transport command and playback state.
 //

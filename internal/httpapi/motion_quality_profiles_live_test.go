@@ -79,11 +79,18 @@ func qualityExternalLocal(t *testing.T, profile string) *qualityDefaultProfile {
 	window := settings.LocalContextSize()
 	messages := max(chat.PromptHistoryLimit, chatCapabilities(settings, nil).HistoryMessages)
 	if profile == "compatible-local" {
+		output := os.Getenv("MAGICHANDY_QUALITY_COMPATIBLE_OUTPUT")
+		if output == "" {
+			output = "prompt"
+		}
 		connection := config.ModelConnection{
 			ID: "quality", Name: "Local candidate", Provider: config.LLMProviderCompatible, NoAuthentication: true,
 			BaseURL: settings.LlamaCPPBaseURL + "/v1", Model: settings.Model, CapabilityLevel: settings.LocalCapabilityLevel,
-			ContextWindow: window, OutputMode: "prompt", SupportedParameters: []string{"max_tokens", "temperature", "top_p"},
+			ContextWindow: window, OutputMode: output,
 		}.Normalize()
+		if output == "prompt" {
+			connection.SupportedParameters = []string{"max_tokens", "temperature", "top_p"}
+		}
 		settings.Connections, settings.ConversationConnectionID = []config.ModelConnection{connection}, connection.ID
 		window, messages, _ = connection.ConversationWindow()
 	}
@@ -120,11 +127,15 @@ func qualityExternalLocal(t *testing.T, profile string) *qualityDefaultProfile {
 
 func qualityTerraDefault(t *testing.T) *qualityDefaultProfile {
 	t.Helper()
+	return qualityChatGPTProfile(t, "gpt-6.1-terra")
+}
+
+func qualityChatGPTProfile(t *testing.T, model string) *qualityDefaultProfile {
+	t.Helper()
 	settings := config.DefaultSettings().LLM
-	const model = "gpt-6.1-terra"
 	directory := os.Getenv("MAGICHANDY_HOSTED_DATA_DIR")
 	if directory == "" {
-		t.Fatal("Terra requires an existing signed-in MAGICHANDY_HOSTED_DATA_DIR")
+		t.Fatal("ChatGPT requires an existing signed-in MAGICHANDY_HOSTED_DATA_DIR")
 	}
 	options := creativeReviewChatGPTOptions(t, directory, model)
 	discovery, err := llm.NewOpenAIResponsesProvider(options)
@@ -137,7 +148,11 @@ func qualityTerraDefault(t *testing.T) *qualityDefaultProfile {
 	}
 	i := slices.IndexFunc(models, func(item llm.CloudModel) bool { return item.Slug == model })
 	if i < 0 {
-		t.Fatal("Terra is unavailable in the signed-in account catalog")
+		var available []string
+		for _, item := range models {
+			available = append(available, item.Slug)
+		}
+		t.Fatalf("model %q unavailable in the signed-in account catalog: %v", model, available)
 	}
 	// New ChatGPT connections use Advanced. Setup offers 128K when the
 	// catalog advertises it, and selects Low when the model supports it.
