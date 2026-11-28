@@ -10,6 +10,9 @@ The main browser entry grew from 838,321 to 838,381 bytes, or 226,270 to
 33,993 bytes with gzip on both builds. The model and simulator results are
 in the [peer review](app-peer-review-2026-11-27.md).
 
+The release candidate's check for stale motion-loop errors brought the
+stripped core to 25,814,016 bytes using the same build settings.
+
 ## 2026-11-27 — Edge admission, responsiveness and feedback
 
 Matched Windows amd64 builds used Go 1.26.11, `CGO_ENABLED=0`,

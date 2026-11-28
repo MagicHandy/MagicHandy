@@ -922,14 +922,14 @@ func (e *Engine) runLoop(ctx context.Context, runEpoch uint64) {
 			if e.completeProgramIfNeeded(ctx, runEpoch) {
 				return
 			}
-			if err := e.dispatchIfLeadNeeded(ctx, runEpoch, "append_points"); err != nil {
-				e.rememberError(err)
+			if !e.continueAfterDispatch(runEpoch, e.dispatchIfLeadNeeded(ctx, runEpoch, "append_points")) {
+				return
 			}
-			if err := e.dispatchVibrationIfNeeded(ctx, runEpoch); err != nil {
-				e.rememberError(err)
+			if !e.continueAfterDispatch(runEpoch, e.dispatchVibrationIfNeeded(ctx, runEpoch)) {
+				return
 			}
-			if err := e.dispatchTempoIfNeeded(ctx, runEpoch); err != nil {
-				e.rememberError(err)
+			if !e.continueAfterDispatch(runEpoch, e.dispatchTempoIfNeeded(ctx, runEpoch)) {
+				return
 			}
 		}
 	}

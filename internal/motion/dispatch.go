@@ -334,6 +334,21 @@ func (e *Engine) rememberError(err error) {
 	e.lastError = err.Error()
 }
 
+// A tick can race Stop or retire its own run during recovery. Only its current
+// owner may publish a dispatch error. Recovery already recorded its stop cause.
+func (e *Engine) continueAfterDispatch(runEpoch uint64, err error) bool {
+	if err == nil {
+		return true
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.validateRunLocked(runEpoch) != nil {
+		return false
+	}
+	e.lastError = err.Error()
+	return true
+}
+
 // forceStopped abandons a start/resume that failed during transport setup. It
 // releases the loop context installed by begin/beginResume so a startup
 // failure never leaks a live cancel func, and a concurrent Stop that already

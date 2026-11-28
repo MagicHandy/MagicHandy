@@ -73,6 +73,13 @@ still owns the operation lock, sends zero, and drains the link and pacer.
 These tests check software commands and acknowledgments. No physical device
 was connected.
 
+During release testing, the motion race suite exposed a queued dispatch
+tick that could replace a sampler fault with “motion run was invalidated”
+after the fault Stop. The loop now checks run ownership before recording
+an error. A deterministic regression delivers the late tick after Stop
+and after a replacement run takes ownership. Both preserve the original
+diagnostic and issue zero device commands.
+
 When hosted chat uses a separate local planner or refusal fallback, the
 local editor reads that worker's status and targets it for Load and Unload.
 Editing a local runtime drains and releases the old worker. A regression
