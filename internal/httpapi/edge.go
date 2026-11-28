@@ -92,7 +92,7 @@ func (s *Server) stillEdge(ctx context.Context, returning bool) (modes.Status, e
 	at := time.Now()
 	state, err := engine.HoldStill(ctx, current.PlanID)
 	done(state.Paused)
-	if err == nil {
+	if err == nil && state.StillHold {
 		s.recordEdge(ctx, session, at, seq, "still", 0)
 	}
 	return s.modes.Status(), err

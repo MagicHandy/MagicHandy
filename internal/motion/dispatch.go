@@ -63,7 +63,7 @@ func (e *Engine) dispatchThrough(
 	result, err := e.transport.AppendPoints(commandCtx, appendCommand)
 	cleanup()
 	if err == nil && edgeFrame {
-		e.acknowledgeEdgeFrame(runEpoch, appendCommand.Tempo, lastSample)
+		e.acknowledgeEdgeFrame(runEpoch, result, appendCommand.Tempo, lastSample)
 	}
 	e.recordTransportResult(reason, lastSample, transport.Command{
 		Kind:      transport.CommandKindPointsAdd,

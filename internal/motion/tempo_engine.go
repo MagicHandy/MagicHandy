@@ -301,7 +301,7 @@ func (e *Engine) sendTempoLocked(ctx context.Context, epoch uint64) error {
 	e.mu.Unlock()
 	result, err := e.transport.AppendPoints(commandCtx, command)
 	if err == nil && edgeFrame {
-		e.acknowledgeEdgeFrame(epoch, frame, nil)
+		e.acknowledgeEdgeFrame(epoch, result, frame, nil)
 	}
 	if errors.Is(err, transport.ErrTempoUnavailable) {
 		e.mu.Lock()

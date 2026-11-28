@@ -11,7 +11,11 @@ vibration-only playback. Both Edge actions now reject that session before
 canceling chat, and the engine also guards the linear-start path. The desktop
 and phone consume the same availability and playback-phase facts. Hold still
 uses ordinary Pause. Return resumes that specific paused motion, subject to
-the controller, Stop generation and current settings.
+the controller, Stop generation and current settings. A transport returning
+without an error can still report an unconfirmed Stop. In that case the engine
+cancels the loop, reports the missing acknowledgment and withholds the still
+hold's Return control. Moving-hold phases also require an accepted append
+for the correct stream.
 
 The ordinary moving hold still chooses a pace inside the saved limits. It uses
 a shorter span only when the original motion's commanded travel and stroke
@@ -74,8 +78,8 @@ read-backs, unrelated numbers, and a present-tense request to set the current
 pace. With the 76-second, 24% plan active, the only new human message in a
 three-press trial was “That was too close.” Both Terra and Sol acknowledged
 it without changing the running plan. After an early manual Return, both chose
-110 seconds and a gentle 20% return on the next press. These were model choices
-observed in this trial. Terra's feedback evaluation used one planner generation. A valid
+110 seconds and a gentle 20% return on the next press. In a repeat Terra chose
+120 seconds and Sol chose 110, both at 20%. Each press used one planner generation. A valid
 answer is applied directly within the existing bounds. Returning early,
 asking for the same duration, and choosing a different duration are all valid.
 The model uses previous settings as evidence when the person comments on them.

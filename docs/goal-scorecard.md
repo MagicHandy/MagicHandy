@@ -8,11 +8,11 @@ main entry loaded by the embedded release UI.
 
 | Measurement | Alpha.91 | Edge update |
 | --- | ---: | ---: |
-| Stripped Go core | 25,712,128 bytes | 25,777,152 bytes |
+| Stripped Go core | 25,712,128 bytes | 25,778,176 bytes |
 | Main JavaScript, raw / gzip | 836,187 / 225,705 bytes | 837,486 / 226,006 bytes |
 | Main CSS, raw / gzip | 196,634 / 33,953 bytes | 196,888 / 33,993 bytes |
-| Prepare a 35% full sweep's holding target | 1.62 ms | 0.11 ms |
-| Allocated per hold preparation | 331,685 bytes | 26,973 bytes |
+| Prepare a 35% full sweep's holding target | 1.72 ms | 0.15 ms |
+| Allocated per hold preparation | 331,659 bytes | 26,972 bytes |
 
 The recipe benchmark used five runs of 250 presses. Its median includes
 validation of the fitted hold. The optional feedback table retains two

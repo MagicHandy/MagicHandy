@@ -466,6 +466,9 @@ func (e *Engine) pause(ctx context.Context, reason, planID string) (ActiveMotion
 	stopCommand := transport.StopCommand{Reason: reason}
 	result, err := e.transport.Stop(stopCtx, stopCommand)
 	stopCancel()
+	if planID != "" && err == nil && !result.ConfirmsStop() {
+		err = errors.New("device did not acknowledge Hold still")
+	}
 	e.recordTransportResult(reason, nil, transport.Command{Kind: transport.CommandKindStop, Stop: &stopCommand}, result, err)
 	e.finishStopped(result, err)
 
@@ -476,6 +479,8 @@ func (e *Engine) pause(ctx context.Context, reason, planID string) (ActiveMotion
 		e.paused = true
 		e.stillHold = planID != "" && err == nil
 		e.traceStateLocked("paused", phaseAnnotation(true))
+	} else if planID != "" && err == nil {
+		err = errRunInvalidated
 	}
 	e.endStopBarrierLocked()
 	e.mu.Unlock()
