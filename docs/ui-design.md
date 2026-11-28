@@ -2,17 +2,19 @@
 
 ## Holding control
 
-Edge lives immediately above permanent Stop, including the mobile footer. It
-requests a gentle holding target without inference; a separate Return action
-appears while holding. Repeated Edge presses never become Return. Backend
-snapshots own status/countdown. Edge requires active live motion and controller
-access; Stop stays usable while Edge is pending, read-only or offline. The hint
-distinguishes prompt application from queued physical motion. During a hold,
-Autopilot displays holding state and retains Pause instead of a misleading Due
-clock. See the [evaluation](edge-hold-review-2026-10-23.md). The phone remote
-renders the same control beside its Stop in the remote footer, admitted by the
-phone's own session view rather than desktop control
-([ADR 0055](decisions/0055-phone-remote-keepalive-and-edge.md)).
+Edge sits above permanent Stop. A press requests gentler live movement through
+the shared engine. **Hold still** pauses the stream and requires an explicit
+**Return**. A second moving Edge press requests a manual hold. The desktop and
+phone use the backend’s eligibility decision. Vibration-only playback, video
+and finite programs are ineligible. Stop stays reachable for offline and
+read-only clients and while either Edge action is pending.
+
+The control shows **Edge requested** while previously queued movement may
+still play, **Slowing** during the estimated transition, and the holding
+state or countdown afterward. The estimate uses the stream clock and the
+transport’s acknowledgment. Autopilot retains Pause during a moving hold.
+The phone acts through its own authenticated controller session.
+[Edge measurements](edge-feedback-review.md) · [Phone control](decisions/0055-phone-remote-keepalive-and-edge.md)
 
 ## Setup and settings
 

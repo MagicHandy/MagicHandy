@@ -46,6 +46,7 @@ type actualSchemaColumn struct {
 }
 
 var requiredSchemaTables = []schemaTable{
+	{name: "chat_edge_holds", columns: columns("session_id:TEXT", "pressed_ns:INTEGER", "after_seq:INTEGER", "kind:TEXT", "holding_pace:INTEGER", "planned_seconds:INTEGER", "return_pace:INTEGER", "return_style:TEXT"), primaryKey: []string{"session_id", "pressed_ns"}},
 	{name: "chat_failures", columns: columns("seq:INTEGER", "session_id:TEXT", "metadata:TEXT", "details:TEXT"), primaryKey: []string{"seq"}},
 	{name: "notice_preferences", columns: columns("owner_key:TEXT", "account_id:TEXT?", "hidden_json:TEXT", "updated_at:INTEGER"), primaryKey: []string{"owner_key"}},
 	{name: "access_audit", columns: columns("seq:INTEGER", "event_id:TEXT", "occurred_at:INTEGER", "document:TEXT"), primaryKey: []string{"seq"}},
@@ -140,6 +141,7 @@ var requiredSchemaIndexes = []schemaIndex{
 }
 
 var requiredSchemaForeignKeys = []schemaForeignKey{
+	{table: "chat_edge_holds", column: "session_id", parentTable: "chat_sessions", parentColumn: "id", onDelete: "CASCADE"},
 	{table: "chat_failures", column: "session_id", parentTable: "chat_sessions", parentColumn: "id", onDelete: "CASCADE"},
 	{table: "notice_preferences", column: "account_id", parentTable: "user_accounts", parentColumn: "id", onDelete: "CASCADE"},
 	{table: "user_recovery_codes", column: "user_id", parentTable: "user_accounts", parentColumn: "id", onDelete: "CASCADE"},

@@ -682,6 +682,7 @@ func composePrompt(set PromptSet, memories []string, patterns []PatternChoice, c
 	}
 	sections = appendPromptSection(sections, "playback_outputs", "Playback outputs", playbackOutputInstructions(capabilities, motionContext))
 	sections = appendPromptSection(sections, "output_guard", "Final output guard", promptOutputGuard(capabilities))
+	sections = appendPromptSection(sections, "edge_observation", "Last Edge press in this chat", motionContext.edgeInstructions())
 	texts := make([]string, 0, len(sections))
 	for _, section := range sections {
 		texts = append(texts, section.Text)

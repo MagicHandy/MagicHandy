@@ -81,7 +81,7 @@ func (s *Server) remoteSession(ctx context.Context, viewer remote.Identity) *rem
 		snapshot := engine.Snapshot()
 		session.Running, session.Paused = snapshot.Running, snapshot.Paused
 		// The same admission as the desktop's Edge button.
-		session.EdgeAllowed = snapshot.Running && !snapshot.Paused && snapshot.Target.MediaID == "" && snapshot.Target.ProgramID == ""
+		session.EdgeAllowed, session.EdgePhase, session.StillHold = snapshot.EdgeAllowed, snapshot.EdgePhase, snapshot.StillHold
 	}
 	if s.modes != nil {
 		if edge := s.modes.Status().EdgeHold; edge != nil {
@@ -139,12 +139,7 @@ func (s *Server) remoteEdge(w http.ResponseWriter, r *http.Request, returning bo
 		writeError(w, http.StatusConflict, errRemoteNoSession)
 		return
 	}
-	var err error
-	if returning {
-		_, err = s.resumeEdge(r.Context())
-	} else {
-		_, err = s.activateEdge(r.Context())
-	}
+	_, err := s.edgeControl(r, returning)
 	outcome, status := "success", http.StatusOK
 	if err != nil {
 		outcome, status = "rejected", http.StatusConflict
@@ -161,11 +156,15 @@ func (s *Server) remoteEdge(w http.ResponseWriter, r *http.Request, returning bo
 // planning in flight are canceled without the Stop path; their own contexts and
 // plan guards reject late work. A canceled reply names Edge as its cause.
 func (s *Server) activateEdge(ctx context.Context) (modes.Status, error) {
+	session, seq := s.edgeChatAnchor(ctx)
+	return s.modes.ActivateChatEdge(ctx, session, seq)
+}
+
+func (s *Server) interruptForEdge() {
 	s.chatWorkspace.CancelTurnsWithCause(errChatEdge)
 	s.motionReview.invalidate()
 	s.cloudRequests.invalidate()
 	s.autopilotHold.release()
-	return s.modes.ActivateEdge(ctx)
 }
 
 func (s *Server) resumeEdge(ctx context.Context) (modes.Status, error) {

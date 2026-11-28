@@ -40,3 +40,30 @@ func TestEdgePlanStrictContract(t *testing.T) {
 		t.Fatalf("lost refusal: %v", err)
 	}
 }
+
+func TestEdgeFeedbackLeavesAcceptedDurationAndReturnUntouched(t *testing.T) {
+	raw := `{"hold_seconds":45,"resume_speed_percent":35,"resume_style":"previous"}`
+	provider := &scriptedProvider{responses: []string{raw, raw}}
+	service := EdgeService{Provider: provider, Feedback: &EdgeFeedback{Observation: EdgeObservation{Kind: "moving", PlannedSeconds: 45, ReturnPace: 35}, Remarks: []string{"That timing worked. Keep choosing what fits."}}}
+	for range 2 {
+		plan, _, err := service.Complete(t.Context(), EdgeContext{PreviousSpeed: 50, HoldingSpeed: 20, SpeedMin: 20, SpeedMax: 50})
+		if err != nil || plan != (EdgePlan{HoldSeconds: 45, ResumeSpeed: 35, ResumeStyle: "previous"}) {
+			t.Fatalf("altered model choice %+v %v", plan, err)
+		}
+	}
+}
+
+func TestEdgeChatAcknowledgementReflectsSelectedPlanner(t *testing.T) {
+	state := MotionContext{EdgePlannerReadsFeedback: true}
+	if state.edgeInstructions() != "" {
+		t.Fatal("injected a button cue before the first press")
+	}
+	state.RecentEdge = &EdgeObservation{Kind: "moving", HoldingPace: 22}
+	if prompt := state.edgeInstructions(); !strings.Contains(prompt, "NEXT press") || !strings.Contains(prompt, `"holding_pace_percent":22`) {
+		t.Fatal("missing future feedback or actual holding pace")
+	}
+	state.EdgePlannerReadsFeedback = false
+	if prompt := state.edgeInstructions(); !strings.Contains(prompt, "mechanical state only") || !strings.Contains(prompt, `"holding_pace_percent":22`) {
+		t.Fatal("chat must still know the observed action and its planner's limits")
+	}
+}

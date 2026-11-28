@@ -182,6 +182,10 @@ func (s FlowSpec) validateLayers() error {
 // FlowTarget compiles the score once into immutable kinematic content. The
 // ordinary engine owns playback, live limit changes, handoffs and Stop.
 func FlowTarget(spec FlowSpec, settings config.MotionSettings) (MotionTarget, error) {
+	return flowTarget(spec, settings, TargetSourceMotionLab)
+}
+
+func flowTarget(spec FlowSpec, settings config.MotionSettings, source string) (MotionTarget, error) {
 	if err := spec.Validate(settings); err != nil {
 		return MotionTarget{}, err
 	}
@@ -206,7 +210,14 @@ func FlowTarget(spec FlowSpec, settings config.MotionSettings) (MotionTarget, er
 		curve, err = compileStrokeCurve(spec, settings.HandyModel)
 		name = "Stroke score"
 	default:
-		curve, err = compileFlowCurve(spec, settings.HandyModel)
+		recipe := spec
+		if source == "edge" {
+			// The button supplies identical steady cycles. Fitting four into
+			// the repeating curve saves work at press time. The semantic score
+			// below keeps its normal loop length for later expressive edits.
+			recipe.LoopCycles = 4
+		}
+		curve, err = compileFlowCurve(recipe, settings.HandyModel)
 	}
 	if err != nil {
 		return MotionTarget{}, err
@@ -220,7 +231,7 @@ func FlowTarget(spec FlowSpec, settings config.MotionSettings) (MotionTarget, er
 	content := &preparedMotion{id: id, name: name, curve: curve, stream: window,
 		referenceRate: referenceTravelRateForSpeed(peakSpeed, settings.HandyModel),
 		acceleration:  acceleration, jerk: jerk}
-	return MotionTarget{Label: name, Source: TargetSourceMotionLab,
+	return MotionTarget{Label: name, Source: source,
 		SpeedPercent: peakSpeed, Flow: CloneFlowSpec(&spec), prepared: content}, nil
 }
 

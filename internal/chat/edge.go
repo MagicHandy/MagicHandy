@@ -11,8 +11,8 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
 
-// EdgeContext is technical state for a button action. It deliberately carries
-// no conversation, persona or history and adds no work to ordinary chat turns.
+// EdgeContext describes the mechanical state at a button press. Optional
+// same-chat observations and remarks are supplied separately to EdgeService.
 type EdgeContext struct {
 	TempoOnly     bool `json:"tempo_only,omitempty"`
 	PreviousSpeed int  `json:"previous_speed_percent"`
@@ -35,9 +35,21 @@ type EdgeService struct {
 	Provider      llm.Provider
 	Model         string
 	ReasoningMode string
+	Feedback      *EdgeFeedback
 }
 
 const edgePurpose = "The person pressed Edge to request a slow, gentle holding interval as a counterpoint to the current motion."
+
+func (state *MotionContext) edgeInstructions() string {
+	if state == nil || state.RecentEdge == nil {
+		return ""
+	}
+	edge, _ := json.Marshal(state.RecentEdge)
+	if !state.EdgePlannerReadsFeedback {
+		return "The button has already acted. Its recorded settings are " + string(edge) + ". Use these facts for read-back. The selected planner uses mechanical state only. Acknowledge feedback without promising it will be applied to the next press. Change current motion only on an explicit request."
+	}
+	return "The button has already acted. Its recorded settings are " + string(edge) + ". When the user gives feedback for the NEXT press, use no current motion action and acknowledge in the future tense, for example: ‘I'll give you more time to settle next time.’ Never claim that feedback just changed playback. Follow a separate explicit request about current motion normally."
+}
 
 func edgeMessages(state EdgeContext, purpose string) []llm.Message {
 	encoded, _ := json.Marshal(state)
@@ -57,16 +69,27 @@ func (s EdgeService) Complete(ctx context.Context, state EdgeContext) (EdgePlan,
 }
 
 func (s EdgeService) complete(ctx context.Context, state EdgeContext, purpose string) (EdgePlan, string, error) {
-	schema, _ := json.Marshal(map[string]any{
-		"type": "object", "additionalProperties": false,
-		"required": []string{"hold_seconds", "resume_speed_percent", "resume_style"},
-		"properties": map[string]any{
-			"hold_seconds":         map[string]any{"type": "integer", "minimum": 8, "maximum": 180},
-			"resume_speed_percent": map[string]any{"type": "integer", "minimum": state.SpeedMin, "maximum": state.SpeedMax},
-			"resume_style":         map[string]any{"type": "string", "enum": []string{"previous", "gentle"}},
-		},
-	})
-	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{Model: s.Model, Messages: edgeMessages(state, purpose), JSONSchema: schema, MaxTokens: 192, ReasoningMode: s.ReasoningMode, Temperature: 0.6}, nil)
+	properties := map[string]any{
+		"hold_seconds":         map[string]any{"type": "integer", "minimum": 8, "maximum": 180},
+		"resume_speed_percent": map[string]any{"type": "integer", "minimum": state.SpeedMin, "maximum": state.SpeedMax},
+		"resume_style":         map[string]any{"type": "string", "enum": []string{"previous", "gentle"}},
+	}
+	required := []string{"hold_seconds", "resume_speed_percent", "resume_style"}
+	messages := edgeMessages(state, purpose)
+	feedback := s.Feedback
+	if feedback != nil && len(feedback.Remarks) > 0 {
+		previous, _ := json.Marshal(feedback.Observation)
+		var quoted strings.Builder
+		for _, line := range feedback.Remarks {
+			encoded, _ := json.Marshal(line)
+			quoted.WriteString("\n- ")
+			quoted.Write(encoded)
+		}
+		messages[0].Content += " Use the latest applicable human request for the next Edge, including exact seconds and pace within the current bounds. Corrections take priority. A close call or a return that felt too soon calls for more settling time and a gentler return. Unrelated remarks have no bearing. The earlier plan describes what happened, never what you must choose."
+		messages[1].Content += "\nPrevious button record: " + string(previous) + "\nQuoted human remarks, oldest to newest:" + quoted.String()
+	}
+	schema, _ := json.Marshal(map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties})
+	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{Model: s.Model, Messages: messages, JSONSchema: schema, MaxTokens: 192, ReasoningMode: s.ReasoningMode, Temperature: 0.6}, nil)
 	if err != nil {
 		return EdgePlan{}, raw, err
 	}

@@ -32,6 +32,11 @@ func (s *Server) prepareInteractiveChatService(ctx context.Context, w http.Respo
 		return chat.Service{}, false
 	}
 	motionContext := s.chatTurnMotion(settings, promptContext.UserRequests, sessionID)
+	if edgeFeedbackEnabled(settings.LLM) {
+		source, _ := s.store.Snapshot()
+		motionContext.RecentEdge = s.chatEdgeObservation(ctx, sessionID)
+		motionContext.EdgePlannerReadsFeedback = edgePlannerUsesFeedback(source.LLM)
+	}
 	s.addManualVibrationResumeContext(ctx, &motionContext)
 	_, repairAvailable := ctx.Value(chatRepairContextKey{}).(*chatRepairCandidate)
 	return chat.Service{

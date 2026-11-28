@@ -56,6 +56,9 @@ type Engine struct {
 	tempoTail          int64
 	tempoOutput        bool
 	linearStartPending bool
+	stillHold          bool
+	edgeFrameAccepted  bool
+	edgeHandoffMillis  int64
 	mu                 sync.Mutex
 	commandMu          sync.Mutex
 	targetMu           sync.Mutex
@@ -118,6 +121,9 @@ type Engine struct {
 // CurrentSample follows the playback clock; LastSample is the accepted
 // transport-buffer tail and may be ahead of playback.
 type ActiveMotionState struct {
+	EdgeAllowed                bool                           `json:"edge_allowed,omitempty"`
+	EdgePhase                  string                         `json:"edge_phase,omitempty"`
+	StillHold                  bool                           `json:"still_hold,omitempty"`
 	PreviousFlowSpeedPercent   int                            `json:"-"`
 	LinkedSession              *transport.LinkedSessionStatus `json:"linked_session,omitempty"`
 	Running                    bool                           `json:"running"`
@@ -303,6 +309,10 @@ func (e *Engine) applyTarget(ctx context.Context, target MotionTarget, reason st
 	}
 	e.mu.Lock()
 	promote := (e.plan.Target.VibrationOnly || e.plan.Target.TempoOnly) && !target.VibrationOnly && !target.TempoOnly
+	if promote && reason == "edge_hold" {
+		e.mu.Unlock()
+		return e.Snapshot(), ErrEdgeUnavailable
+	}
 	settings, admission, envelope := e.settings, e.stopGeneration, e.plan.Target.Vibration
 	if promote {
 		e.linearStartPending = true
@@ -329,6 +339,10 @@ func (e *Engine) applyTarget(ctx context.Context, target MotionTarget, reason st
 		}
 		return e.startAtGeneration(ctx, target, settings, admission+1, true)
 	}
+	return e.applyRunningTarget(ctx, runEpoch, target, reason)
+}
+
+func (e *Engine) applyRunningTarget(ctx context.Context, runEpoch uint64, target MotionTarget, reason string) (ActiveMotionState, error) {
 	// Replenishing the current run and sending an admitted replacement are
 	// engine work. Superseding a chat/planner request must not abort an upload
 	// that may already be accepted, forcing recovery Stop. Each wire command
@@ -337,7 +351,14 @@ func (e *Engine) applyTarget(ctx context.Context, target MotionTarget, reason st
 	// before committing the replacement, so canceled queued edits never apply.
 	dispatchCtx, cancelDispatch := context.WithTimeout(context.WithoutCancel(ctx), targetDispatchTimeout)
 	defer cancelDispatch()
-	if err := e.ensureLeadBuffer(dispatchCtx, runEpoch, "retarget_lead_points"); err != nil {
+	edgeEntry := target.Source == "edge" && reason == "edge_hold"
+	var err error
+	if edgeEntry {
+		err = e.ensurePlaybackHealthy(dispatchCtx, runEpoch, reason)
+	} else {
+		err = e.ensureLeadBuffer(dispatchCtx, runEpoch, "retarget_lead_points")
+	}
+	if err != nil {
 		return e.Snapshot(), err
 	}
 	if err := ctx.Err(); err != nil {
@@ -350,6 +371,11 @@ func (e *Engine) applyTarget(ctx context.Context, target MotionTarget, reason st
 		return e.Snapshot(), err
 	}
 	err = e.dispatchInteractiveEdit(dispatchCtx, runEpoch, "retarget_points")
+	if edgeEntry && err == nil {
+		// Top up with the newly admitted gentle trajectory. Already delivered
+		// or in-flight frames remain owned by the transport.
+		err = e.ensureLeadBuffer(dispatchCtx, runEpoch, "edge_lead_points")
+	}
 	return e.Snapshot(), err
 }
 
@@ -393,10 +419,26 @@ func (e *Engine) RefreshSettings(ctx context.Context, settings config.MotionSett
 // Resume can continue the same pattern where it left off. It is not the
 // safety path: Stop clears everything, Pause deliberately retains state.
 func (e *Engine) Pause(ctx context.Context, reason string) (ActiveMotionState, error) {
+	return e.pause(ctx, reason, "")
+}
+
+// HoldStill pauses exactly the running plan on which the user pressed Edge.
+func (e *Engine) HoldStill(ctx context.Context, planID string) (ActiveMotionState, error) {
+	if planID == "" {
+		return e.Snapshot(), errRunInvalidated
+	}
+	return e.pause(ctx, "edge_still", planID)
+}
+
+func (e *Engine) pause(ctx context.Context, reason, planID string) (ActiveMotionState, error) {
 	if reason == "" {
 		reason = "pause"
 	}
 	e.mu.Lock()
+	if planID != "" && (ctx.Err() != nil || e.plan.ID != planID || !e.running || e.starting || e.completing || e.plan.Target.VibrationOnly) {
+		e.mu.Unlock()
+		return e.Snapshot(), errRunInvalidated
+	}
 	if e.paused && !e.running {
 		e.mu.Unlock()
 		return e.Snapshot(), nil
@@ -432,6 +474,7 @@ func (e *Engine) Pause(ctx context.Context, reason string) (ActiveMotionState, e
 	e.mu.Lock()
 	if e.stopGeneration == pauseAdmission {
 		e.paused = true
+		e.stillHold = planID != "" && err == nil
 		e.traceStateLocked("paused", phaseAnnotation(true))
 	}
 	e.endStopBarrierLocked()
@@ -536,6 +579,7 @@ func (e *Engine) beginResume(loopCtx context.Context, reason string, cancel cont
 	e.streamID = fmt.Sprintf("%s-%06d", e.streamIDPrefix, e.generation)
 	e.startedAt = e.now()
 	e.nextSampleMillis = 0
+	e.edgeFrameAccepted, e.edgeHandoffMillis = false, 0
 	e.pendingEdit = nil
 	e.lastResult = nil
 	e.lastError = ""
@@ -689,6 +733,7 @@ func (e *Engine) begin(ctx context.Context, loopCtx context.Context, target Moti
 	e.settings = settings
 	e.startedAt = e.now()
 	e.nextSampleMillis = 0
+	e.edgeFrameAccepted, e.edgeHandoffMillis = false, 0
 	e.pendingEdit = nil
 	e.lastSample = nil
 	e.currentSample = nil
@@ -787,6 +832,9 @@ func (e *Engine) retarget(runEpoch uint64, target MotionTarget, reason string) e
 		return err
 	}
 	bridgeInserted := e.installEditLocked(previous, previousTransition, &next, handoff, estimatedMillis)
+	if target.Source == "edge" {
+		e.edgeFrameAccepted, e.edgeHandoffMillis = false, handoff
+	}
 	if target.Vibration != nil && (e.vibration == nil || e.vibration.spec != *target.Vibration) {
 		e.setVibrationLocked(*target.Vibration, estimatedMillis)
 	}

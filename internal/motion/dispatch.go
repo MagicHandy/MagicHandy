@@ -52,6 +52,7 @@ func (e *Engine) dispatchThrough(
 		Points:   points,
 	}
 	e.mu.Lock()
+	edgeFrame := e.plan.Target.Source == "edge"
 	appendCommand.VibrationOnly = e.plan.Target.VibrationOnly
 	appendCommand.TempoOnly = e.plan.Target.TempoOnly
 	appendCommand.SpeedPercent = e.plan.Target.SpeedPercent
@@ -61,6 +62,9 @@ func (e *Engine) dispatchThrough(
 	e.mu.Unlock()
 	result, err := e.transport.AppendPoints(commandCtx, appendCommand)
 	cleanup()
+	if err == nil && edgeFrame {
+		e.acknowledgeEdgeFrame(runEpoch, appendCommand.Tempo, lastSample)
+	}
 	e.recordTransportResult(reason, lastSample, transport.Command{
 		Kind:      transport.CommandKindPointsAdd,
 		PointsAdd: &appendCommand,

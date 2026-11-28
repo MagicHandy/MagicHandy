@@ -1,5 +1,23 @@
 # Goal Scorecard
 
+## 2026-11-27 — Edge admission, responsiveness and feedback
+
+Matched Windows amd64 builds used Go 1.26.11, `CGO_ENABLED=0`,
+`-buildvcs=false -trimpath` and `-ldflags "-s -w"`. Asset sizes refer to the
+main entry loaded by the embedded release UI.
+
+| Measurement | Alpha.91 | Edge update |
+| --- | ---: | ---: |
+| Stripped Go core | 25,712,128 bytes | 25,777,152 bytes |
+| Main JavaScript, raw / gzip | 836,187 / 225,705 bytes | 837,486 / 226,006 bytes |
+| Main CSS, raw / gzip | 196,634 / 33,953 bytes | 196,888 / 33,993 bytes |
+| Prepare a 35% full sweep's holding target | 1.62 ms | 0.11 ms |
+| Allocated per hold preparation | 331,685 bytes | 26,973 bytes |
+
+The recipe benchmark used five runs of 250 presses. Its median includes
+validation of the fitted hold. The optional feedback table retains two
+mechanical observations per qualifying chat. [Motion, transport and model trials](edge-feedback-review.md)
+
 ## 2026-11-27 — Cloud refill timing and saved chat evidence
 
 On Windows amd64 with Go 1.26.11, the stripped pure-Go core measured

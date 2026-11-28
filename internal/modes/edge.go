@@ -12,13 +12,16 @@ import (
 // EdgeInput describes the mechanical state after an immediate holding override.
 // Only the normal mode loop may schedule its automatic return.
 type EdgeInput struct {
-	TempoOnly     bool `json:"tempo_only,omitempty"`
-	PreviousSpeed int  `json:"previous_speed_percent"`
-	HoldingSpeed  int  `json:"holding_speed_percent"`
-	SpeedMin      int  `json:"speed_min_percent"`
-	SpeedMax      int  `json:"resume_speed_max_percent"`
-	RangeMin      int  `json:"holding_range_min_percent"`
-	RangeMax      int  `json:"holding_range_max_percent"`
+	ChatSessionID string    `json:"-"`
+	AfterSeq      int64     `json:"-"`
+	PressedAt     time.Time `json:"-"`
+	TempoOnly     bool      `json:"tempo_only,omitempty"`
+	PreviousSpeed int       `json:"previous_speed_percent"`
+	HoldingSpeed  int       `json:"holding_speed_percent"`
+	SpeedMin      int       `json:"speed_min_percent"`
+	SpeedMax      int       `json:"resume_speed_max_percent"`
+	RangeMin      int       `json:"holding_range_min_percent"`
+	RangeMax      int       `json:"holding_range_max_percent"`
 }
 
 // EdgeDecision chooses a bounded duration and return, never raw device commands.
@@ -38,12 +41,14 @@ func (d EdgeDecision) Validate(input EdgeInput) error {
 
 // EdgeStatus is the backend-owned holding control snapshot.
 type EdgeStatus struct {
-	Active          bool   `json:"active"`
-	Phase           string `json:"phase"`
-	Automatic       bool   `json:"automatic"`
-	ResumeAt        string `json:"resume_at,omitempty"`
-	ResumeInSeconds int    `json:"resume_in_seconds,omitempty"`
-	Message         string `json:"message,omitempty"`
+	ChatSessionID   string    `json:"-"`
+	PressedAt       time.Time `json:"-"`
+	Active          bool      `json:"active"`
+	Phase           string    `json:"phase"`
+	Automatic       bool      `json:"automatic"`
+	ResumeAt        string    `json:"resume_at,omitempty"`
+	ResumeInSeconds int       `json:"resume_in_seconds,omitempty"`
+	Message         string    `json:"message,omitempty"`
 }
 
 type edgeState struct {
@@ -66,8 +71,16 @@ type guardedEdgeEngine interface {
 // ActivateEdge does no model work and never starts a stopped or paused device.
 // The plan-ID guard and engine Stop generation protect the physical handoff.
 func (m *Manager) ActivateEdge(ctx context.Context) (Status, error) {
+	return m.ActivateChatEdge(ctx, "", 0)
+}
+
+// ActivateChatEdge binds observations to the conversation active at the press.
+func (m *Manager) ActivateChatEdge(ctx context.Context, sessionID string, afterSeq int64) (Status, error) {
 	m.userControlMu.Lock()
 	defer m.userControlMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return m.Status(), err
+	}
 	m.reconcileEdge()
 	m.mu.Lock()
 	if m.edge != nil && m.edge.status.Active {
@@ -75,6 +88,9 @@ func (m *Manager) ActivateEdge(ctx context.Context) (Status, error) {
 		m.cancelOperationLocked()
 		m.suspendEdgeLocked("Holding until you choose Return.")
 		m.mu.Unlock()
+		if m.options.EdgeAdmitted != nil {
+			m.options.EdgeAdmitted()
+		}
 		return m.Status(), nil
 	}
 	m.mu.Unlock()
@@ -83,10 +99,11 @@ func (m *Manager) ActivateEdge(ctx context.Context) (Status, error) {
 		return m.Status(), errors.New("start motion before using Edge")
 	}
 	before := engine.Snapshot()
-	if !before.Running || before.Paused || before.Target.MediaID != "" || before.Target.ProgramID != "" {
-		return m.Status(), errors.New("start live motion to use Edge; video and timed programs are not supported")
+	if !before.AllowsMovingHold() {
+		return m.Status(), motion.ErrEdgeUnavailable
 	}
-	holding, err := motion.HoldingTarget(before, m.options.Settings())
+	settings := m.options.Settings()
+	holding, err := motion.HoldingTarget(before, settings)
 	if err != nil {
 		return m.Status(), err
 	}
@@ -106,11 +123,19 @@ func (m *Manager) ActivateEdge(ctx context.Context) (Status, error) {
 	m.speech.deadline, m.speech.waitingID = time.Time{}, ""
 	automatic := m.loop.mode == ModeAutopilot && m.options.DecideEdge != nil
 	e := &edgeState{status: EdgeStatus{Active: true, Phase: "applying", Automatic: automatic}, previous: cloneTarget(before.Target), holding: holding, keepalive: keepalive}
-	e.input = edgeInput(before, holding, m.options.Settings().SpeedMinPercent, m.options.Settings().SpeedMaxPercent)
+	e.input = edgeInput(before, holding, settings.SpeedMinPercent, settings.SpeedMaxPercent)
+	e.input.ChatSessionID, e.input.AfterSeq, e.input.PressedAt = sessionID, afterSeq, m.options.Now()
+	e.status.ChatSessionID, e.status.PressedAt = sessionID, e.input.PressedAt
 	m.edge = e
 	m.events.decisionSource = "edge_hold"
 	m.mu.Unlock()
+	if m.options.EdgeAdmitted != nil {
+		m.options.EdgeAdmitted()
+	}
 	state, err := engine.ApplyTargetIfCurrent(ctx, holding, "edge_hold", before.PlanID)
+	if err == nil && m.options.EdgeApplied != nil {
+		m.options.EdgeApplied(ctx, e.input)
+	}
 	m.mu.Lock()
 	if m.edge == e {
 		if err != nil {
@@ -219,6 +244,9 @@ func (m *Manager) planEdgeReturn(ctx context.Context, e *edgeState, generation u
 	}
 	m.mu.Unlock()
 	if accepted {
+		if m.options.EdgePlanned != nil {
+			m.options.EdgePlanned(operation, e.input, plan)
+		}
 		m.trace(ModeAutopilot, "edge_return_planned", &diagnostics.MotionTracePlanner{Mode: ModeAutopilot, Event: "edge_return_planned", SpeedPercent: plan.ResumeSpeed, DurationMillis: int64(plan.HoldSeconds) * 1000}, plan.ResumeStyle)
 	} else if err != nil && operation.Err() == nil {
 		m.trace(ModeAutopilot, "edge_return_unavailable", nil, "gentle hold retained; manual return required")

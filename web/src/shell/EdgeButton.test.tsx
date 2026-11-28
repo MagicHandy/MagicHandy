@@ -8,18 +8,36 @@ import english from "../i18n/locales/en.json";
 import type { ModesStatus } from "../api/types";
 
 const app = vi.hoisted(() => ({ refresh: vi.fn(), show: vi.fn(), readOnly: false, backendOnline: true, stale: false,
-  state: { modes: {} as ModesStatus, stop_sequence: 0, motion: { available: true, engine: { running: true, paused: false, target: {} } } },
+  state: { modes: {} as ModesStatus, stop_sequence: 0, motion: { available: true, engine: { running: true, paused: false, edge_allowed: true, edge_phase: "", still_hold: false, target: {} } } },
 }));
 vi.mock("../state/app-state", () => ({ useAppState: () => app, useMotionState: () => null, useToast: () => ({ show: app.show }) }));
 vi.mock("../api/client", async (original) => ({ ...await original<typeof import("../api/client")>(), api: {
   activateEdge: vi.fn(async () => ({})), resumeEdge: vi.fn(async () => ({})), stopMotion: vi.fn(async () => ({})),
+  holdStill: vi.fn(async () => ({})), resumeStillHold: vi.fn(async () => ({})),
 } }));
 
 describe("EdgeButton", () => {
+  it("renders the engine's queued and slowing phases and offers an explicit still hold", async () => {
+    app.state.modes.edge_hold = { active: true, phase: "planning", automatic: true };
+    app.state.motion.engine.edge_phase = "queued";
+    const view = render(<EdgeButton />);
+    expect(screen.getByRole("status")).toHaveTextContent("Edge requested");
+    app.state.motion.engine.edge_phase = "slowing";
+    view.rerender(<EdgeButton />);
+    expect(screen.getByRole("status")).toHaveTextContent("Slowing");
+    fireEvent.click(screen.getByRole("button", { name: "Hold still" }));
+    await waitFor(() => expect(api.holdStill).toHaveBeenCalledTimes(1));
+    app.state.motion.engine.edge_allowed = false;
+    app.state.motion.engine.still_hold = true;
+    view.rerender(<EdgeButton />);
+    expect(screen.getByRole("status")).toHaveTextContent("Holding still");
+    fireEvent.click(screen.getByRole("button", { name: "Resume from still hold" }));
+    await waitFor(() => expect(api.resumeStillHold).toHaveBeenCalledTimes(1));
+  });
   beforeEach(() => {
     vi.clearAllMocks(); setLocaleForTest("en", english);
     app.readOnly = false; app.backendOnline = true; app.stale = false; app.state.modes = {};
-    app.state.motion.engine = { running: true, paused: false, target: {} };
+    app.state.motion.engine = { running: true, paused: false, edge_allowed: true, edge_phase: "", still_hold: false, target: {} };
   });
   it("submits once and waits for backend holding state", async () => {
     const view = render(<EdgeButton />);
@@ -41,6 +59,7 @@ describe("EdgeButton", () => {
     if (kind === "stopped") app.state.motion.engine.running = false;
     if (kind === "media") app.state.motion.engine.target = { media_id: "movie" };
     if (kind === "program") app.state.motion.engine.target = { program_id: "finite" };
+    if (["paused", "stopped", "media", "program"].includes(kind)) app.state.motion.engine.edge_allowed = false;
     render(<><EdgeButton /><StopButton /></>);
     expect(screen.getByRole("button", { name: "Edge — gentle hold" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Emergency stop all motion" })).toBeEnabled();

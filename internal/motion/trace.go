@@ -53,6 +53,7 @@ func (e *Engine) snapshotLocked(target MotionTarget) ActiveMotionState {
 		state.StartedAt = e.startedAt.UTC().Format(timeFormatRFC3339Nano)
 	}
 	state.Tempo = e.tempoReadoutLocked(playbackMillis)
+	e.addEdgeSnapshotLocked(&state, playbackMillis)
 	if e.plan.ID != "" {
 		state.Phase = e.frozenPhase
 		if e.running {

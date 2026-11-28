@@ -589,6 +589,8 @@ export const api = {
   resumeMotion: () => request("POST", "/api/motion/resume", {}),
   resetMotionPosition: (failureID: string) => request<import("./types").MotionInfo>("POST", "/api/motion/reset-position", { failure_id: failureID }),
   activateEdge: () => request("POST", "/api/motion/edge", {}),
+  holdStill: () => request("POST", "/api/motion/edge?style=still", {}),
+  resumeStillHold: () => request("POST", "/api/motion/edge/resume?style=still", {}),
   resumeEdge: () => request("POST", "/api/motion/edge/resume", {}),
   applyQuick: (patch: Partial<{
     speed_min_percent: number;
@@ -664,10 +666,10 @@ export const api = {
   remoteEventsURL: () => `/api/remote/events?client_id=${encodeURIComponent(clientId)}`,
   remoteKeepalive: (signal?: AbortSignal) =>
     request<{ keepalive: { renewed: boolean; lease_expires_in_ms?: number } }>("POST", "/api/remote/keepalive", {}, signal),
-  remoteEdge: (stopSequence: number) =>
-    request<{ session: RemoteSession }>("POST", "/api/remote/edge", {}, undefined, { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
-  remoteEdgeResume: (stopSequence: number) =>
-    request<{ session: RemoteSession }>("POST", "/api/remote/edge/resume", {}, undefined, { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  remoteEdge: (stopSequence: number, still = false) =>
+    request<{ session: RemoteSession }>("POST", still ? "/api/remote/edge?style=still" : "/api/remote/edge", {}, undefined, { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  remoteEdgeResume: (stopSequence: number, still = false) =>
+    request<{ session: RemoteSession }>("POST", still ? "/api/remote/edge/resume?style=still" : "/api/remote/edge/resume", {}, undefined, { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
   saveMediaPlayback: (patch: Partial<{
     script_smoothing_percent: number;
     peak_rounding_ms: number;

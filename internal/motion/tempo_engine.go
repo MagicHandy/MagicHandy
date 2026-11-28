@@ -297,8 +297,12 @@ func (e *Engine) sendTempoLocked(ctx context.Context, epoch uint64) error {
 		return nil
 	}
 	command := transport.AppendPointsCommand{StreamID: e.streamID, Tempo: frame, TempoOnly: e.plan.Target.TempoOnly}
+	edgeFrame := command.TempoOnly && e.plan.Target.Source == "edge"
 	e.mu.Unlock()
 	result, err := e.transport.AppendPoints(commandCtx, command)
+	if err == nil && edgeFrame {
+		e.acknowledgeEdgeFrame(epoch, frame, nil)
+	}
 	if errors.Is(err, transport.ErrTempoUnavailable) {
 		e.mu.Lock()
 		if e.runEpoch == epoch {

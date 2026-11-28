@@ -277,6 +277,14 @@ about building new motion.
 
 ## Capability gates and live-provider evidence
 
+The Edge button requests a hold through the shared engine. Any model assigned
+to **Advanced (with reasoning)** can use a same-chat button observation and
+human feedback when it plans the next automatic moving hold. The selected
+planner's conversation-sharing policy governs access. An Advanced conversation
+model can describe the last button press and whether its planner can use the
+feedback. A request for the next hold leaves current playback alone.
+[Edge feedback and model routing](decisions/0076-edge-feedback-in-the-planning-role.md)
+
 The sidebar and Settings > Model expose the persisted Dynamic / Pattern Library
 / Off mode list. Pattern mode additionally exposes area focus and experimental
 patterns. Disabled methods are absent from the prompt and stripped from model

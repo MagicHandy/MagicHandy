@@ -163,6 +163,8 @@ type Session struct {
 	Running      bool      `json:"running,omitempty"`
 	Paused       bool      `json:"paused,omitempty"`
 	EdgeAllowed  bool      `json:"edge_allowed,omitempty"`
+	EdgePhase    string    `json:"edge_phase,omitempty"`
+	StillHold    bool      `json:"still_hold,omitempty"`
 	Edge         *EdgeHold `json:"edge,omitempty"`
 }
 
@@ -180,7 +182,7 @@ func (s *Session) Equal(other *Session) bool {
 	if s == nil || other == nil {
 		return s == other
 	}
-	if s.Alive != other.Alive || s.Running != other.Running || s.Paused != other.Paused || s.EdgeAllowed != other.EdgeAllowed {
+	if s.Alive != other.Alive || s.Running != other.Running || s.Paused != other.Paused || s.EdgeAllowed != other.EdgeAllowed || s.EdgePhase != other.EdgePhase || s.StillHold != other.StillHold {
 		return false
 	}
 	if s.Edge == nil || other.Edge == nil {

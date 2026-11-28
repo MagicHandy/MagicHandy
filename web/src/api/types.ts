@@ -86,6 +86,9 @@ export interface MotionPaceSummary {
 }
 
 export interface EngineSnapshot {
+  edge_allowed?: boolean;
+  edge_phase?: string;
+  still_hold?: boolean;
   linked_session?: { status: "ready" | "degraded" | "failed"; continue_healthy: boolean; retired_devices: string[]; idle_devices?: string[] };
   running: boolean;
   starting?: boolean;

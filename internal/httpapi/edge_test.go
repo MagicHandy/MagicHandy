@@ -56,7 +56,10 @@ func TestEdgeFreestyleKeepsOneStream(t *testing.T) {
 	if _, err := s.modes.Start(t.Context(), modes.ModeFreestyle); err != nil {
 		t.Fatal(err)
 	}
-	waitForEngineRunning(t, s)
+	waitUntil(t, "Freestyle ready for a live edit", func() bool {
+		engine := s.currentMotionEngine()
+		return engine != nil && engine.Snapshot().EdgeAllowed
+	})
 	stream := s.currentMotionEngine().Snapshot().StreamID
 	if _, err := s.modes.ActivateEdge(t.Context()); err != nil {
 		t.Fatal(err)

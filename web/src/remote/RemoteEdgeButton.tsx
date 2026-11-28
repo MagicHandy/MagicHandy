@@ -10,6 +10,7 @@ export function RemoteEdgeButton({ remote }: { remote: RemoteView }) {
   const session = state?.session;
   const sequence = state?.stop_sequence;
   const unavailable = remote.stale || !session?.alive || sequence === undefined || Boolean(state?.other_account);
-  return <EdgeControl className="remote-edge" hold={session?.edge} allowed={Boolean(session?.edge_allowed)} unavailable={unavailable}
+  return <EdgeControl className="remote-edge" hold={session?.edge} allowed={Boolean(session?.edge_allowed)} phase={session?.edge_phase} still={session?.still_hold} unavailable={unavailable}
+    holdStill={() => api.remoteEdge(sequence ?? 0, true)} resumeStill={() => api.remoteEdgeResume(sequence ?? 0, true)}
     activate={() => api.remoteEdge(sequence ?? 0)} resume={() => api.remoteEdgeResume(sequence ?? 0)} onSettled={remote.refresh} />;
 }
