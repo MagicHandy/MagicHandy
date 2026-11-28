@@ -6,12 +6,27 @@ Accepted. The reviewed unsigned policy was established after Microsoft completed
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.64 and alpha.66 through alpha.91
+reviewed alpha.14 through alpha.64 and alpha.66 through alpha.92
 package-preserving releases. The latest amendment is dated 2026-11-27.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.92 amendment
+
+The owner requested a release of the reviewed Edge controls, long-chat
+recall, local model management and device teardown fixes. The
+[Edge trials](../edge-feedback-review.md) and
+[app review](../app-peer-review-2026-11-27.md) record the model replays,
+commanded motion and simulated transport checks. Physical device onset
+and travel were outside these measurements.
+
+This amendment admits `0.1.0-alpha.92` to `ReviewedUnsignedPublic`.
+The recorded Microsoft case, exact-artifact Defender scan, vulnerability
+checks on all five payload executables, installer lifecycle, manifest and
+two-file checksum verification are required for publication. The Windows
+x64 setup and portable ZIP come from the immutable tag on `main`.
 
 ### Alpha.91 amendment
 
@@ -1250,11 +1265,11 @@ Negative:
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
   alpha.8 through alpha.11, alpha.13 through alpha.64, or alpha.66 through
-  alpha.91 version, the recorded Microsoft case ID, the
+  alpha.92 version, the recorded Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
 - Alpha.9 through alpha.11, alpha.13 through alpha.64, and alpha.66 through
-  alpha.91 reviewed setup workflows run Microsoft Defender against the exact
+  alpha.92 reviewed setup workflows run Microsoft Defender against the exact
   public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,

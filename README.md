@@ -3,13 +3,13 @@
 <h1>MagicHandy</h1>
 <p><strong>Your devices. Your models. Your control.</strong></p>
 <p>A free, open-source, local-first app for AI chat, hands-free motion, patterns, and video funscript playback with <a href="https://www.thehandy.com/">The Handy</a> and other supported devices.</p>
-<p><a href="https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.88"><strong>Download for Windows</strong></a> &nbsp;·&nbsp; <a href="docs/getting-started.md">Getting started</a> &nbsp;·&nbsp; <a href="#documentation">Documentation</a> &nbsp;·&nbsp; <a href="https://discord.gg/N2fTuQzxC3">Discord</a></p>
+<p><a href="https://github.com/MagicHandy/MagicHandy/releases"><strong>Download for Windows</strong></a> &nbsp;·&nbsp; <a href="docs/getting-started.md">Getting started</a> &nbsp;·&nbsp; <a href="#documentation">Documentation</a> &nbsp;·&nbsp; <a href="https://discord.gg/N2fTuQzxC3">Discord</a></p>
 
 </div>
 
 > [!IMPORTANT]
-> **Early alpha · v0.1.0-alpha.88 · Windows x64 · unsigned.** Expect rough
-> edges. Read the [release notes](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.88)
+> **Early alpha · Windows x64 · unsigned.** Expect rough
+> edges. Read the [notes for the version you download](https://github.com/MagicHandy/MagicHandy/releases)
 > for tested behavior and known limitations.
 
 App data stays on your machine. Cloud models, device services, and remote
@@ -28,8 +28,8 @@ access are optional choices you enable explicitly.
 
 ## Install on Windows
 
-Download [**v0.1.0-alpha.88**](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.88)
-and choose the package that suits you:
+Open the [Windows releases](https://github.com/MagicHandy/MagicHandy/releases)
+and choose a package from the newest alpha.
 
 | Package | Best for | Updating |
 |---|---|---|
