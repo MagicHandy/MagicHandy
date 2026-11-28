@@ -36,11 +36,11 @@ describe("phone Edge", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edge — gentle hold" }));
     await waitFor(() => expect(refresh).toHaveBeenCalled());
     expect(api.remoteEdge).toHaveBeenCalledWith(7);
-    expect(screen.queryByRole("button", { name: "Resume from gentle hold" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Return" })).toBeNull();
 
     rendered.rerender(<RemoteEdgeButton remote={view({ session: { ...live, edge: { active: true, phase: "holding", automatic: false } } }, { refresh })} />);
     expect(screen.getByRole("status")).toHaveTextContent("Holding until you resume");
-    fireEvent.click(screen.getByRole("button", { name: "Resume from gentle hold" }));
+    fireEvent.click(screen.getByRole("button", { name: "Return" }));
     await waitFor(() => expect(api.remoteEdgeResume).toHaveBeenCalledWith(7));
   });
 

@@ -31,7 +31,7 @@ describe("EdgeButton", () => {
     app.state.motion.engine.still_hold = true;
     view.rerender(<EdgeButton />);
     expect(screen.getByRole("status")).toHaveTextContent("Holding still");
-    fireEvent.click(screen.getByRole("button", { name: "Resume from still hold" }));
+    fireEvent.click(screen.getByRole("button", { name: "Return" }));
     await waitFor(() => expect(api.resumeStillHold).toHaveBeenCalledTimes(1));
   });
   beforeEach(() => {
@@ -44,12 +44,35 @@ describe("EdgeButton", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edge — gentle hold" }));
     await waitFor(() => expect(app.refresh).toHaveBeenCalled());
     expect(api.activateEdge).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("button", { name: "Resume from gentle hold" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Return" })).toBeNull();
     app.state.modes.edge_hold = { active: true, phase: "holding", automatic: true };
     view.rerender(<EdgeButton />);
     expect(screen.getByRole("status")).toHaveTextContent("Autopilot will resume");
-    fireEvent.click(screen.getByRole("button", { name: "Resume from gentle hold" }));
+    fireEvent.click(screen.getByRole("button", { name: "Return" }));
     await waitFor(() => expect(api.resumeEdge).toHaveBeenCalledTimes(1));
+  });
+  it("uses the manager's ownership for Return and mutes only countdown ticks", () => {
+    app.state.motion.engine.edge_phase = "holding";
+    const view = render(<EdgeButton />);
+    expect(screen.queryByRole("button", { name: "Return" })).toBeNull();
+    expect(screen.queryByText("Holding until you resume")).toBeNull();
+    app.state.modes.edge_hold = { active: true, phase: "holding", automatic: true, resume_in_seconds: 15 };
+    view.rerender(<EdgeButton />);
+    expect(screen.getByRole("status")).toHaveAttribute("aria-live", "off");
+    app.state.motion.engine.edge_phase = "slowing";
+    view.rerender(<EdgeButton />);
+    expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
+    expect(screen.getByRole("button", { name: "Return" })).toBeEnabled();
+  });
+  it("names the still request while waiting for transport confirmation", async () => {
+    let finish!: (value: object) => void;
+    vi.mocked(api.holdStill).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    render(<EdgeButton />);
+    fireEvent.click(screen.getByRole("button", { name: "Hold still" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Pausing");
+    expect(screen.getByRole("button", { name: "Edge — gentle hold" })).toHaveTextContent("Edge");
+    finish({});
+    await waitFor(() => expect(app.refresh).toHaveBeenCalled());
   });
   it.each(["offline", "readOnly", "stale", "paused", "stopped", "media", "program"])("disables Edge for %s while Stop stays reachable", (kind) => {
     if (kind === "offline") app.backendOnline = false;

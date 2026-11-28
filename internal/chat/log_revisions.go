@@ -17,9 +17,9 @@ func publishMessageRevision(ctx context.Context, tx *sql.Tx, sessionID string, s
 
 // ConversationHeadContext reads display and recovery heads in one snapshot.
 func (l *MessageLog) ConversationHeadContext(ctx context.Context, sessionID string) (seq, revision int64, err error) {
-	err = l.db.SQL().QueryRowContext(ctx, `SELECT s.revision, COALESCE(MAX(m.seq), 0)
-		FROM chat_sessions s LEFT JOIN messages m ON m.session_id = s.id AND m.committed = 1
-		WHERE s.id = ? GROUP BY s.id, s.revision`, sessionID).Scan(&revision, &seq)
+	err = l.db.SQL().QueryRowContext(ctx, `SELECT s.revision,
+		COALESCE((SELECT MAX(seq) FROM messages WHERE session_id = s.id AND committed = 1), 0)
+		FROM chat_sessions s WHERE s.id = ?`, sessionID).Scan(&revision, &seq)
 	if err == sql.ErrNoRows {
 		err = ErrChatSessionNotFound
 	}

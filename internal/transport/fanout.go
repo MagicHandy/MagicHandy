@@ -151,7 +151,7 @@ func (f *FanOut) Stop(ctx context.Context, command StopCommand) (CommandResult, 
 		result.OK = false
 		result.Error = err.Error()
 	}
-	if err == nil && command.Fault {
+	if err == nil && result.ConfirmsStop() && command.Fault {
 		f.mu.Lock()
 		f.faultStopped = true
 		f.mu.Unlock()
@@ -161,7 +161,7 @@ func (f *FanOut) Stop(ctx context.Context, command StopCommand) (CommandResult, 
 
 // SetStrokeWindow applies the shared stroke window to each active participant.
 func (f *FanOut) SetStrokeWindow(ctx context.Context, command StrokeWindowCommand) (CommandResult, error) {
-	return f.dispatchParallel(ctx, func(t Transport) (CommandResult, error) { return t.SetStrokeWindow(ctx, command) })
+	return f.dispatchSelected(ctx, scalarAll, CommandKindStrokeWindow, func(t Transport) (CommandResult, error) { return t.SetStrokeWindow(ctx, command) })
 }
 
 // AppendPoints sends the shared engine's points to each active participant.
@@ -180,7 +180,7 @@ func (f *FanOut) AppendPoints(ctx context.Context, command AppendPointsCommand) 
 	case command.Vibration != nil:
 		only = scalarVibration
 	}
-	return f.dispatchSelected(ctx, only, func(t Transport) (CommandResult, error) { return t.AppendPoints(ctx, command) })
+	return f.dispatchSelected(ctx, only, CommandKindPointsAdd, func(t Transport) (CommandResult, error) { return t.AppendPoints(ctx, command) })
 }
 
 // A frame with no points updates one scalar channel's owners only.
@@ -225,11 +225,7 @@ func (f *FanOut) TakesTempo() bool {
 // Independent device I/O shares the same frame and runs concurrently, so each
 // extra Cloud device does not add another round trip to every append. All writes
 // finish before rollback/return; no detached command can outlive this operation.
-func (f *FanOut) dispatchParallel(ctx context.Context, send func(Transport) (CommandResult, error)) (CommandResult, error) {
-	return f.dispatchSelected(ctx, scalarAll, send)
-}
-
-func (f *FanOut) dispatchSelected(ctx context.Context, only scalarSelection, send func(Transport) (CommandResult, error)) (CommandResult, error) {
+func (f *FanOut) dispatchSelected(ctx context.Context, only scalarSelection, kind CommandKind, send func(Transport) (CommandResult, error)) (CommandResult, error) {
 	started := time.Now()
 	f.mu.Lock()
 	fault, retired := f.fault, f.inactiveSnapshotLocked()
@@ -264,6 +260,7 @@ func (f *FanOut) dispatchSelected(ctx context.Context, only scalarSelection, sen
 	wait.Wait()
 	var result CommandResult
 	var latency int64
+	allConfirmed := true
 	for index, p := range f.participants {
 		if retired[index] {
 			continue
@@ -283,11 +280,13 @@ func (f *FanOut) dispatchSelected(ctx context.Context, only scalarSelection, sen
 			return results[index], f.failedCommand(ctx, p.Label, err)
 		}
 		latency = max(latency, results[index].LatencyMillis)
+		allConfirmed = results[index].Confirms(kind) && allConfirmed
 		if !result.OK {
 			result = results[index]
 		}
 	}
 	result.LatencyMillis = max(result.LatencyMillis, latency, time.Since(started).Milliseconds())
+	result.OK = result.OK && allConfirmed
 	return result, nil
 }
 
@@ -384,8 +383,8 @@ func (f *FanOut) retire(ctx context.Context, index int, cause error) bool {
 	}
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	_, err := f.participants[index].Transport.Stop(stopCtx, StopCommand{Reason: "linked_participant_failed", Fault: true})
-	if err != nil {
+	result, err := f.participants[index].Transport.Stop(stopCtx, StopCommand{Reason: "linked_participant_failed", Fault: true})
+	if err != nil || !result.ConfirmsStop() {
 		f.mu.Lock()
 		f.warnings += " Stop could not be confirmed."
 		f.mu.Unlock()

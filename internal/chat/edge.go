@@ -32,10 +32,12 @@ type EdgePlan struct {
 
 // EdgeService uses a compact technical contract only after Edge is pressed.
 type EdgeService struct {
-	Provider      llm.Provider
-	Model         string
-	ReasoningMode string
-	Feedback      *EdgeFeedback
+	Provider              llm.Provider
+	Model                 string
+	ReasoningMode         string
+	MaxTokens             int
+	ReasoningBudgetTokens int
+	Feedback              *EdgeFeedback
 }
 
 const edgePurpose = "The person pressed Edge to request a slow, gentle holding interval as a counterpoint to the current motion."
@@ -86,10 +88,15 @@ func (s EdgeService) complete(ctx context.Context, state EdgeContext, purpose st
 			quoted.Write(encoded)
 		}
 		messages[0].Content += " Use the latest applicable human request for the next Edge, including exact seconds and pace within the current bounds. Corrections take priority. A close call or a return that felt too soon calls for more settling time and a gentler return. Unrelated remarks have no bearing. The earlier plan describes what happened, never what you must choose."
-		messages[1].Content += "\nPrevious button record: " + string(previous) + "\nQuoted human remarks, oldest to newest:" + quoted.String()
+		messages[1].Content += "\nEarlier button record: " + string(previous) + "\nQuoted human remarks, oldest to newest:" + quoted.String()
 	}
 	schema, _ := json.Marshal(map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties})
-	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{Model: s.Model, Messages: messages, JSONSchema: schema, MaxTokens: 192, ReasoningMode: s.ReasoningMode, Temperature: 0.6}, nil)
+	limit := s.MaxTokens
+	if limit <= 0 {
+		limit = 192
+	}
+	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{Model: s.Model, Messages: messages, JSONSchema: schema,
+		MaxTokens: limit, ReasoningMode: s.ReasoningMode, ReasoningBudgetTokens: s.ReasoningBudgetTokens, Temperature: 0.6}, nil)
 	if err != nil {
 		return EdgePlan{}, raw, err
 	}

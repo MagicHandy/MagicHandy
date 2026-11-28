@@ -12,7 +12,9 @@ read-only clients and while either Edge action is pending.
 The control shows **Edge requested** while previously queued movement may
 still play, **Slowing** during the estimated transition, and the holding
 state or countdown afterward. The estimate uses the stream clock and the
-transport’s acknowledgment. Autopilot retains Pause during a moving hold.
+transport’s acknowledgment. Return appears while the backend owns the hold.
+Screen readers announce phase changes and the selected pending action, while
+the per-second countdown stays quiet. Autopilot retains Pause during a moving hold.
 The phone acts through its own authenticated controller session.
 [Edge measurements](edge-feedback-review.md) · [Phone control](decisions/0055-phone-remote-keepalive-and-edge.md)
 

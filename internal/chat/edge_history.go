@@ -54,12 +54,13 @@ func (l *MessageLog) RecordEdgePlan(ctx context.Context, session string, at time
 	})
 }
 
-func (l *MessageLog) lastEdgeBefore(ctx context.Context, session string, before int64) (*EdgeObservation, int64, error) {
+func (l *MessageLog) lastEdgeBefore(ctx context.Context, session string, before int64, preferMoving bool) (*EdgeObservation, int64, error) {
 	var item EdgeObservation
 	var anchor, pressed int64
 	err := l.db.SQL().QueryRowContext(ctx, `SELECT kind,holding_pace,planned_seconds,return_pace,return_style,after_seq,pressed_ns
-		FROM chat_edge_holds WHERE session_id=? AND pressed_ns<? ORDER BY pressed_ns DESC LIMIT 1`,
-		session, before).Scan(&item.Kind, &item.HoldingPace, &item.PlannedSeconds, &item.ReturnPace, &item.ReturnStyle, &anchor, &pressed)
+		FROM chat_edge_holds WHERE session_id=? AND pressed_ns<?
+		ORDER BY (? AND kind<>'still') DESC, pressed_ns DESC LIMIT 1`,
+		session, before, preferMoving).Scan(&item.Kind, &item.HoldingPace, &item.PlannedSeconds, &item.ReturnPace, &item.ReturnStyle, &anchor, &pressed)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, 0, nil
 	}
@@ -69,23 +70,25 @@ func (l *MessageLog) lastEdgeBefore(ctx context.Context, session string, before 
 
 // LatestEdge supplies a fact only in the conversation where the press occurred.
 func (l *MessageLog) LatestEdge(ctx context.Context, session string) (*EdgeObservation, error) {
-	item, _, err := l.lastEdgeBefore(ctx, session, 1<<63-1)
+	item, _, err := l.lastEdgeBefore(ctx, session, 1<<63-1, false)
 	return item, err
 }
 
 // EdgeFeedbackBefore reads first reactions, named hold notes and latest
 // corrections. Skip oversized lines whole so truncation cannot change a request.
 func (l *MessageLog) EdgeFeedbackBefore(ctx context.Context, session string, press time.Time, through int64) (*EdgeFeedback, error) {
-	item, after, err := l.lastEdgeBefore(ctx, session, press.UnixNano())
+	item, after, err := l.lastEdgeBefore(ctx, session, press.UnixNano(), true)
 	if err != nil || item == nil || through <= after {
 		return nil, err
 	}
 	rows, err := l.db.SQL().QueryContext(ctx, `WITH remarks AS (
 		SELECT seq,content FROM messages WHERE session_id=? AND committed=1 AND role='user'
 		AND seq>? AND seq<=? AND length(CAST(content AS BLOB)) BETWEEN 1 AND 384
-		AND EXISTS (SELECT 1 FROM chat_edge_holds WHERE session_id=? AND pressed_ns=? AND after_seq=?)
+		AND EXISTS (SELECT 1 FROM chat_edge_holds WHERE session_id=? AND pressed_ns=? AND after_seq=? AND kind<>'still')
 	), opening AS (SELECT * FROM remarks ORDER BY seq LIMIT 2),
-	named AS (SELECT * FROM remarks WHERE instr(lower(content),'edge')>0 OR instr(lower(content),'hold')>0 ORDER BY seq DESC LIMIT 2),
+	named AS (SELECT * FROM remarks WHERE EXISTS (
+		SELECT 1 FROM json_each('["edge","hold","al límite","mantener inmóvil","no limite","manter parado","寸止め","静止","边缘控制"]')
+		WHERE instr(lower(remarks.content), value)>0) ORDER BY seq DESC LIMIT 2),
 	latest AS (SELECT * FROM remarks ORDER BY seq DESC LIMIT 3)
 	SELECT content FROM (SELECT * FROM opening UNION SELECT * FROM named UNION SELECT * FROM latest) ORDER BY seq`,
 		session, after, through, session, press.UnixNano(), through)

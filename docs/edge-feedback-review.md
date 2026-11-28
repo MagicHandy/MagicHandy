@@ -45,6 +45,23 @@ transition. Smaller refill trials sometimes improved the median. At 50% a
 retains the existing healthy Cloud refill budget and starvation checks.
 Physical Cloud and Bluetooth onset still need measurement.
 
+### Independent review
+
+Claude Opus 5.5 at Max and Gemini 4 Neon at XHigh reviewed PR #383 and the
+alpha.91 app. Both agreed on a reproduced race in which a status poll could
+remove Return while the engine was installing a moving hold. A delayed second
+Edge press during a still pause also canceled chat. The manager now checks
+the live plan and pause state before treating a press as a repeat. A failed
+attempt releases the scheduler when the prior plan is still running. A hold
+already installed before a later transport error keeps a manual Return.
+A stopped engine cannot restart as a consequence of a failed hold.
+
+Linked playback requires a matching positive receipt from every participating
+owner before it confirms the shared frame. A retired connection that never
+received Stop leaves an explicit unconfirmed warning. On desktop and phone,
+only an owned hold offers Return. The pending caption identifies the pressed
+action, and screen readers announce phase changes while the countdown stays quiet.
+
 ## Model qualification
 
 The baseline used the same real mechanical state with the previous technical
@@ -72,6 +89,22 @@ connection, automatic structured output passed two of six checks. Prompt-only
 output passed zero of six. The automatic run acknowledged the exact request
 but never produced an accepted return plan. These runs explain why the catalog
 continues to recommend Intermediate for 12B.
+
+Both reviewers identified the 192-token Edge output cap as a problem for
+reasoning providers. With the same Gemma 4 12B and automatic structured output
+on the same compatible endpoint, we repeated three planner requests twice.
+At 192 tokens all six responses were incomplete (median 2.49 seconds).
+With the selected Advanced allowance of 1,024 tokens, all six produced valid
+plans (median 8.34 seconds). Both exact requests succeeded in both runs.
+Both close-call responses extended the hold. One kept the earlier return pace
+and missed the stricter lower-pace criterion, for five of six intent passes.
+The button takes effect before this generation. The output allowance is a
+ceiling, and the planner still gets one attempt.
+
+A still pause between moving presses now preserves feedback already given for
+the next moving hold. At most three mechanical observations are retained per
+chat. An earlier deleted instruction or a late committed reply invalidates a
+pending plan through the conversation's publication revision. [Decision and retention](decisions/0076-edge-feedback-in-the-planning-role.md)
 
 The fixtures cover implicit relief, exact requests, later corrections,
 read-backs, unrelated numbers, and a present-tense request to set the current
@@ -115,3 +148,7 @@ The local review retained the overview and detailed curves under
 `.scratch/edge/edge-comparison.png`. Use `TestEdgeVisualReview` and the
 motion atlas renderer to generate the waveforms.
 [Visual review procedure](motion-visual-review.md)
+
+The peer review added the twelve matched output-budget trials, including the
+six incomplete responses. They introduced no additional trajectory. The
+repeat export produced the same 47 steady entries and 140 transitions.

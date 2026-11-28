@@ -8,15 +8,19 @@ main entry loaded by the embedded release UI.
 
 | Measurement | Alpha.91 | Edge update |
 | --- | ---: | ---: |
-| Stripped Go core | 25,712,128 bytes | 25,778,176 bytes |
-| Main JavaScript, raw / gzip | 836,187 / 225,705 bytes | 837,486 / 226,006 bytes |
+| Stripped Go core | 25,712,128 bytes | 25,786,880 bytes |
+| Main JavaScript, raw / gzip | 836,187 / 225,705 bytes | 838,321 / 226,270 bytes |
 | Main CSS, raw / gzip | 196,634 / 33,953 bytes | 196,888 / 33,993 bytes |
-| Prepare a 35% full sweep's holding target | 1.72 ms | 0.15 ms |
-| Allocated per hold preparation | 331,659 bytes | 26,972 bytes |
+| Prepare a 35% full sweep's holding target | 2.12 ms | 0.13 ms |
+| Allocated per hold preparation | 331,683 bytes | 26,976 bytes |
 
 The recipe benchmark used five runs of 250 presses. Its median includes
-validation of the fitted hold. The optional feedback table retains two
-mechanical observations per qualifying chat. [Motion, transport and model trials](edge-feedback-review.md)
+validation of the fitted hold. The optional feedback table retains two moving
+observations and the latest still pause per qualifying chat. In a 1,000-message
+SQLite fixture, checking the planner's conversation revision with a 48 KiB
+last message cost 10.7 µs and 1,160 bytes per check, down from 126.4 µs and
+51,206 bytes. These are medians from five runs of 500 checks on one CPU.
+[Motion, transport and model trials](edge-feedback-review.md)
 
 ## 2026-11-27 — Cloud refill timing and saved chat evidence
 

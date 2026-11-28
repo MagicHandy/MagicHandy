@@ -29,7 +29,7 @@ func (e *Engine) addEdgeSnapshotLocked(state *ActiveMotionState, playback int64)
 // A reserved cursor is not a receipt. A late reply for the previous path
 // cannot move the displayed phase into an unacknowledged hold.
 func (e *Engine) acknowledgeEdgeFrame(epoch uint64, receipt transport.CommandResult, tempo *transport.TempoFrame, tail *MotionSample) {
-	if !receipt.OK || receipt.Kind != transport.CommandKindPointsAdd {
+	if !receipt.Confirms(transport.CommandKindPointsAdd) {
 		return
 	}
 	e.mu.Lock()

@@ -117,10 +117,14 @@ func (s *Server) decideEdge(ctx context.Context, input modes.EdgeInput) (modes.E
 	}
 	defer release()
 	service := chat.EdgeService{Provider: provider, Model: settings.LLM.Model, ReasoningMode: settings.LLM.ReasoningMode}
-	if edgeFeedbackEnabled(settings.LLM) && settings.LLM.MotionPlanner.ContextPolicy != config.ContextTechnical && input.ChatSessionID == admission.session && input.ChatSessionID != "" {
-		read, cancel := context.WithTimeout(providerCtx, 25*time.Millisecond)
-		service.Feedback, _ = s.chatLog.EdgeFeedbackBefore(read, input.ChatSessionID, input.PressedAt, input.AfterSeq)
-		cancel()
+	if edgeFeedbackEnabled(settings.LLM) {
+		service.MaxTokens = max(settings.LLM.MaxOutputTokens, settings.LLM.ConnectionOutputFloor())
+		service.ReasoningBudgetTokens = managedLlamaReasoningBudget(settings.LLM, s.managedLLM.Snapshot().Runtime.Current)
+		if settings.LLM.MotionPlanner.ContextPolicy != config.ContextTechnical && input.ChatSessionID == admission.session && input.ChatSessionID != "" {
+			read, cancel := context.WithTimeout(providerCtx, 25*time.Millisecond)
+			service.Feedback, _ = s.chatLog.EdgeFeedbackBefore(read, input.ChatSessionID, input.PressedAt, input.AfterSeq)
+			cancel()
+		}
 	}
 	state := chat.EdgeContext{TempoOnly: input.TempoOnly, PreviousSpeed: input.PreviousSpeed, HoldingSpeed: input.HoldingSpeed,
 		SpeedMin: input.SpeedMin, SpeedMax: input.SpeedMax, RangeMin: input.RangeMin, RangeMax: input.RangeMax}

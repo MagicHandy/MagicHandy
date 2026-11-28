@@ -82,18 +82,6 @@ func (m *Manager) ActivateChatEdge(ctx context.Context, sessionID string, afterS
 		return m.Status(), err
 	}
 	m.reconcileEdge()
-	m.mu.Lock()
-	if m.edge != nil && m.edge.status.Active {
-		m.loop.generation++
-		m.cancelOperationLocked()
-		m.suspendEdgeLocked("Holding until you choose Return.")
-		m.mu.Unlock()
-		if m.options.EdgeAdmitted != nil {
-			m.options.EdgeAdmitted()
-		}
-		return m.Status(), nil
-	}
-	m.mu.Unlock()
 	engine, ok := m.options.Current().(guardedEdgeEngine)
 	if !ok {
 		return m.Status(), errors.New("start motion before using Edge")
@@ -102,12 +90,22 @@ func (m *Manager) ActivateChatEdge(ctx context.Context, sessionID string, afterS
 	if !before.AllowsMovingHold() {
 		return m.Status(), motion.ErrEdgeUnavailable
 	}
+	if repeated, err := m.latchActiveEdge(ctx, before.PlanID); repeated {
+		if err == nil && m.options.EdgeAdmitted != nil {
+			m.options.EdgeAdmitted()
+		}
+		return m.Status(), err
+	}
 	settings := m.options.Settings()
 	holding, err := motion.HoldingTarget(before, settings)
 	if err != nil {
 		return m.Status(), err
 	}
 	m.mu.Lock()
+	if err := ctx.Err(); err != nil {
+		m.mu.Unlock()
+		return m.Status(), err
+	}
 	if m.user.paused {
 		m.mu.Unlock()
 		return m.Status(), errors.New("a hold or pause is already active")
@@ -138,25 +136,54 @@ func (m *Manager) ActivateChatEdge(ctx context.Context, sessionID string, afterS
 	}
 	m.mu.Lock()
 	if m.edge == e {
-		if err != nil {
-			m.suspendEdgeLocked("The hold could not be applied. Use Stop if needed.")
-			e.status.Active, e.status.Phase = false, "failed"
-			if state.Target.Source == "edge" && state.PlanID != before.PlanID {
-				e.applied, e.planID = true, state.PlanID
-			}
-		} else {
-			e.applied, e.planID = true, state.PlanID
-			e.status.Phase = "holding"
-			if m.loop.generation != generation {
-				m.suspendEdgeLocked("The session changed. Resume when ready.")
-			}
-			if e.status.Automatic {
-				e.status.Phase = "planning"
-			}
-		}
+		m.finishEdgeApplyLocked(e, before.PlanID, generation, state, err)
 	}
 	m.mu.Unlock()
 	return m.Status(), err
+}
+
+func (m *Manager) finishEdgeApplyLocked(e *edgeState, previousPlan string, generation uint64, state motion.ActiveMotionState, err error) {
+	if err != nil {
+		if state.Running && state.Target.Source == "edge" && state.PlanID != previousPlan {
+			e.applied, e.planID = true, state.PlanID
+			m.suspendEdgeLocked("Holding until you choose Return.")
+			return
+		}
+		m.edge = nil
+		if !state.Running && !state.Paused {
+			m.user.stopped = true
+			m.chat.target, m.chat.keepalive = nil, false
+		} else if state.PlanID == previousPlan && m.loop.generation == generation && !m.user.stopped {
+			m.chat.keepalive = e.keepalive
+		}
+		return
+	}
+	e.applied, e.planID = true, state.PlanID
+	e.status.Phase = "holding"
+	if m.loop.generation != generation {
+		m.suspendEdgeLocked("The session changed. Resume when ready.")
+	} else if e.status.Automatic {
+		e.status.Phase = "planning"
+	}
+}
+
+// A second press on the same running hold revokes its automatic Return.
+func (m *Manager) latchActiveEdge(ctx context.Context, planID string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.edge == nil || !m.edge.status.Active {
+		return false, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return true, err
+	}
+	if m.user.paused || m.edge.planID != planID {
+		return true, motion.ErrEdgeUnavailable
+	}
+	m.loop.generation++
+	m.cancelOperationLocked()
+	m.suspendEdgeLocked("Holding until you choose Return.")
+	return true, nil
 }
 
 // suspendEdgeLocked preserves the gentle motion but revokes automatic return
@@ -377,10 +404,14 @@ func (m *Manager) adoptEdgeReturnLocked(e *edgeState, state motion.ActiveMotionS
 func (m *Manager) reconcileEdge() {
 	m.mu.Lock()
 	expected := m.edge
-	m.mu.Unlock()
-	if expected == nil {
+	if expected == nil || !expected.applied || m.user.paused {
+		m.mu.Unlock()
 		return
 	}
+	// A status read can overlap installation or replacement of a plan.
+	// Only reconcile an engine snapshot taken for this same applied hold.
+	planID, generation := expected.planID, m.loop.generation
+	m.mu.Unlock()
 	engine := m.options.Current()
 	var state motion.ActiveMotionState
 	if engine != nil {
@@ -389,7 +420,7 @@ func (m *Manager) reconcileEdge() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	e := m.edge
-	if e != expected || !e.applied || m.user.paused || state.Paused {
+	if e != expected || e.planID != planID || m.loop.generation != generation || m.user.paused || state.Paused {
 		return
 	}
 	if !state.Running {

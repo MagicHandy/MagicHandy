@@ -144,6 +144,13 @@ func TestEdgeFeedbackUsesSelectedRolesInThePlannerRequest(t *testing.T) {
 				t.Fatalf("planner result: %+v %v", result, err)
 			}
 			req := provider.requests[0]
+			wantLimit := 192
+			if tc.plannerLevel == config.ModelCapabilityAdvanced {
+				wantLimit = 1024
+			}
+			if req.MaxTokens != wantLimit {
+				t.Fatalf("planner output limit %d, want %d", req.MaxTokens, wantLimit)
+			}
 			if req.Model != "user-selected-model" || strings.Contains(req.Messages[1].Content, feedback) != tc.wantQuote {
 				t.Fatalf("unexpected model or feedback in request: %+v", req.Messages)
 			}
@@ -163,12 +170,16 @@ func TestStillEdgeRemoteRequiresExplicitReturnAndStopWins(t *testing.T) {
 	}
 	engine := s.currentMotionEngine()
 	before := engine.Snapshot()
+	do("/api/remote/edge", 200)
 	do("/api/remote/edge?style=still", 200)
 	if state := engine.Snapshot(); !state.Paused || !state.StillHold || state.Running || state.EdgeAllowed {
 		t.Fatalf("still state %+v", state)
 	}
 	do("/api/remote/edge/resume", 409)
+	checkPausedEdgeKeepsChat(t, s, func() { do("/api/remote/edge", 409) })
 	do("/api/remote/edge/resume?style=still", 200)
+	// Hold still paused the moving hold, which has its own manual Return.
+	do("/api/remote/edge/resume", 200)
 	if state := engine.Snapshot(); !state.Running || state.StillHold || state.Target.SpeedPercent != before.Target.SpeedPercent {
 		t.Fatal("explicit still return lost the paused target")
 	}
@@ -179,5 +190,40 @@ func TestStillEdgeRemoteRequiresExplicitReturnAndStopWins(t *testing.T) {
 	do("/api/remote/edge/resume?style=still", 409)
 	if engine.Snapshot().Running {
 		t.Fatal("stale return restarted motion")
+	}
+}
+
+func TestPausedMovingEdgeRejectsStaleDesktopPress(t *testing.T) {
+	s := newTestServer(t)
+	for _, step := range []struct{ path, body string }{
+		{"/api/motion/start", `{"pattern":"flow-full-sweeps","speed_percent":35}`},
+		{"/api/motion/edge", "{}"},
+		{"/api/motion/edge?style=still", "{}"},
+	} {
+		if got := personalizationRequest(t, s, http.MethodPost, step.path, step.body); got.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", step.path, got.Code, got.Body.String())
+		}
+	}
+	checkPausedEdgeKeepsChat(t, s, func() {
+		if got := personalizationRequest(t, s, http.MethodPost, "/api/motion/edge", "{}"); got.Code != http.StatusConflict {
+			t.Fatalf("paused Edge: %d", got.Code)
+		}
+	})
+}
+
+func checkPausedEdgeKeepsChat(t *testing.T, s *Server, press func()) {
+	t.Helper()
+	id, err := s.chatLog.ActiveSessionIDContext(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	turn, finish, err := s.chatWorkspace.BeginTurn(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer finish()
+	press()
+	if state := s.currentMotionEngine().Snapshot(); turn.Err() != nil || !state.StillHold || state.Running {
+		t.Fatalf("rejected press disturbed chat or pause: chat=%v still=%t running=%t", turn.Err(), state.StillHold, state.Running)
 	}
 }

@@ -8,17 +8,20 @@ a moving hold should last and how it should return. A person may describe
 the previous hold, give an exact preference for the next one, or talk about
 another subject while the device is running.
 
-Record at most two mechanical button observations per chat in SQLite. Each
+Record the two latest moving holds and the latest still hold per chat in SQLite. Each
 observation references the sequence of the last committed message at the press.
 Store the type and requested pace after the engine accepts the action. An
 accepted automatic plan adds its duration, return pace and style. Its duration
 describes a plan. A manual Return can end the hold sooner.
 
-The planner may read bounded, verbatim human remarks between the two presses
+The planner may read bounded, verbatim human remarks between moving presses
 when its resolved capability is Advanced (with reasoning) and
 its context policy allows the conversation. Initial reactions, recent references
 to Edge or a hold, and the latest corrections can bring at most seven complete
-user messages of up to 384 bytes each into the request. The model decides their
+user messages of up to 384 bytes each into the request. A still pause preserves
+the feedback window. If a still pause is the only earlier observation, it can
+provide the initial reference. Chat read-back always uses the most recent
+press. The model decides their
 relevance. Message deletion and retention apply at read time. Deleting the chat
 cascades to its button observations. Separate chats have separate evidence.
 
@@ -33,7 +36,9 @@ Intermediate and Advanced without reasoning keep their established planning
 contracts. Storage contention can cost an observation. The mechanical action
 and Stop remain available.
 
-The engine uses the validated duration and return submitted by the planner.
+The Advanced planner receives its configured output budget and, on managed
+llama.cpp builds that support it, its thinking budget. Other capability levels
+use the compact 192-token contract. The engine uses the validated duration and return submitted by the planner.
 A previous duration can recur. The duration window is 8–180 seconds and the
 existing speed bounds apply. Planner errors, a second Edge press and newer
 user control continue to revoke automatic return. Other models assigned to

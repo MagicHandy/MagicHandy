@@ -67,3 +67,15 @@ func TestEdgeChatAcknowledgementReflectsSelectedPlanner(t *testing.T) {
 		t.Fatal("chat must still know the observed action and its planner's limits")
 	}
 }
+
+func TestEdgeForwardsTheConfiguredReasoningBudget(t *testing.T) {
+	provider := &scriptedProvider{responses: []string{`{"hold_seconds":76,"resume_speed_percent":24,"resume_style":"gentle"}`}}
+	service := EdgeService{Provider: provider, MaxTokens: 2048, ReasoningMode: "auto", ReasoningBudgetTokens: 1024}
+	if _, _, err := service.Complete(t.Context(), EdgeContext{SpeedMin: 20, SpeedMax: 50}); err != nil {
+		t.Fatal(err)
+	}
+	req := provider.requests[0]
+	if req.MaxTokens != 2048 || req.ReasoningBudgetTokens != 1024 || req.ReasoningMode != "auto" {
+		t.Fatalf("lost reasoning configuration: output=%d thinking=%d mode=%s", req.MaxTokens, req.ReasoningBudgetTokens, req.ReasoningMode)
+	}
+}
