@@ -3,7 +3,7 @@
 ## 2026-11-27 — Saved-chat recall and worker lifecycle review
 
 With Go 1.26.11 on Windows amd64, the stripped core grew from 25,788,416
-bytes on the reviewed Edge branch (`a0f6005b`) to 25,809,920 bytes. Both
+bytes on the reviewed Edge branch (`a0f6005b`) to 25,812,480 bytes. Both
 builds used `CGO_ENABLED=0`, `-buildvcs=false -trimpath -ldflags "-s -w"`.
 The main browser entry grew from 838,321 to 838,381 bytes, or 226,270 to
 226,286 bytes with gzip. The stylesheet measured 196,888 bytes raw and

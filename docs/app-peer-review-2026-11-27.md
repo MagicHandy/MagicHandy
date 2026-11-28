@@ -43,8 +43,11 @@ showed the same commanded shapes as the previous Edge export.
 Validated routes keep archive reads separate from motion. Named and
 opening lookups have distinct schemas, and Inkling retains its required
 object root. The default Gemmas keep the union shape used in their earlier
-context regression tests. An invalid read-only lookup yields the localized
-unavailable response. A malformed router or mixed recall and motion
+context regression tests. Missing keys, invalid field types and mixed
+operations yield a visible routing error. A complete read-only lookup with
+unusable arguments explains that the search could not run and sets the
+fallback diagnostic. The reader reserves “Unavailable” for a fact it could
+not verify. A malformed router or mixed recall and motion
 envelope cannot trigger an ordinary motion repair. First-token timing
 ends at the first answer-model token. Total cost still includes
 the router and all evidence calls.

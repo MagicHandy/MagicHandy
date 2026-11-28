@@ -150,13 +150,19 @@ func TestLongChatLookupContractPreservesModelRootAndBounds(t *testing.T) {
 func TestLongChatRouterKeepsMalformedOrMixedLookupsReadOnly(t *testing.T) {
 	const invalid = `{"action":"read_user_history","scope":"matching","terms":[],"facts":[{"detail":"checkpoint","kind":"text"}]}`
 	const ordinary = `{"ordinary":true}`
+	const failedSearch = "No pude formular la búsqueda en los mensajes guardados."
 	fenced := func(raw string) string { return "```json\r\n" + raw + "\r\n```" }
 	for _, tc := range []struct {
 		name, raw, reply string
 		unenforced       bool
 	}{
-		{"invalid typed", invalid, "No disponible", false},
-		{"one whole fence", fenced(invalid), "No disponible", true},
+		{"invalid typed", invalid, failedSearch, false},
+		{"one whole fence", fenced(invalid), failedSearch, true},
+		{"incomplete", `{"action":"read_user_history"}`, "", true},
+		{"mixed lookup branches", strings.Replace(invalid, `"terms":[]`, `"terms":[],"count":1`, 1), "", true},
+		{"wrong argument type", strings.Replace(invalid, `"terms":[]`, `"terms":"checkpoint"`, 1), "", true},
+		{"unknown nested field", strings.Replace(invalid, `"kind":"text"`, `"kind":"text","motion":"start"`, 1), "", true},
+		{"null pace count", `{"action":"read_user_history","scope":"opening_paces","count":null,"following_adjustment":false}`, "", true},
 		{"ordinary choice", fenced(ordinary), "Ready", true},
 		{"enforced fence", fenced(ordinary), "", false},
 		{"outside prose", "Here you go:\n" + fenced(ordinary), "", true},
@@ -172,6 +178,9 @@ func TestLongChatRouterKeepsMalformedOrMixedLookupsReadOnly(t *testing.T) {
 			}}, nil)
 			if (err != nil) != (tc.reply == "") || r.Response.Reply != tc.reply || r.Response.Motion != nil || r.RepairAttempted || (len(p.requests) == 2) != (tc.reply == "Ready") {
 				t.Fatalf("%+v, %v, calls=%d", r, err, len(p.requests))
+			}
+			if r.SemanticFallback != (tc.reply == failedSearch) || r.CanRepair() {
+				t.Fatalf("unread history was reported as a verified answer or offered motion repair: %+v", r)
 			}
 		})
 	}

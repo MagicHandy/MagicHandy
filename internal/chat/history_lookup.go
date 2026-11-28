@@ -116,23 +116,15 @@ func (s Service) resolveHistoryLookup(ctx context.Context, request Request, raw 
 	if err := ctx.Err(); err != nil {
 		return raw, &result, err
 	}
-	var fields map[string]json.RawMessage
-	var lookup HistoryLookup
-	var action string
-	if json.Unmarshal([]byte(raw), &fields) != nil || json.Unmarshal(fields["action"], &action) != nil || action != "read_user_history" {
-		return raw, &result, errors.New("invalid saved-message lookup response")
+	lookup, err := decodeHistoryLookup(raw)
+	if err != nil {
+		result.InitialMalformed, result.Malformed = true, true
+		return raw, &result, err
 	}
-	for key := range fields {
-		switch key {
-		case "action", "scope", "terms", "facts", "count", "following_adjustment":
-		default:
-			return raw, &result, errors.New("unexpected field in saved-message lookup")
-		}
-	}
-	decoder := json.NewDecoder(strings.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if len(fields) != 4 || decoder.Decode(&lookup) != nil || !lookup.valid() {
-		result.Response.Reply = historyUnavailable(s.Prompt.ID)
+	if !lookup.valid() {
+		// No archive read took place. Keep this distinguishable from missing evidence.
+		result.InitialMalformed, result.SemanticFallback = true, true
+		result.Response.Reply = historySearchFailed(s.Prompt.ID)
 		return raw, &result, nil
 	}
 	sources, err := request.ReadUserHistory(ctx, lookup)
@@ -144,6 +136,34 @@ func (s Service) resolveHistoryLookup(ctx context.Context, request Request, raw 
 		}
 	}
 	return raw, &result, err
+}
+
+func decodeHistoryLookup(raw string) (HistoryLookup, error) {
+	var lookup HistoryLookup
+	var fields map[string]json.RawMessage
+	errInvalid := errors.New("invalid saved-message lookup response")
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if json.Unmarshal([]byte(raw), &fields) != nil || len(fields) != 4 || decoder.Decode(&lookup) != nil || lookup.Action != "read_user_history" {
+		return lookup, errInvalid
+	}
+	first, second := "terms", "facts"
+	switch lookup.Scope {
+	case "opening_paces":
+		first, second = "count", "following_adjustment"
+	case "opening", "matching":
+		if slices.Contains(lookup.Terms, "") || slices.ContainsFunc(lookup.Facts, func(f historyFact) bool { return f.Detail == "" || f.Kind == "" }) {
+			return lookup, errInvalid
+		}
+	default:
+		return lookup, errInvalid
+	}
+	for _, key := range [...]string{"action", "scope", first, second} {
+		if fields[key] == nil || string(fields[key]) == "null" {
+			return lookup, errInvalid
+		}
+	}
+	return lookup, nil
 }
 
 func withHistoryLookupSchema(schema json.RawMessage, compact, objectRoot bool) json.RawMessage {
@@ -302,6 +322,21 @@ func hasCitedNumber(quote string) bool {
 		}
 	}
 	return false
+}
+
+func historySearchFailed(promptID string) string {
+	switch promptLocaleForID(promptID) {
+	case promptLocaleSpanish:
+		return "No pude formular la búsqueda en los mensajes guardados."
+	case promptLocalePortugueseBrazil:
+		return "Não consegui formular a busca nas mensagens salvas."
+	case promptLocaleSimplifiedChinese:
+		return "我没能根据这个问题在已保存的消息中进行搜索。"
+	case promptLocaleJapanese:
+		return "この質問に合う検索条件を作れなかったため、保存されたメッセージを検索できませんでした。"
+	default:
+		return "I couldn’t form a search for that question in the saved messages."
+	}
 }
 
 func historyUnavailable(promptID string) string {

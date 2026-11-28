@@ -676,9 +676,11 @@ long-chat routing and to retrieving evidence, and is reported as generation
 time in response diagnostics.
 
 Named lookups require one to four nonempty search terms. Opening lookups
-carry an empty term list. A completed read-only choice with unusable fields
-returns the localized unavailable answer. A mixed lookup and device command
-is rejected. A compact router authorizes the ordinary prompt only with its
+carry an empty term list. An incomplete or mixed lookup is rejected. A
+complete read-only choice with unusable search terms gives a localized
+message explaining that the search could not run, and the diagnostics mark
+the fallback. “Unavailable” identifies evidence the reader could not verify.
+A compact router authorizes the ordinary prompt only with its
 explicit ordinary choice. For providers configured without schema enforcement,
 the reader also accepts one complete JSON object inside a Markdown code fence.
 
